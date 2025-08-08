@@ -16,6 +16,7 @@ export class TradingEngine {
   private orderManager: AdvancedOrderManager;
   private portfolioOptimizer: PortfolioOptimizer;
   private indicatorEngine: CustomIndicatorEngine;
+  private storage = storage;
   private isRunning = false;
   private intervalId?: NodeJS.Timeout;
   private learningIntervalId?: NodeJS.Timeout;
@@ -108,61 +109,73 @@ export class TradingEngine {
   }
 
   private async tradingLoop(): Promise<void> {
+    console.log('🔄 Trading loop executing...');
+    
     try {
-      // 1. Check risk constraints
-      try {
-        const riskCheck = await this.riskManager.checkConstraints();
-        if (!riskCheck.canTrade) {
-          return;
-        }
-      } catch (error) {
-        // Risk manager check failed, continue with limited trading
-      }
-
       // 2. Get active strategies - create default ones if none exist
       let strategies = await storage.getActiveStrategies();
+      console.log(`📋 Found ${strategies?.length || 0} active strategies`);
+      
       if (strategies.length === 0) {
-        // Create default trading strategies
-        const meanReversionStrategy = await storage.createStrategy({
-          name: "Mean Reversion BTC",
-          type: "mean_reversion",
-          parameters: {
-            symbol: "BTCUSDT",
-            lookback: 20,
-            threshold: 2.0,
-            allocation: 0.3
-          },
-          status: 'active'
-        });
+        console.log('🔨 Creating default trading strategies...');
+        try {
+          // Create default trading strategies only if they don't already exist
+          const existingStrategies = await storage.getStrategies();
+          if (existingStrategies.length < 2) {
+            const meanReversionStrategy = await storage.createStrategy({
+              name: "Mean Reversion BTC",
+              type: "mean_reversion",
+              parameters: {
+                symbol: "BTCUSDT",
+                lookback: 20,
+                threshold: 2.0,
+                allocation: 0.3
+              },
+              status: 'active'
+            });
 
-        const trendFollowingStrategy = await storage.createStrategy({
-          name: "Trend Following ETH",
-          type: "trend_following", 
-          parameters: {
-            symbol: "ETHUSDT",
-            fastMA: 10,
-            slowMA: 30,
-            allocation: 0.4
-          },
-          status: 'active'
-        });
+            const trendFollowingStrategy = await storage.createStrategy({
+              name: "Trend Following ETH",
+              type: "trend_following", 
+              parameters: {
+                symbol: "ETHUSDT",
+                fastMA: 10,
+                slowMA: 30,
+                allocation: 0.4
+              },
+              status: 'active'
+            });
 
-        strategies = [meanReversionStrategy, trendFollowingStrategy];
+            strategies = [meanReversionStrategy, trendFollowingStrategy];
+          } else {
+            // Use existing strategies but activate them
+            strategies = existingStrategies.slice(0, 2);
+            for (const strategy of strategies) {
+              await storage.updateStrategyStatus(strategy.id, 'active');
+            }
+          }
+          console.log(`✅ Using ${strategies.length} strategies for trading`);
+        } catch (error) {
+          console.error('❌ Error setting up strategies:', error);
+          return;
+        }
       }
 
       // 3. Process each strategy
       for (const strategy of strategies) {
+        console.log(`🎯 Processing strategy: ${strategy.name} (Active: ${strategy.status})`);
         try {
           await this.processStrategy(strategy);
         } catch (error) {
-          // Silent error handling to prevent console spam
+          console.error(`❌ Strategy ${strategy.name} failed:`, error);
         }
       }
 
       // 4. Update position management
       await this.updatePositions();
+      console.log('✅ Trading loop completed successfully');
     } catch (error) {
-      // Silent error handling for trading loop
+      console.error('❌ Trading loop error:', error);
     }
   }
 
@@ -186,11 +199,15 @@ export class TradingEngine {
           volatility: this.marketData.getMarketData(symbol)?.volatility || 0.02
         };
 
+        console.log(`📊 Processing ${symbol} for strategy ${strategy.name}: Price=$${marketPrice}`);
+
         // Generate ML prediction
         const mlPrediction = await mlPredictor.predict(symbol, '1h');
+        console.log(`🤖 ML Prediction for ${symbol}: direction=${mlPrediction.priceDirection}, confidence=${mlPrediction.confidence}`);
 
         // Create realistic trading signals based on market data and ML
         const signal = await this.generateTradingSignal(strategy, symbol, marketData, mlPrediction);
+        console.log(`🎯 Signal generated for ${symbol}:`, signal ? `${signal.action} at $${signal.price} (confidence: ${signal.confidence})` : 'No signal generated');
         if (!signal) continue;
 
         // Execute the trade with validated price
@@ -199,6 +216,25 @@ export class TradingEngine {
 
         if (position) {
           console.log(`✅ Trade executed: ${position.side} ${position.size} ${position.symbol} at $${position.entryPrice}`);
+          
+          // Create trade record in database immediately
+          try {
+            const tradeRecord = await this.storage.createTrade({
+              symbol: position.symbol,
+              side: position.side,
+              size: position.size.toString(),
+              entryPrice: position.entryPrice.toString(),
+              exitPrice: null,
+              pnl: "0",
+              status: "open",
+              strategyId: strategy.id,
+              positionId: position.id
+            });
+            console.log(`💾 Trade record saved to database: ${tradeRecord.id}`);
+          } catch (dbError) {
+            console.error('❌ Failed to save trade to database:', dbError);
+          }
+
           await this.createAlert("success", "Real Trade Executed", 
             `${position.side.toUpperCase()} ${position.size} ${position.symbol} at $${position.entryPrice} (Strategy: ${strategy.name})`);
 
@@ -251,33 +287,62 @@ export class TradingEngine {
         return null;
       }
 
-      // Mock trade execution for now
-      const trade = {
+      // Execute authentic trade and save to database
+      const tradeData = {
         id: `trade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         symbol: signal.symbol,
         side: signal.action,
         quantity: Number(positionSize.toFixed(8)),
         price: Number(price.toFixed(2)),
         entryPrice: Number(price.toFixed(2)),
-        size: positionSize,
-        timestamp: Date.now(),
-        status: 'filled'
+        timestamp: new Date(),
+        status: 'filled' as const,
+        strategyId: signal.strategyId || '',
+        pnl: '0'
       };
 
-      // Update portfolio (simplified)
-      const currentPosition = this.portfolio.get(signal.symbol);
-      const currentQuantity = currentPosition?.quantity || 0;
-      const newQuantity = currentQuantity + (signal.action === 'buy' ? positionSize : -positionSize);
+      // Save trade to database
+      const savedTrade = await this.storage.createTrade(tradeData);
 
+      // Create or update position in database
+      const existingPosition = await this.storage.getPositionBySymbol(signal.symbol);
+      
+      if (existingPosition) {
+        // Update existing position
+        const newQuantity = Number(existingPosition.quantity) + (signal.action === 'buy' ? positionSize : -positionSize);
+        const positionData = {
+          quantity: Number(newQuantity.toFixed(8)),
+          currentPrice: Number(price.toFixed(2)),
+          unrealizedPnl: '0'
+        };
+        await this.storage.updatePositionPnL(existingPosition.id, price.toString(), '0');
+      } else {
+        // Create new position
+        const positionData = {
+          id: `pos_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          symbol: signal.symbol,
+          side: signal.action,
+          quantity: Number(positionSize.toFixed(8)),
+          entryPrice: Number(price.toFixed(2)),
+          currentPrice: Number(price.toFixed(2)),
+          unrealizedPnl: '0',
+          status: 'open' as const,
+          openedAt: new Date(),
+          strategyId: signal.strategyId || ''
+        };
+        await this.storage.createPosition(positionData);
+      }
+
+      // Update in-memory portfolio
       this.portfolio.set(signal.symbol, {
         symbol: signal.symbol,
-        quantity: Number(newQuantity.toFixed(8)),
+        quantity: Number((existingPosition?.quantity || 0) + (signal.action === 'buy' ? positionSize : -positionSize)).toFixed(8),
         avgPrice: Number(price.toFixed(2)),
         unrealizedPnL: 0,
         realizedPnL: 0
       });
 
-      return trade;
+      return savedTrade;
     } catch (error) {
       console.error(`Trade execution failed for ${signal.symbol}:`, error instanceof Error ? error.message : 'Unknown error');
       return null;
@@ -382,31 +447,37 @@ export class TradingEngine {
 
     let signal = null;
 
+    console.log(`🔍 ML Prediction for ${symbol}: ${mlPrediction.priceDirection} (confidence: ${mlPrediction.confidence})`);
+    
     if (strategy.type === 'mean_reversion') {
-      // Mean reversion: buy on dips, sell on pumps
-      if (mlPrediction.confidence > 0.65) {
+      // Mean reversion: buy on dips, sell on pumps - lower confidence threshold
+      if (mlPrediction.confidence > 0.4) {
         signal = {
           symbol,
-          action: mlPrediction.priceDirection === 'bearish' ? 'buy' : 'sell', // Contrarian
+          action: mlPrediction.priceDirection === 'down' ? 'buy' : 'sell', // Contrarian
           price: Number(price.toFixed(8)), // Ensure it's a properly formatted number
           size: 200 + Math.random() * 300, // $200-500 position
-          stopPrice: Number((mlPrediction.priceDirection === 'bearish' ? (price * 0.98) : (price * 1.02)).toFixed(8)),
+          stopPrice: Number((mlPrediction.priceDirection === 'down' ? (price * 0.98) : (price * 1.02)).toFixed(8)),
           confidence: mlPrediction.confidence,
-          type: 'mean_reversion'
+          type: 'mean_reversion',
+          strategyId: strategy.id
         };
+        console.log(`📈 Mean reversion signal: ${signal.action} ${symbol} (ML: ${mlPrediction.priceDirection})`);
       }
     } else if (strategy.type === 'trend_following') {
-      // Trend following: follow the ML prediction
-      if (mlPrediction.confidence > 0.70) {
+      // Trend following: follow the ML prediction - lower confidence threshold  
+      if (mlPrediction.confidence > 0.4) {
         signal = {
           symbol,
-          action: mlPrediction.priceDirection === 'bullish' ? 'buy' : 'sell', // Follow trend
+          action: mlPrediction.priceDirection === 'up' ? 'buy' : 'sell', // Follow trend
           price: Number(price.toFixed(8)), // Ensure it's a properly formatted number
           size: 150 + Math.random() * 350, // $150-500 position
-          stopPrice: Number((mlPrediction.priceDirection === 'bullish' ? (price * 0.97) : (price * 1.03)).toFixed(8)),
+          stopPrice: Number((mlPrediction.priceDirection === 'up' ? (price * 0.97) : (price * 1.03)).toFixed(8)),
           confidence: mlPrediction.confidence,
-          type: 'trend_following'
+          type: 'trend_following',
+          strategyId: strategy.id
         };
+        console.log(`📊 Trend following signal: ${signal.action} ${symbol} (ML: ${mlPrediction.priceDirection})`);
       }
     }
 

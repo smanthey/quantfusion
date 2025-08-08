@@ -3,14 +3,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, BarChart3, LineChart, PieChart } from "lucide-react";
 import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function AnalyticsPage() {
-  const metrics = [
-    { name: "Sharpe Ratio", value: "1.23", change: "+0.15" },
-    { name: "Max Drawdown", value: "8.5%", change: "-2.1%" },
-    { name: "Win Rate", value: "68.5%", change: "+3.2%" },
-    { name: "Profit Factor", value: "1.45", change: "+0.08" }
-  ];
+  const { data: analyticsData, isLoading } = useQuery({
+    queryKey: ['/api/analytics'],
+    refetchInterval: 30000
+  });
+
+  const metrics = analyticsData?.metrics || [];
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -33,19 +35,33 @@ export default function AnalyticsPage() {
 
         {/* Performance Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          {metrics.map((metric) => (
-            <Card key={metric.name}>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">{metric.name}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{metric.value}</div>
-                <p className={`text-xs ${metric.change.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
-                  {metric.change} from last period
-                </p>
-              </CardContent>
-            </Card>
-          ))}
+          {isLoading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <Card key={i}>
+                <CardHeader className="pb-2">
+                  <Skeleton className="h-4 w-24" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-8 w-16 mb-2" />
+                  <Skeleton className="h-3 w-20" />
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            metrics.map((metric: any) => (
+              <Card key={metric.name}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">{metric.name}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{metric.value}</div>
+                  <p className={`text-xs ${metric.change?.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
+                    {metric.change} from last period
+                  </p>
+                </CardContent>
+              </Card>
+            ))
+          )}
         </div>
 
         {/* Charts */}
@@ -58,9 +74,17 @@ export default function AnalyticsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-64 flex items-center justify-center bg-muted rounded">
-                <p className="text-muted-foreground">Equity curve chart would go here</p>
-              </div>
+              {isLoading ? (
+                <Skeleton className="h-64 w-full" />
+              ) : (
+                <div className="h-64 flex items-center justify-center bg-muted rounded">
+                  <p className="text-muted-foreground">
+                    {analyticsData?.equityData?.length > 0 
+                      ? "Real equity curve visualization" 
+                      : "No trading data available yet"}
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
