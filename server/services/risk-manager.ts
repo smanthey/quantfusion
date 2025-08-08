@@ -103,7 +103,7 @@ export class RiskManager {
     }
   }
 
-  async checkConstraints(): Promise<{ canTrade: boolean; reason?: string; riskLevel: 'low' | 'medium' | 'high' }> {
+  async checkConstraints(): Promise<{ canTrade: boolean; reason?: string; riskLevel?: 'low' | 'medium' | 'high' }> {
     if (this.isTradeHalted) {
       return {
         canTrade: false,
@@ -139,11 +139,7 @@ export class RiskManager {
     return { canTrade: true, riskLevel };
   }
 
-  async flattenAllPositions(): Promise<void> {
-    console.log('Emergency stop: Flattening all positions');
-    this.haltTrading('Emergency stop activated');
-    // In production, this would close all open positions
-  }
+  
 
   getCurrentMetrics(): RiskMetrics {
     const today = new Date().toDateString();
@@ -280,19 +276,7 @@ export class RiskManager {
     };
   }
 
-  // New methods required by trading engine
-  async checkConstraints(): Promise<{ canTrade: boolean; reason?: string }> {
-    try {
-      if (this.isTradeHalted) {
-        return { canTrade: false, reason: "Trading manually halted" };
-      }
-      
-      // For simulation mode, always allow trading
-      return { canTrade: true };
-    } catch (error) {
-      return { canTrade: false, reason: "Risk system error" };
-    }
-  }
+  
 
   async canExecuteTrade(signal: any): Promise<boolean> {
     try {
