@@ -1,9 +1,9 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { tradingEngine } from './services/trading-engine';
-import { multiAssetEngine } from './services/multi-asset-engine';
-import { abTestingService } from './services/ab-testing';
+import { TradingEngine } from './services/trading-engine';
+import { MultiAssetEngine } from './services/multi-asset-engine';
+import { ABTestingService } from './services/ab-testing';
 import { ForexTradingEngine } from './services/forex-trading-engine';
 
 const app = express();
@@ -67,7 +67,9 @@ app.use((req, res, next) => {
   const port = parseInt(process.env.PORT || '5000', 10);
   const host = "0.0.0.0"; // Ensure this is set if it was intended to be used in startServer
 
-  // Initialize forex trading engine
+  // Initialize engines
+  const tradingEngine = new TradingEngine();
+  const multiAssetEngine = new MultiAssetEngine();
   const forexEngine = new ForexTradingEngine();
 
   async function startServer() {
@@ -96,9 +98,6 @@ app.use((req, res, next) => {
       process.exit(1);
     }
   }
-
-  // Export forex engine for routes
-  export { forexEngine };
 
   // Start server
   startServer();

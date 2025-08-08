@@ -572,12 +572,14 @@ export class ForexTradingEngine {
    * Get forex account status for comparison dashboard
    */
   getForexAccountStatus(): ForexAccount & { tradesCount: number; winRate: number } {
-    const closedTrades = this.forexTrades.filter(t => t.status === 'closed');
+    // Count ALL trades, not just closed ones for comparison consistency
+    const allTrades = this.forexTrades;
+    const closedTrades = allTrades.filter(t => t.status === 'closed');
     const winningTrades = closedTrades.filter(t => (t.pnl || 0) > 0);
     
     return {
       ...this.forexAccount,
-      tradesCount: closedTrades.length,
+      tradesCount: allTrades.length, // Show total trades executed
       winRate: closedTrades.length > 0 ? (winningTrades.length / closedTrades.length) * 100 : 0
     };
   }

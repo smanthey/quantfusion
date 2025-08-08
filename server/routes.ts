@@ -26,7 +26,7 @@ import { AdvancedOrderManager } from "./services/advanced-order-types";
 import { PortfolioOptimizer } from "./services/portfolio-optimizer";
 import { CustomIndicatorEngine } from "./services/custom-indicators";
 import { abTestingRouter } from "./routes/ab-testing";
-import { multiAssetRouter } from './routes/multi-asset';
+import { multiAssetRoutes } from './routes/multi-asset';
 import { ForexTradingEngine } from './services/forex-trading-engine';
 import { ForexDataService } from './services/forex-data-service';
 
@@ -1005,7 +1005,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/ab-testing', abTestingRouter);
 
   // Use the multi-asset router
-  app.use('/api/multi-asset', multiAssetRouter);
+  app.use('/api/multi-asset', multiAssetRoutes);
 
   // Initialize forex services
   const forexEngine = new ForexTradingEngine();
