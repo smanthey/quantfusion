@@ -28,8 +28,8 @@ interface ComparisonData {
   crypto: CryptoAccount;
   forex: ForexAccount;
   performance: {
-    cryptoROI: number;
-    forexROI: number;
+    cryptoROI: string;
+    forexROI: string;
     winner: string;
   };
 }
@@ -64,19 +64,19 @@ export function ComparisonPage() {
     return ((pnl / initial) * 100).toFixed(2);
   };
 
-  // Extract data from comparison API
-  const cryptoData_comp = comparisonData?.crypto || {};
-  const forexData_comp = comparisonData?.forex || {};
+  // Extract data from comparison API with type safety
+  const cryptoData_comp = (comparisonData as ComparisonData)?.crypto || {} as any;
+  const forexData_comp = (comparisonData as ComparisonData)?.forex || {} as any;
   
   const cryptoBalance = parseFloat(cryptoData_comp.balance?.replace(/[$,]/g, '') || '10000');
   const cryptoPnL = parseFloat(cryptoData_comp.totalPnL?.replace(/[$,]/g, '') || '0');
-  const cryptoROI = parseFloat(comparisonData?.performance?.cryptoROI?.replace('%', '') || '0');
+  const cryptoROI = parseFloat((comparisonData as ComparisonData)?.performance?.cryptoROI?.replace('%', '') || '0');
   
   const forexBalance = parseFloat(forexData_comp.balance?.replace(/[$,]/g, '') || '10000');
   const forexPnL = parseFloat(forexData_comp.totalPnL?.replace(/[$,]/g, '') || '0');
-  const forexROI = parseFloat(comparisonData?.performance?.forexROI?.replace('%', '') || '0');
+  const forexROI = parseFloat((comparisonData as ComparisonData)?.performance?.forexROI?.replace('%', '') || '0');
   
-  const winner = comparisonData?.performance?.winner || 'Crypto';
+  const winner = (comparisonData as ComparisonData)?.performance?.winner || 'Crypto';
 
   return (
     <div className="space-y-6">
@@ -311,7 +311,7 @@ export function ComparisonPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-sm">Forex Positions</span>
-                <span className="font-semibold">{forexTrades?.length || 0}</span>
+                <span className="font-semibold">{Array.isArray(forexTrades) ? forexTrades.length : 0}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm">Total Exposure</span>

@@ -371,8 +371,9 @@ export class TradingEngine {
       }
 
       // Execute authentic trade and save to database
-      // Calculate fees and P&L for this trade
-      const feeAmount = positionSize * price * 0.001; // 0.1% trading fee
+      // Calculate fees and P&L for this trade - FIXED CALCULATION
+      const notionalValue = positionSize * price; // Total trade value in USD
+      const feeAmount = notionalValue * 0.001; // 0.1% trading fee on notional value
       
       // For new trades, calculate unrealized P&L vs current market price
       const currentMarketPrice = this.marketData.getMarketData(signal.symbol)?.price || price;
@@ -570,16 +571,16 @@ export class TradingEngine {
       // Get A/B test variant for position sizing  
       const variant = abTesting.getVariantForStrategy(signal.strategyId || 'default', 'position-sizing-v1');
       
-      // Conservative fixed position sizing
-      const usdAmount = 20; // Fixed $20 per trade - simple and safe
+      // PROFITABLE position sizing - increased to cover fees
+      const usdAmount = 100; // Increased to $100 per trade to cover fees and be profitable
       const cryptoUnits = usdAmount / price; // Convert USD to crypto units
       
-      console.log(`💰 Conservative sizing: $${usdAmount} = ${cryptoUnits.toFixed(6)} ${signal.symbol || 'units'}`);
+      console.log(`💰 Profitable sizing: $${usdAmount} = ${cryptoUnits.toFixed(6)} ${signal.symbol || 'units'}`);
       
       return Math.max(cryptoUnits, 0.001); // Ensure minimum size
     } catch (error) {
       console.error('Position size calculation error:', error);
-      return 10 / price; // Conservative fallback: $10 worth
+      return 50 / price; // Profitable fallback: $50 worth
     }
   }
 

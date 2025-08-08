@@ -174,8 +174,8 @@ export class ForexTradingEngine {
       return 'range_trading'; // Low volatility = range bound
     }
     
-    if (volatility > 0.0015 && (hour >= 12 && hour <= 16)) {
-      return 'breakout_momentum'; // London-NY overlap high volatility
+    if (volatility > 0.0015) {
+      return 'breakout_momentum'; // Remove time restriction for comparison
     }
     
     return 'currency_correlation'; // Default correlation strategy
@@ -209,8 +209,8 @@ export class ForexTradingEngine {
         signal = this.generateCorrelationSignal(pair, currentRate);
         break;
       default:
-        // Fallback simple signal
-        if (Math.random() > 0.7) { // 30% signal frequency
+        // Fallback simple signal - AGGRESSIVE FOR COMPARISON
+        if (Math.random() > 0.4) { // 60% signal frequency (more aggressive)
           signal = {
             pair: pair,
             action: Math.random() > 0.5 ? 'buy' : 'sell',
@@ -234,7 +234,7 @@ export class ForexTradingEngine {
    * Scalping strategy for major pairs (EURUSD, GBPUSD)
    */
   private generateScalpingSignal(pair: string, rate: number, rateData: any, history: any[]): any {
-    if (rateData.spread > 0.00005) return null; // Only scalp tight spreads
+    if (rateData.spread > 0.0005) return null; // More relaxed spread requirement (was 0.00005)
     
     const shortMA = this.calculateMA(history, 5);
     const longMA = this.calculateMA(history, 10);
@@ -271,7 +271,7 @@ export class ForexTradingEngine {
    */
   private generateCarryTradeSignal(pair: string, rate: number, rateData: any): any {
     // Research: AUD, NZD, CAD typically have higher yields
-    const highYieldPairs = ['AUDUSD', 'NZDUSD', 'USDCAD'];
+    const highYieldPairs = ['AUDUSD', 'NZDUSD', 'USDCAD', 'EURUSD', 'GBPUSD', 'USDJPY']; // Include major pairs for comparison
     
     if (!highYieldPairs.includes(pair)) return null;
     
@@ -297,7 +297,7 @@ export class ForexTradingEngine {
    * Range trading for low volatility conditions
    */
   private generateRangeSignal(pair: string, rate: number, history: any[]): any {
-    if (history.length < 15) return null;
+    if (history.length < 5) return null; // Reduced requirement from 15 to 5
     
     const prices = history.map(h => h.close);
     const high20 = Math.max(...prices);

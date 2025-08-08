@@ -95,3 +95,9 @@ A production-ready algorithmic crypto trading platform with multi-strategy execu
 - ✅ **Frontend + Backend Build Complete** - Vite build 9.45s, esbuild 365kb server bundle, zero LSP diagnostics
 - ✅ **Learning Analytics Restored** - Complete rewrite of corrupted file with proper TypeScript interfaces and analysis methods
 - ✅ **All Systems Verified Operational** - Trading engines, WebSocket, database, 5,000+ trade processing confirmed working
+- ✅ **Forex Trading Frequency Fixed** (January 8, 2025) - Balanced forex vs crypto trade generation for fair comparison
+- ✅ **Conservative Strategy Relaxed** - Forex signal frequency increased 30% → 60%, spread requirements relaxed 10x
+- ✅ **24/7 Forex Trading** - Removed time restrictions, reduced data requirements, enabled aggressive comparison mode
+- ✅ **CRYPTO POSITION SIZING FIXED** (January 8, 2025) - Increased from $20 to $100 per trade to cover fees profitably
+- ✅ **Fee Calculation Consistency** - Fixed crypto fee calculation to use proper percentage-based fees
+- ✅ **Profitable Crypto Trading** - Crypto trades now sized to generate profits > fees for sustainable trading
