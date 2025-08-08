@@ -74,24 +74,24 @@ export class ForexTradingEngine {
     this.isRunning = true;
     console.log('🌍 FOREX CLONE ACTIVATED - Running separate forex trading system');
     
-    // Run forex trading every 10 seconds (more aggressive for comparison)
+    // Run forex trading every 2 seconds (EXTREMELY aggressive for comparison)
     this.intervalId = setInterval(async () => {
       try {
         await this.runForexTradingCycle();
       } catch (error) {
         console.error('❌ Forex trading cycle error:', error);
       }
-    }, 10000);
+    }, 2000);
     
     // AGGRESSIVE START - Force multiple immediate executions
     console.log('💱 FOREX STARTING: Forcing immediate forex trades...');
     
-    // Execute immediately and repeatedly
-    for (let i = 0; i < 5; i++) {
+    // Execute immediately and repeatedly - SUPER AGGRESSIVE
+    for (let i = 0; i < 20; i++) {
       setTimeout(() => {
-        console.log(`💱 FOREX EXECUTION ${i + 1}/5`);
+        console.log(`💱 FOREX EXECUTION ${i + 1}/20`);
         this.runForexTradingCycle();
-      }, i * 1000); // Every second for first 5 seconds
+      }, i * 500); // Every 500ms for first 10 seconds
     }
   }
 
@@ -209,8 +209,8 @@ export class ForexTradingEngine {
         signal = this.generateCorrelationSignal(pair, currentRate);
         break;
       default:
-        // Fallback simple signal - AGGRESSIVE FOR COMPARISON
-        if (Math.random() > 0.4) { // 60% signal frequency (more aggressive)
+        // Fallback simple signal - SUPER AGGRESSIVE FOR COMPARISON
+        if (Math.random() > 0.05) { // 95% signal frequency (extremely aggressive)
           signal = {
             pair: pair,
             action: Math.random() > 0.5 ? 'buy' : 'sell',
@@ -231,15 +231,16 @@ export class ForexTradingEngine {
   }
 
   /**
-   * Scalping strategy for major pairs (EURUSD, GBPUSD)
+   * Scalping strategy for major pairs (EURUSD, GBPUSD) - SUPER AGGRESSIVE
    */
   private generateScalpingSignal(pair: string, rate: number, rateData: any, history: any[]): any {
-    if (rateData.spread > 0.0005) return null; // More relaxed spread requirement (was 0.00005)
+    // Removed spread requirement - always generate signals for comparison
     
     const shortMA = this.calculateMA(history, 5);
     const longMA = this.calculateMA(history, 10);
     
-    if (rate > shortMA && shortMA > longMA && rateData.volatility > 0.0005) {
+    // Generate signals without volatility restrictions for comparison
+    if (Math.random() > 0.1) { // 90% chance to generate buy signal
       return {
         action: 'buy',
         pair,
@@ -251,7 +252,7 @@ export class ForexTradingEngine {
       };
     }
     
-    if (rate < shortMA && shortMA < longMA && rateData.volatility > 0.0005) {
+    if (Math.random() > 0.1) { // 90% chance to generate sell signal
       return {
         action: 'sell',
         pair,
@@ -278,7 +279,7 @@ export class ForexTradingEngine {
     // Carry trades are typically long-term, but we'll use shorter timeframes
     const trendStrength = Math.random(); // In production, calculate actual trend
     
-    if (trendStrength > 0.6) {
+    if (trendStrength > 0.1) { // Much more aggressive - 90% chance
       return {
         action: pair.startsWith('USD') ? 'sell' : 'buy', // Long high-yield currency
         pair,
@@ -297,7 +298,7 @@ export class ForexTradingEngine {
    * Range trading for low volatility conditions
    */
   private generateRangeSignal(pair: string, rate: number, history: any[]): any {
-    if (history.length < 5) return null; // Reduced requirement from 15 to 5
+    // Always generate signals for comparison - ignore history requirements
     
     const prices = history.map(h => h.close);
     const high20 = Math.max(...prices);
@@ -378,8 +379,8 @@ export class ForexTradingEngine {
     // Research-based correlations for arbitrage
     const correlations = this.forexData.getCurrencyCorrelations();
     
-    // CONSERVATIVE: Generate signals more frequently but with better control
-    if (Math.random() > 0.5) { // 50% signal frequency - more active but conservative
+    // SUPER AGGRESSIVE: Generate signals almost always for comparison
+    if (Math.random() > 0.02) { // 98% signal frequency - extremely aggressive
       return {
         action: Math.random() > 0.5 ? 'buy' : 'sell',
         pair,
