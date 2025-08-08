@@ -182,26 +182,51 @@ export class ForexTradingEngine {
   }
 
   /**
-   * Generate forex-specific trading signals - SIMPLIFIED FOR DEMO
+   * Generate forex-specific trading signals
    */
   private async generateForexSignal(pair: string, rateData: any, strategy: string): Promise<any> {
     const currentRate = parseFloat(rateData.price);
     
-    // FORCE SIGNAL GENERATION - Skip complex logic for now
     console.log(`💱 GENERATING SIGNAL for ${pair} at ${currentRate}`);
     
-    // Always generate signal for comparison testing
-    const signal = {
-      pair: pair,
-      action: Math.random() > 0.5 ? 'buy' : 'sell',
-      rate: currentRate,
-      size: this.calculateForexPositionSize(pair, currentRate),
-      confidence: 0.75,
-      strategy: strategy,
-      reasoning: `${strategy} signal for ${pair}`
-    };
+    // Generate signals based on strategy type
+    let signal = null;
     
-    console.log(`💱 FOREX SIGNAL CREATED: ${signal.action} ${pair} size: ${signal.size}`);
+    switch (strategy) {
+      case 'scalping_major_pairs':
+        signal = this.generateScalpingSignal(pair, currentRate, rateData, []);
+        break;
+      case 'carry_trade':
+        signal = this.generateCarryTradeSignal(pair, currentRate, rateData);
+        break;
+      case 'range_trading':
+        signal = this.generateRangeSignal(pair, currentRate, []);
+        break;
+      case 'breakout_momentum':
+        signal = this.generateBreakoutSignal(pair, currentRate, [], rateData.volatility || 0.001);
+        break;
+      case 'currency_correlation':
+        signal = this.generateCorrelationSignal(pair, currentRate);
+        break;
+      default:
+        // Fallback simple signal
+        if (Math.random() > 0.7) { // 30% signal frequency
+          signal = {
+            pair: pair,
+            action: Math.random() > 0.5 ? 'buy' : 'sell',
+            rate: currentRate,
+            size: this.calculateForexPositionSize(pair, strategy),
+            confidence: 0.65,
+            strategy: strategy,
+            reasoning: `${strategy} signal for ${pair}`
+          };
+        }
+        break;
+    }
+    
+    if (signal) {
+      console.log(`💱 FOREX SIGNAL CREATED: ${signal.action} ${pair} size: ${signal.size}`);
+    }
     return signal;
   }
 
@@ -372,7 +397,7 @@ export class ForexTradingEngine {
   /**
    * Calculate forex position size based on strategy and risk management
    */
-  private calculateForexPositionSize(pair: string, strategy: string): number {
+  private calculateForexPositionSize(pair: string, strategy: string | number): number {
     const riskPerTrade = 0.02; // 2% risk per trade (research-based)
     const accountBalance = this.forexAccount.freeMargin;
     const riskAmount = accountBalance * riskPerTrade;
@@ -381,12 +406,14 @@ export class ForexTradingEngine {
     const pipValue = this.getPipValue(pair);
     
     let stopPips = 15; // Default
-    switch (strategy) {
-      case 'scalping_major_pairs': stopPips = 5; break;
-      case 'carry_trade': stopPips = 25; break;
-      case 'range_trading': stopPips = 15; break;
-      case 'breakout_momentum': stopPips = 12; break;
-      case 'currency_correlation': stopPips = 18; break;
+    if (typeof strategy === 'string') {
+      switch (strategy) {
+        case 'scalping_major_pairs': stopPips = 5; break;
+        case 'carry_trade': stopPips = 25; break;
+        case 'range_trading': stopPips = 15; break;
+        case 'breakout_momentum': stopPips = 12; break;
+        case 'currency_correlation': stopPips = 18; break;
+      }
     }
     
     // Position size = Risk Amount / (Stop Pips * Pip Value)

@@ -1,6 +1,10 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { tradingEngine } from './services/trading-engine';
+import { multiAssetEngine } from './services/multi-asset-engine';
+import { abTestingService } from './services/ab-testing';
+import { ForexTradingEngine } from './services/forex-trading-engine';
 
 const app = express();
 app.use(express.json());
@@ -61,23 +65,41 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, async () => {
-    log(`serving on port ${port}`);
-    
-    // AUTO-START ALL AUTOMATION SYSTEMS
-    setTimeout(async () => {
-      try {
-        const { TradingEngine } = await import('./services/trading-engine');
-        const tradingEngine = new TradingEngine();
-        await tradingEngine.start();
-        console.log('🚀 FULL AUTOMATION SYSTEMS ACTIVATED - Auto Trading, Learning, Data Collection Now Running');
-      } catch (error) {
-        console.error('Error starting automation systems:', error);
-      }
-    }, 5000); // Start after 5 seconds to allow full server initialization
-  });
+  const host = "0.0.0.0"; // Ensure this is set if it was intended to be used in startServer
+
+  // Initialize forex trading engine
+  const forexEngine = new ForexTradingEngine();
+
+  async function startServer() {
+    try {
+      console.log('🚀 Starting AutoQuant server...');
+
+      // Start trading engine
+      await tradingEngine.start();
+      console.log('✅ Trading engine started');
+
+      // Start multi-asset engine
+      await multiAssetEngine.start();
+      console.log('✅ Multi-asset engine started');
+
+      // Start forex trading engine
+      await forexEngine.start();
+      console.log('✅ Forex trading engine started');
+
+      const server = app.listen(port, host, () => {
+        console.log(`🌐 Server running on http://${host}:${port}`);
+      });
+
+      return server;
+    } catch (error) {
+      console.error('❌ Server startup failed:', error);
+      process.exit(1);
+    }
+  }
+
+  // Export forex engine for routes
+  export { forexEngine };
+
+  // Start server
+  startServer();
 })();

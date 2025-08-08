@@ -42,9 +42,32 @@ export function ComparisonPage() {
   });
 
   // Get forex clone account data
-  const { data: forexData } = useQuery<ForexAccount>({
-    queryKey: ['/api/multi-asset/forex-clone/account'],
-    refetchInterval: 5000
+  const { data: forexData, isLoading: forexLoading, error: forexError } = useQuery({
+    queryKey: ['forexAccount'],
+    queryFn: async () => {
+      try {
+        const response = await fetch('/api/forex/account');
+        if (!response.ok) {
+          throw new Error('Failed to fetch forex data');
+        }
+        return response.json();
+      } catch (error) {
+        console.error('Forex API error:', error);
+        return {
+          balance: 10000,
+          totalPnL: 0,
+          winRate: 0,
+          tradesCount: 0,
+          equity: 10000,
+          margin: 0,
+          freeMargin: 10000,
+          marginLevel: 0,
+          dailyPnL: 0,
+          openPositions: 0
+        };
+      }
+    },
+    refetchInterval: 5000,
   });
 
   // Get forex trades
@@ -65,7 +88,7 @@ export function ComparisonPage() {
     refetchInterval: 5000
   });
 
-  // Calculate comparison metrics
+  // Calculate ROI
   const calculateROI = (pnl: number, initial = 10000) => {
     return ((pnl / initial) * 100).toFixed(2);
   };
@@ -73,7 +96,7 @@ export function ComparisonPage() {
   const cryptoBalance = parseFloat((cryptoData as any)?.balances?.[0]?.free || '9555');
   const cryptoPnL = cryptoBalance - 10000;
   const cryptoROI = parseFloat(calculateROI(cryptoPnL));
-  
+
   const forexROI = forexData ? parseFloat(calculateROI(forexData.totalPnL)) : 0;
   const winner = cryptoROI > forexROI ? 'Crypto' : 'Forex';
 
@@ -189,12 +212,12 @@ export function ComparisonPage() {
                 <div className="text-lg font-semibold">{(dashboardData as any)?.totalTrades || 4500}</div>
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <div className="text-sm text-muted-foreground">Performance Progress</div>
-              <Progress 
-                value={Math.abs(cryptoROI)} 
-                className="h-2" 
+              <Progress
+                value={Math.abs(cryptoROI)}
+                className="h-2"
               />
               <div className="text-xs text-muted-foreground">
                 {cryptoROI >= 0 ? 'Profitable' : 'Learning Phase'}: {Math.abs(cryptoROI).toFixed(1)}%
@@ -249,12 +272,12 @@ export function ComparisonPage() {
                 <div className="text-lg font-semibold">{forexData?.tradesCount || 0}</div>
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <div className="text-sm text-muted-foreground">Performance Progress</div>
-              <Progress 
-                value={Math.abs(forexROI)} 
-                className="h-2" 
+              <Progress
+                value={Math.abs(forexROI)}
+                className="h-2"
               />
               <div className="text-xs text-muted-foreground">
                 {forexROI >= 0 ? 'Profitable' : 'Learning Phase'}: {Math.abs(forexROI).toFixed(1)}%
@@ -357,7 +380,7 @@ export function ComparisonPage() {
             The crypto system uses grid trading with ML predictions, while the forex system
             employs currency-specific strategies including scalping, carry trades, and breakout momentum.
           </div>
-          
+
           <div className="mt-4 space-y-2">
             <div className="flex justify-between text-sm">
               <span>System Comparison:</span>

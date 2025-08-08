@@ -26,6 +26,9 @@ import { AdvancedOrderManager } from "./services/advanced-order-types";
 import { PortfolioOptimizer } from "./services/portfolio-optimizer";
 import { CustomIndicatorEngine } from "./services/custom-indicators";
 import { abTestingRouter } from "./routes/ab-testing";
+import { multiAssetRouter } from './routes/multi-asset';
+import { ForexTradingEngine } from './services/forex-trading-engine';
+import { ForexDataService } from './services/forex-data-service';
 
 // Initialize trading services
 const marketData = new MarketDataService();
@@ -40,35 +43,35 @@ const indicatorEngine = new CustomIndicatorEngine();
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
-  
+
   // WebSocket server for real-time updates
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
-  
+
   // Store connected clients
   const clients = new Set<WebSocket>();
-  
+
   wss.on('connection', (ws) => {
     clients.add(ws);
     console.log('Client connected to WebSocket');
-    
+
     // Send initial data
     ws.send(JSON.stringify({
       type: 'connection',
       status: 'connected',
       timestamp: new Date().toISOString()
     }));
-    
+
     ws.on('close', () => {
       clients.delete(ws);
       console.log('Client disconnected from WebSocket');
     });
-    
+
     ws.on('error', (error) => {
       console.error('WebSocket error:', error);
       clients.delete(ws);
     });
   });
-  
+
   // Broadcast function for real-time updates
   const broadcast = (data: any) => {
     const message = JSON.stringify(data);
@@ -78,7 +81,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
   };
-  
+
   // UNIFIED mathematical performance calculation - used by ALL endpoints for consistency
   async function calculateUnifiedPerformance(allTrades: Trade[]) {
     if (!allTrades || allTrades.length === 0) {
@@ -101,7 +104,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const ethData = marketData.getMarketData('ETHUSDT');
     const btcCurrentPrice = btcData?.price || 116600;
     const ethCurrentPrice = ethData?.price || 3875;
-    
+
     let totalPnl = 0;
     let winningTrades = 0;
     let losingTrades = 0;
@@ -112,25 +115,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     let maxDrawdown = 0;
     const returns: number[] = [];
     const equityPoints: any[] = [];
-    
+
     // Sort trades chronologically for accurate calculations
     const sortedTrades = [...allTrades].sort((a, b) => 
       new Date(a.executedAt).getTime() - new Date(b.executedAt).getTime()
     );
-    
+
     // STANDARDIZED P&L calculation used across ALL endpoints
     for (const trade of sortedTrades) {
       const entryPrice = parseFloat(trade.entryPrice || '0');
       const size = parseFloat(trade.size || '0');
       const executedAt = new Date(trade.executedAt);
       const currentPrice = trade.symbol === 'BTCUSDT' ? btcCurrentPrice : ethCurrentPrice;
-      
+
       if (entryPrice > 0 && currentPrice > 0 && size > 0) {
         // CONSISTENT P&L Formula: Position Value * Price Change %
         const positionValue = size * entryPrice * 0.000001; // Convert to realistic dollar amount
         const priceChange = currentPrice - entryPrice;
         const priceChangePercent = priceChange / entryPrice;
-        
+
         let tradePnl = 0;
         if (trade.side === 'buy') {
           // Long: profit when price rises
@@ -139,14 +142,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Short: profit when price falls
           tradePnl = positionValue * -priceChangePercent;
         }
-        
+
         // Subtract realistic transaction costs
         tradePnl -= 0.05; // $0.05 per trade
-        
+
         totalPnl += tradePnl;
         runningEquity += tradePnl;
         returns.push(tradePnl);
-        
+
         // Track wins/losses
         if (tradePnl > 0) {
           winningTrades++;
@@ -155,14 +158,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           losingTrades++;
           losses += Math.abs(tradePnl);
         }
-        
+
         // Calculate proper drawdown
         if (runningEquity > peak) {
           peak = runningEquity;
         }
         const currentDrawdown = peak > 0 ? ((peak - runningEquity) / peak) * 100 : 0;
         maxDrawdown = Math.max(maxDrawdown, currentDrawdown);
-        
+
         // Track equity curve
         equityPoints.push({
           timestamp: executedAt,
@@ -170,7 +173,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
     }
-    
+
     // Calculate performance metrics using proper financial formulas
     const totalTrades = allTrades.length;
     const winRate = totalTrades > 0 ? winningTrades / totalTrades : 0;
@@ -181,7 +184,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    
+
     let dailyPnL = 0;
     for (const point of equityPoints) {
       if (point.timestamp >= today && point.timestamp < tomorrow) {
@@ -189,14 +192,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dailyPnL += (point.value - prevValue);
       }
     }
-    
+
     // Calculate Sharpe ratio using proper statistical methods
     const avgReturn = returns.length > 0 ? returns.reduce((a, b) => a + b, 0) / returns.length : 0;
     const variance = returns.length > 1 ? 
       returns.reduce((sum, ret) => sum + Math.pow(ret - avgReturn, 2), 0) / (returns.length - 1) : 0;
     const volatility = Math.sqrt(variance);
     const sharpeRatio = volatility > 0 ? (avgReturn / volatility) * Math.sqrt(252) : 0; // Annualized
-    
+
     return {
       totalPnl,
       dailyPnL,
@@ -216,7 +219,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const completedTrades = await storage.getAllTrades(); // Use ALL trades for consistent metrics
       const strategies = await storage.getStrategies();
-      
+
       if (completedTrades.length === 0) {
         return res.json({
           metrics: [
@@ -232,7 +235,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const allTrades = await storage.getAllTrades();
       const performance = await calculateUnifiedPerformance(allTrades);
-      
+
       // Calculate metrics changes from actual data (compare to yesterday's performance)
       const yesterdayTrades = allTrades.filter(t => {
         const tradeDate = new Date(t.executedAt!);
@@ -243,14 +246,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         today.setHours(0,0,0,0);
         return tradeDate >= yesterday && tradeDate < today;
       });
-      
+
       const yesterdayPerf = yesterdayTrades.length > 0 ? await calculateUnifiedPerformance(yesterdayTrades) : performance;
-      
+
       const sharpeChange = (((performance.sharpeRatio || 0) - (yesterdayPerf.sharpeRatio || 0)) * 100).toFixed(1);
       const drawdownChange = (((performance.drawdown || 0) - (yesterdayPerf.drawdown || 0)) * 100).toFixed(1);
       const winRateChange = ((((performance.winRate || 0) - (yesterdayPerf.winRate || 0)) * 100) * 100).toFixed(1);
       const pfChange = (((performance.profitFactor || 0) - (yesterdayPerf.profitFactor || 0)) * 100).toFixed(1);
-      
+
       res.json({
         metrics: [
           { name: "Sharpe Ratio", value: performance.sharpeRatio?.toFixed(2) || "0.00", change: `${parseFloat(sharpeChange) > 0 ? '+' : ''}${sharpeChange}%` },
@@ -268,7 +271,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // API Routes
-  
+
   // Get dashboard data
   app.get('/api/dashboard', async (req, res) => {
     try {
@@ -280,7 +283,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const systemAlerts = await storage.getSystemAlerts(10);
       // Get current risk metrics from RiskManager
       const currentMetrics = riskManager.getCurrentMetrics();
-      
+
       // Get current risk metrics from RiskManager
       const riskData = {
         currentDrawdown: (currentMetrics.currentDrawdown / 10000) * 100,
@@ -337,7 +340,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         riskMetrics: riskData
       };
 
-      
+
       res.json(dashboardData);
     } catch (error) {
       console.error('Dashboard data error:', error);
@@ -350,11 +353,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const trades = await storage.getAllTrades(); // Use ALL trades for consistent counting
       const positions = await storage.getOpenPositions();
-      
+
       // Check if trading engine is active (recent trades)
       const recentTradeTime = trades.length > 0 ? new Date(trades[0].executedAt!) : null;
       const isEngineActive = recentTradeTime && (Date.now() - recentTradeTime.getTime()) < 60000; // Within 1 minute
-      
+
       // Check market data freshness
       let marketDataStatus = 'live';
       try {
@@ -363,7 +366,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch {
         marketDataStatus = 'offline';
       }
-      
+
       res.json({
         tradingEngine: isEngineActive ? 'active' : 'inactive',
         marketData: marketDataStatus,
@@ -386,26 +389,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
-  
+
   // Account management - USE UNIFIED CALCULATION METHOD
   app.get('/api/account', async (req, res) => {
     try {
       const allTrades = await storage.getAllTrades();
       console.log(`📊 Calculating account balance from ${allTrades.length} trades using UNIFIED method`);
-      
+
       // Use the same unified performance calculation as all other endpoints
       const performance = await calculateUnifiedPerformance(allTrades);
-      
+
       // Starting capital: $10,000  
       const startingCapital = 10000;
       const totalFees = allTrades.length * 0.05; // $0.05 per trade fee
-      
+
       // Account balance = Starting Capital + P&L - Fees
       const currentBalance = startingCapital + performance.totalPnl - totalFees;
       const freeBalance = Math.max(0, currentBalance);
-      
+
       console.log(`💰 UNIFIED Account Balance: Start=$${startingCapital}, P&L=$${performance.totalPnl.toFixed(2)}, Fees=$${totalFees.toFixed(2)}, Current=$${currentBalance.toFixed(2)}`);
-      
+
       const accountInfo = {
         balances: [{
           asset: 'USDT',
@@ -424,7 +427,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         winningTrades: performance.winningTrades,
         losingTrades: performance.losingTrades
       };
-      
+
       res.json(accountInfo);
     } catch (error) {
       console.error('Account data error:', error);
@@ -451,45 +454,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to fetch strategies' });
     }
   });
-  
+
   app.post('/api/strategies', async (req, res) => {
     try {
       const validatedData = insertStrategySchema.parse(req.body);
       const strategy = await storage.createStrategy(validatedData);
-      
+
       broadcast({
         type: 'strategy_created',
         data: strategy
       });
-      
+
       res.json(strategy);
     } catch (error) {
       res.status(400).json({ error: 'Invalid strategy data' });
     }
   });
-  
+
   app.put('/api/strategies/:id/status', async (req, res) => {
     try {
       const { id } = req.params;
       const { status } = req.body;
-      
+
       if (!['active', 'inactive', 'paused'].includes(status)) {
         return res.status(400).json({ error: 'Invalid status' });
       }
-      
+
       const strategy = await storage.updateStrategyStatus(id, status);
-      
+
       broadcast({
         type: 'strategy_status_updated',
         data: { id, status }
       });
-      
+
       res.json(strategy);
     } catch (error) {
       res.status(500).json({ error: 'Failed to update strategy status' });
     }
   });
-  
+
   // Position management
   app.get('/api/positions', async (req, res) => {
     try {
@@ -499,74 +502,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to fetch positions' });
     }
   });
-  
+
   // Trading operations
   app.post('/api/trading/start', async (req, res) => {
     try {
       await tradingEngine.start();
-      
+
       broadcast({
         type: 'trading_started',
         timestamp: new Date().toISOString()
       });
-      
+
       res.json({ status: 'Trading started' });
     } catch (error) {
       res.status(500).json({ error: 'Failed to start trading' });
     }
   });
-  
+
   app.post('/api/trading/stop', async (req, res) => {
     try {
       await tradingEngine.stop();
-      
+
       broadcast({
         type: 'trading_stopped',
         timestamp: new Date().toISOString()
       });
-      
+
       res.json({ status: 'Trading stopped' });
     } catch (error) {
       res.status(500).json({ error: 'Failed to stop trading' });
     }
   });
-  
+
   app.post('/api/trading/emergency-stop', async (req, res) => {
     try {
       await tradingEngine.emergencyStop();
-      
+
       broadcast({
         type: 'emergency_stop',
         timestamp: new Date().toISOString()
       });
-      
+
       res.json({ status: 'Emergency stop executed' });
     } catch (error) {
       res.status(500).json({ error: 'Failed to execute emergency stop' });
     }
   });
-  
+
   // Backtesting
   app.post('/api/backtest', async (req, res) => {
     try {
       const { strategyId, startDate, endDate, parameters } = req.body;
-      
+
       const result = await backtestEngine.run({
         strategyId,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         parameters
       });
-      
+
       await storage.createBacktestResult(result);
-      
+
       res.json(result);
     } catch (error) {
       console.error('Backtest error:', error);
       res.status(500).json({ error: 'Failed to run backtest' });
     }
   });
-  
+
   app.get('/api/backtest/results/:strategyId', async (req, res) => {
     try {
       const { strategyId } = req.params;
@@ -576,7 +579,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to fetch backtest results' });
     }
   });
-  
+
   // Risk management
   app.get('/api/risk', async (req, res) => {
     try {
@@ -602,15 +605,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to fetch risk metrics' });
     }
   });
-  
+
   // Learning Analytics
   app.get('/api/learning/analysis', async (req, res) => {
     try {
       const { LearningAnalyticsEngine } = await import('./services/learning-analytics');
       const analyticsEngine = new LearningAnalyticsEngine(storage);
-      
+
       const analysisResult = await analyticsEngine.analyzeAllLearningData();
-      
+
       res.json(analysisResult);
     } catch (error) {
       console.error('Learning analysis error:', error);
@@ -622,7 +625,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { LearningAnalyticsEngine } = await import('./services/learning-analytics');
       const analyticsEngine = new LearningAnalyticsEngine(storage);
-      
+
       const result = await analyticsEngine.analyzeAllLearningData();
       res.json({ patterns: result.patterns });
     } catch (error) {
@@ -635,7 +638,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { LearningAnalyticsEngine } = await import('./services/learning-analytics');
       const analyticsEngine = new LearningAnalyticsEngine(storage);
-      
+
       const result = await analyticsEngine.analyzeAllLearningData();
       res.json({ 
         insights: result.insights,
@@ -653,14 +656,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const trades = await storage.getAllTrades();
       const recentTrades = trades.slice(-1000);
-      
+
       // Calculate actual learning metrics from trade data
       const winningTrades = recentTrades.filter(trade => {
         // Simulate P&L based on current market prices vs entry prices
         const entryPrice = parseFloat(trade.entryPrice || '0');
         const currentPrice = trade.symbol === 'BTCUSDT' ? 116200 : 3965;
         const priceChange = (currentPrice - entryPrice) / entryPrice;
-        
+
         if (trade.side === 'buy') {
           return priceChange > 0.001; // Account for fees
         } else {
@@ -670,7 +673,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const currentWinRate = recentTrades.length > 0 ? winningTrades.length / recentTrades.length : 0;
       const learningVelocity = Math.max(0, (currentWinRate - 0.2) * 100); // Learning improvement over baseline
-      
+
       res.json({
         learningActive: true,
         totalTradesProcessed: trades.length,
@@ -703,23 +706,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to fetch alerts' });
     }
   });
-  
+
   app.post('/api/alerts/:id/acknowledge', async (req, res) => {
     try {
       const { id } = req.params;
       await storage.acknowledgeAlert(id);
-      
+
       broadcast({
         type: 'alert_acknowledged',
         data: { id }
       });
-      
+
       res.json({ status: 'Alert acknowledged' });
     } catch (error) {
       res.status(500).json({ error: 'Failed to acknowledge alert' });
     }
   });
-  
+
   // Market data
   app.get('/api/market/regime', async (req, res) => {
     try {
@@ -729,7 +732,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to fetch market regime' });
     }
   });
-  
+
   // Real-time data updates (simulate for demo) - simplified to avoid API errors
   setInterval(async () => {
     try {
@@ -754,17 +757,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           timestamp: new Date().toISOString()
         }
       });
-      
+
     } catch (error) {
       console.error('Real-time update error:', error);
     }
   }, 5000); // Update every 5 seconds
-  
+
   // Get historical candles for backtesting and analysis
   app.get('/api/market/:symbol/candles', async (req, res) => {
     const { symbol } = req.params;
     const { interval = '1m', limit = '100' } = req.query;
-    
+
     try {
       const candles = historicalDataService.getCandles(
         symbol, 
@@ -791,7 +794,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/patterns/:symbol/:patternName', async (req, res) => {
     const { symbol, patternName } = req.params;
     const { days = '30' } = req.query;
-    
+
     try {
       const occurrences = historicalDataService.identifyPatternOccurrences(
         symbol, 
@@ -808,7 +811,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/market/:symbol/regimes', async (req, res) => {
     const { symbol } = req.params;
     const { days = '90' } = req.query;
-    
+
     try {
       const regimes = historicalDataService.getMarketRegimeHistory(
         symbol, 
@@ -825,12 +828,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { symbol } = req.params;
       const { timeHorizon = '1h' } = req.query;
-      
+
       const prediction = await mlPredictor.generatePrediction(
         symbol.toUpperCase(),
         timeHorizon as string
       );
-      
+
       res.json(prediction);
     } catch (error) {
       console.error('Error generating ML prediction:', error);
@@ -875,7 +878,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/orders', async (req, res) => {
     try {
       const allTrades = await storage.getAllTrades();
-      
+
       // Transform recent trades into order format
       const orders = allTrades.slice(0, 20).map((trade: any, index: number) => {
         const executedAt = new Date(trade.executedAt);
@@ -890,7 +893,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           timestamp: executedAt.toLocaleString()
         };
       });
-      
+
       res.json(orders);
     } catch (error) {
       console.error('Orders API error:', error);
@@ -1001,9 +1004,143 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // A/B Testing endpoints
   app.use('/api/ab-testing', abTestingRouter);
 
-  // Multi-Asset and Forex Comparison endpoints
-  const { multiAssetRoutes } = await import('./routes/multi-asset');
-  app.use('/api/multi-asset', multiAssetRoutes);
+  // Use the multi-asset router
+  app.use('/api/multi-asset', multiAssetRouter);
+
+  // Initialize forex services
+  const forexEngine = new ForexTradingEngine();
+  const forexData = new ForexDataService();
+
+  // Forex endpoints
+  app.get('/api/forex/account', async (req, res) => {
+    try {
+      const accountStatus = forexEngine.getForexAccountStatus();
+      res.json(accountStatus);
+    } catch (error) {
+      console.error('Error getting forex account:', error);
+      res.status(500).json({ error: 'Failed to get forex account status' });
+    }
+  });
+
+  app.get('/api/forex/positions', async (req, res) => {
+    try {
+      const positions = forexEngine.getForexPositionsArray();
+      res.json(positions);
+    } catch (error) {
+      console.error('Error getting forex positions:', error);
+      res.status(500).json({ error: 'Failed to get forex positions' });
+    }
+  });
+
+  app.get('/api/forex/trades', async (req, res) => {
+    try {
+      const trades = forexEngine.getForexTrades();
+      res.json(trades);
+    } catch (error) {
+      console.error('Error getting forex trades:', error);
+      res.status(500).json({ error: 'Failed to get forex trades' });
+    }
+  });
+
+  app.get('/api/forex/rates', async (req, res) => {
+    try {
+      const rates = forexData.getAllForexRates();
+      res.json(rates);
+    } catch (error) {
+      console.error('Error getting forex rates:', error);
+      res.status(500).json({ error: 'Failed to get forex rates' });
+    }
+  });
+
+  app.get('/api/forex/pairs/:symbol', async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      const rate = forexData.getForexRate(symbol);
+      if (!rate) {
+        return res.status(404).json({ error: 'Forex pair not found' });
+      }
+      res.json(rate);
+    } catch (error) {
+      console.error('Error getting forex pair:', error);
+      res.status(500).json({ error: 'Failed to get forex pair data' });
+    }
+  });
+
+  // Dashboard endpoint
+  app.get('/api/dashboard', async (req, res) => {
+    try {
+      const strategies = await storage.getStrategies();
+      const positions = await storage.getOpenPositions();
+      const recentTrades = await storage.getRecentTrades(10);
+      const currentRegime = await storage.getCurrentRegime();
+      const riskMetrics = await storage.getCurrentRiskMetrics();
+      const systemAlerts = await storage.getSystemAlerts(10);
+      // Get current risk metrics from RiskManager
+      const currentMetrics = riskManager.getCurrentMetrics();
+
+      // Get current risk metrics from RiskManager
+      const riskData = {
+        currentDrawdown: (currentMetrics.currentDrawdown / 10000) * 100,
+        dailyPnL: currentMetrics.dailyPnL,
+        totalPositionSize: currentMetrics.totalPositionSize,
+        riskUtilization: currentMetrics.riskUtilization,
+        isHalted: currentMetrics.isHalted,
+        circuitBreakers: currentMetrics.circuitBreakers
+      };
+
+      // Get live market data or use fallback
+      const btcData = marketData.getMarketData('BTCUSDT');
+      const ethData = marketData.getMarketData('ETHUSDT');
+
+      // Calculate actual performance metrics from all trades
+      const allTrades = await storage.getAllTrades();
+      const performance = await calculateUnifiedPerformance(allTrades);
+
+      // Format data to match frontend expectations
+      const dashboardData = {
+        strategies: strategies || [],
+        positions: positions || [],
+        recentTrades: recentTrades || [],
+        systemAlerts: systemAlerts || [],
+        performance: {
+          totalPnl: performance.totalPnl,
+          dailyPnL: performance.dailyPnL,
+          drawdown: performance.drawdown,
+          winRate: performance.winRate,
+          profitFactor: performance.profitFactor,
+          sharpeRatio: performance.sharpeRatio,
+          totalTrades: performance.totalTrades,
+          equity: performance.equity
+        },
+        marketData: {
+          BTCUSDT: {
+            price: btcData?.price || 116600, // Web-researched BTC price
+            change: btcData?.change || 0.015, // Web-researched 24h change
+            volume: btcData?.volume || 65000000000, // Web-researched volume
+            volatility: btcData?.volatility || 0.042 // Web-researched volatility
+          },
+          ETHUSDT: {
+            price: ethData?.price || 3875, // Web-researched ETH price
+            change: ethData?.change || 0.03, // Web-researched 24h change
+            volume: ethData?.volume || 42000000000, // Web-researched volume
+            volatility: ethData?.volatility || 0.048 // Web-researched volatility
+          },
+          regime: {
+            current: currentRegime?.regime || 'Trending',
+            strength: parseFloat(currentRegime?.volatility || '0.75'),
+            confidence: parseFloat(currentRegime?.avgSpread || '0.82')
+          }
+        },
+        riskMetrics: riskData
+      };
+
+
+      res.json(dashboardData);
+    } catch (error) {
+      console.error('Dashboard data error:', error);
+      res.status(500).json({ error: 'Failed to fetch dashboard data' });
+    }
+  });
 
   // Portfolio Optimization endpoints
   app.get('/api/portfolio/optimization', async (req, res) => {
@@ -1033,13 +1170,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/portfolio/rebalance', async (req, res) => {
     try {
       const result = await portfolioOptimizer.rebalancePortfolio(req.body);
-      
+
       broadcast({
         type: 'portfolio_rebalanced',
         data: result,
         timestamp: new Date().toISOString()
       });
-      
+
       res.json(result);
     } catch (error) {
       console.error('Error rebalancing portfolio:', error);
@@ -1062,7 +1199,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { symbol } = req.params;
       const { period = '14' } = req.query;
-      
+
       // Simulate adaptive RSI calculation
       const rsi = {
         symbol,
@@ -1070,7 +1207,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         signal: Math.random() > 0.5 ? 'overbought' : 'oversold',
         period: parseInt(period as string)
       };
-      
+
       res.json(rsi);
     } catch (error) {
       console.error('Error calculating adaptive RSI:', error);
@@ -1082,7 +1219,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { symbol } = req.params;
       const { period = '20' } = req.query;
-      
+
       // Simulate sentiment oscillator calculation
       const sentiment = {
         symbol,
@@ -1090,7 +1227,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sentiment: Math.random() > 0.5 ? 'bullish' : 'bearish',
         confidence: Math.random()
       };
-      
+
       res.json(sentiment);
     } catch (error) {
       console.error('Error calculating sentiment oscillator:', error);
@@ -1102,7 +1239,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { symbol } = req.params;
       const { period = '20' } = req.query;
-      
+
       // Simulate market regime calculation
       const regime = {
         symbol,
@@ -1110,7 +1247,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         strength: Math.random(),
         confidence: Math.random()
       };
-      
+
       res.json(regime);
     } catch (error) {
       console.error('Error calculating market regime:', error);
@@ -1122,7 +1259,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { symbol } = req.params;
       const { period = '50' } = req.query;
-      
+
       const data = historicalDataService.getHistoricalData(symbol, 100, '1h');
       // Simulate volume profile calculation
       const profile = {
@@ -1132,7 +1269,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         point_of_control: Math.random() * 1000 + 39500,
         volume_nodes: []
       };
-      
+
       res.json(profile);
     } catch (error) {
       console.error('Error calculating volume profile:', error);
@@ -1144,7 +1281,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { symbol } = req.params;
       const { period = '20', multiplier = '2' } = req.query;
-      
+
       const data = historicalDataService.getHistoricalData(symbol, 100, '1h');
       // Simulate volatility bands calculation
       const bands = {
@@ -1154,7 +1291,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         middle_band: Math.random() * 1000 + 39000,
         bandwidth: Math.random() * 0.1
       };
-      
+
       res.json(bands);
     } catch (error) {
       console.error('Error calculating volatility bands:', error);
@@ -1168,7 +1305,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { period = '7d' } = req.query;
       const strategies = await storage.getActiveStrategies();
       const performance = [];
-      
+
       for (const strategy of strategies) {
         const trades = await storage.getTradesByStrategy(strategy.id);
         // Simulate strategy performance analysis
@@ -1184,7 +1321,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ...analysis
         });
       }
-      
+
       res.json(performance);
     } catch (error) {
       console.error('Error analyzing strategy performance:', error);
