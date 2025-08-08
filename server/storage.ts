@@ -254,6 +254,7 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(systemAlerts)
+      .where(eq(systemAlerts.acknowledged, false))
       .orderBy(desc(systemAlerts.createdAt))
       .limit(limit);
   }
