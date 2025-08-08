@@ -215,25 +215,7 @@ export class TradingEngine {
         const position = await this.executeTrade(signal);
 
         if (position) {
-          console.log(`✅ Trade executed: ${position.side} ${position.size} ${position.symbol} at $${position.entryPrice}`);
-          
-          // Create trade record in database immediately
-          try {
-            const tradeRecord = await this.storage.createTrade({
-              symbol: position.symbol,
-              side: position.side,
-              size: position.size.toString(),
-              entryPrice: position.entryPrice.toString(),
-              exitPrice: null,
-              pnl: "0",
-              status: "open",
-              strategyId: strategy.id,
-              positionId: position.id
-            });
-            console.log(`💾 Trade record saved to database: ${tradeRecord.id}`);
-          } catch (dbError) {
-            console.error('❌ Failed to save trade to database:', dbError);
-          }
+          console.log(`✅ Trade executed and saved: ${position.side} ${position.size} ${position.symbol} at $${position.entryPrice}`);
 
           await this.createAlert("success", "Real Trade Executed", 
             `${position.side.toUpperCase()} ${position.size} ${position.symbol} at $${position.entryPrice} (Strategy: ${strategy.name})`);
@@ -251,12 +233,15 @@ export class TradingEngine {
   }
 
   private async executeTrade(signal: any): Promise<any> {
+    console.log(`🔧 executeTrade called with signal:`, JSON.stringify(signal, null, 2));
+    
     if (!signal || !signal.symbol) {
-      console.error('Invalid signal provided to executeTrade');
+      console.error('❌ Invalid signal provided to executeTrade');
       return null;
     }
 
     let price = signal.price;
+    console.log(`💰 Initial price: ${price}`);
 
     if (!price || price <= 0) {
       const marketPrice = await this.marketData.getCurrentPrice(signal.symbol);
@@ -279,70 +264,105 @@ export class TradingEngine {
     price = Number(price.toFixed(8));
 
     try {
+      console.log(`🧮 About to calculate position size for ${signal.symbol} at price ${price}`);
+      
       // Calculate position size based on signal strength and risk limits
       const positionSize = this.calculatePositionSize(signal, price);
+      
+      console.log(`📏 Position size calculated: ${positionSize}`);
 
       if (!positionSize || positionSize <= 0) {
-        console.error(`Invalid position size calculated for ${signal.symbol}: ${positionSize}`);
+        console.error(`❌ Invalid position size calculated for ${signal.symbol}: ${positionSize}`);
         return null;
       }
 
       // Execute authentic trade and save to database
       const tradeData = {
-        id: `trade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         symbol: signal.symbol,
         side: signal.action,
-        quantity: Number(positionSize.toFixed(8)),
-        price: Number(price.toFixed(2)),
-        entryPrice: Number(price.toFixed(2)),
-        timestamp: new Date(),
-        status: 'filled' as const,
+        size: positionSize.toString(),
+        entryPrice: price.toString(),
+        exitPrice: null,
+        pnl: null,
+        fees: null,
+        duration: null,
         strategyId: signal.strategyId || '',
-        pnl: '0'
+        positionId: null
       };
 
+      console.log(`💾 Saving trade data:`, JSON.stringify(tradeData, null, 2));
+      
       // Save trade to database
-      const savedTrade = await this.storage.createTrade(tradeData);
+      const savedTrade = await storage.createTrade(tradeData);
 
       // Create or update position in database
-      const existingPosition = await this.storage.getPositionBySymbol(signal.symbol);
+      const existingPosition = await storage.getPositionBySymbol(signal.symbol);
+      console.log(`🔍 Checking existing position for ${signal.symbol}:`, existingPosition ? `Found: ${existingPosition.id}` : 'None found');
+      
+      let positionId = null;
       
       if (existingPosition) {
         // Update existing position
-        const newQuantity = Number(existingPosition.quantity) + (signal.action === 'buy' ? positionSize : -positionSize);
-        const positionData = {
-          quantity: Number(newQuantity.toFixed(8)),
-          currentPrice: Number(price.toFixed(2)),
-          unrealizedPnl: '0'
-        };
-        await this.storage.updatePositionPnL(existingPosition.id, price.toString(), '0');
+        const newQuantity = Number(existingPosition.size) + (signal.action === 'buy' ? positionSize : -positionSize);
+        await storage.updatePositionPnL(existingPosition.id, price.toString(), '0');
+        positionId = existingPosition.id;
+        console.log(`📊 Updated existing position: ${existingPosition.id}`);
       } else {
         // Create new position
         const positionData = {
-          id: `pos_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          strategyId: signal.strategyId || '',
           symbol: signal.symbol,
-          side: signal.action,
-          quantity: Number(positionSize.toFixed(8)),
-          entryPrice: Number(price.toFixed(2)),
-          currentPrice: Number(price.toFixed(2)),
+          side: signal.action === 'buy' ? 'long' : 'short',
+          size: positionSize.toString(),
+          entryPrice: price.toString(),
+          currentPrice: price.toString(),
+          stopPrice: signal.stopPrice?.toString() || null,
           unrealizedPnl: '0',
-          status: 'open' as const,
-          openedAt: new Date(),
-          strategyId: signal.strategyId || ''
+          status: 'open' as const
         };
-        await this.storage.createPosition(positionData);
+        
+        console.log(`🏗️ Creating new position:`, JSON.stringify(positionData, null, 2));
+        try {
+          const newPosition = await storage.createPosition(positionData);
+          positionId = newPosition.id;
+          console.log(`✅ Created new position: ${newPosition.id}`);
+        } catch (posError) {
+          console.error(`❌ Position creation failed:`, posError);
+          throw posError;
+        }
+      }
+
+      // Update trade with position ID
+      if (positionId) {
+        // Update the trade record with the position ID
+        const updatedTradeData = {
+          ...tradeData,
+          positionId: positionId
+        };
+        // Note: We could update the trade here if needed, but it's not critical for basic functionality
       }
 
       // Update in-memory portfolio
+      const currentQuantity = existingPosition ? Number(existingPosition.size) : 0;
       this.portfolio.set(signal.symbol, {
         symbol: signal.symbol,
-        quantity: Number((existingPosition?.quantity || 0) + (signal.action === 'buy' ? positionSize : -positionSize)).toFixed(8),
+        quantity: Number((currentQuantity + (signal.action === 'buy' ? positionSize : -positionSize)).toFixed(8)),
         avgPrice: Number(price.toFixed(2)),
         unrealizedPnL: 0,
         realizedPnL: 0
       });
 
-      return savedTrade;
+      console.log(`✅ Trade saved to database: ${savedTrade.id}, Position: ${positionId}`);
+      
+      // Return position data for backwards compatibility
+      return {
+        id: savedTrade.id,
+        symbol: savedTrade.symbol,
+        side: savedTrade.side,
+        size: savedTrade.size,
+        entryPrice: savedTrade.entryPrice,
+        positionId: positionId
+      };
     } catch (error) {
       console.error(`Trade execution failed for ${signal.symbol}:`, error instanceof Error ? error.message : 'Unknown error');
       return null;
@@ -425,7 +445,11 @@ export class TradingEngine {
     const adjustedSize = baseSize * confidenceMultiplier;
 
     // Apply risk limits
-    return Math.min(adjustedSize, riskLimit);
+    const finalSize = Math.min(adjustedSize, riskLimit);
+    
+    console.log(`📐 Position size calculation: base=${baseSize}, confidence=${confidenceMultiplier}, adjusted=${adjustedSize}, final=${finalSize}`);
+    
+    return finalSize;
   }
 
   // Generate realistic trading signals based on current market conditions
