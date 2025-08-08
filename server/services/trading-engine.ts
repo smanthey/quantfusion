@@ -158,6 +158,13 @@ export class TradingEngine {
     console.log('🔄 Trading loop executing...');
     
     try {
+      // EMERGENCY: Check total losses IMMEDIATELY
+      const currentBalance = await this.getCurrentBalance();
+      const totalLoss = 10000 - currentBalance;
+      if (totalLoss > 500) {
+        console.log(`🚨 EMERGENCY HALT: Total loss $${totalLoss.toFixed(2)} exceeds $500 limit - STOPPING ALL TRADING`);
+        return; // EXIT IMMEDIATELY
+      }
       // 2. Get active strategies - create default ones if none exist
       let strategies = await storage.getActiveStrategies();
       console.log(`📋 Found ${strategies?.length || 0} active strategies`);
@@ -571,20 +578,21 @@ export class TradingEngine {
       // Get A/B test variant for position sizing  
       const variant = abTesting.getVariantForStrategy(signal.strategyId || 'default', 'position-sizing-v1');
       
-      let baseSize = 300; // Default $300 position in USD
-      let confidenceMultiplier = signal.confidence || 0.6;
-      let maxRisk = 0.015; // 1.5% default
+      // EMERGENCY: Drastically reduced position sizing to stop losses  
+      let baseSize = 25; // EMERGENCY REDUCTION from $300 to $25 position in USD
+      let confidenceMultiplier = Math.min(signal.confidence || 0.6, 0.5); // Cap multiplier
+      let maxRisk = 0.005; // 0.5% EMERGENCY REDUCTION
       
       if (variant && variant.config) {
-        baseSize = variant.config.baseSize || baseSize;
-        confidenceMultiplier = variant.config.confidenceMultiplier || confidenceMultiplier;
-        maxRisk = variant.config.maxRiskPerTrade || maxRisk;
+        baseSize = Math.min(variant.config.baseSize || baseSize, 50); // CAP AT $50
+        confidenceMultiplier = Math.min(variant.config.confidenceMultiplier || confidenceMultiplier, 0.5);
+        maxRisk = Math.min(variant.config.maxRiskPerTrade || maxRisk, 0.005);
         
-        console.log(`🧪 A/B TEST: Using ${variant.name} for position sizing`);
+        console.log(`🧪 A/B TEST: Using ${variant.name} for position sizing (EMERGENCY LIMITS)`);
       }
       
-      // Calculate position size in USD, then convert to crypto units
-      const usdAmount = baseSize * confidenceMultiplier;
+      // EMERGENCY: Cap all position sizes
+      const usdAmount = Math.min(baseSize * confidenceMultiplier, 30); // Never exceed $30 per trade
       const cryptoUnits = usdAmount / price; // Convert USD to crypto units
       
       console.log(`📐 Position size calculation: USD=${usdAmount}, price=${price}, crypto_units=${cryptoUnits}`);
@@ -592,7 +600,7 @@ export class TradingEngine {
       return Math.max(cryptoUnits, 0.001); // Ensure minimum size
     } catch (error) {
       console.error('Position size calculation error:', error);
-      return 100 / price; // Safe fallback: $100 worth
+      return 10 / price; // EMERGENCY FALLBACK: Only $10 worth
     }
   }
 

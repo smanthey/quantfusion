@@ -29,8 +29,8 @@ export interface Trade {
 }
 
 export class RiskManager {
-  private maxDrawdown = 0.15; // 15% max drawdown
-  private maxDailyLoss = 500; // $500 max daily loss
+  private maxDrawdown = 0.05; // 5% max drawdown - EMERGENCY TIGHTENING  
+  private maxDailyLoss = 100; // $100 max daily loss - EMERGENCY REDUCTION
   private maxPositionSize = 0.1; // 10% of portfolio per position
   private isHalted = false;
   private circuitBreakers: string[] = [];
