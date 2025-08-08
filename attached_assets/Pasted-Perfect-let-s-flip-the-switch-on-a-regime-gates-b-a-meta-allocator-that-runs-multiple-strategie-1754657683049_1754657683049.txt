@@ -1,0 +1,262 @@
+Perfect—let’s flip the switch on (a) regime gates, (b) a meta-allocator that runs multiple strategies at once, and (c) an explore/exploit loop so it keeps learning without nuking the account.
+
+I’ll give you drop-in modules and exactly where they plug into your scaffold. If you want a zipped repo after this, say the word.
+
+⸻
+
+1) Regime detection (vol/liquidity gates)
+
+aqcore/regimes.py
+
+import pandas as pd
+import numpy as np
+
+class Regime:
+    def __init__(self, vol_lookback=1440, spread_bps_threshold=6, range_norm=0.015):
+        self.vol_lookback = vol_lookback
+        self.spread_bps_threshold = spread_bps_threshold
+        self.range_norm = range_norm
+
+    def compute(self, df_candles: pd.DataFrame, spread_bps: float) -> str:
+        """
+        Returns: 'trend', 'chop', or 'off'
+        """
+        # Volatility proxy (ATR% or realized vol); here: normalized high-low range
+        hl_range = (df_candles['high'] - df_candles['low']) / df_candles['close']
+        vol = hl_range.rolling(self.vol_lookback, min_periods=int(self.vol_lookback*0.3)).mean().iloc[-1]
+
+        # If spreads are wide => execution cost too high -> possibly 'off'
+        if spread_bps >= self.spread_bps_threshold:
+            return 'off'
+
+        # Trend if range/vol expansion is elevated; otherwise chop (mean-rev friendly)
+        if vol >= self.range_norm:
+            return 'trend'
+        return 'chop'
+
+Wire it in (example in your runner)
+
+from aqcore.regimes import Regime
+regime = Regime(vol_lookback=720, spread_bps_threshold=6, range_norm=0.012)
+current_regime = regime.compute(df_recent_candles, latest_spread_bps)
+# gate which strategies can run
+eligible = {
+  'mean_rev': current_regime in ('chop',),
+  'breakout': current_regime in ('trend',),
+  'trend_ma': current_regime in ('trend', 'chop'),  # allow broadly but size by meta-allocator
+}
+
+
+⸻
+
+2) Meta-allocator (runs strategies in parallel)
+
+aqcore/allocator.py
+
+import numpy as np
+from dataclasses import dataclass
+from typing import Dict, List
+
+@dataclass
+class StratStats:
+    name: str
+    pf_live: float         # rolling profit factor (live/paper)
+    dd_live: float         # rolling max drawdown (0..1)
+    trades_live: int
+    vol_target: float      # desired risk (e.g., 0.2 = 20% annualized vol)
+    corr_row: Dict[str, float]  # correlation to other strategies
+    eligible: bool
+
+class MetaAllocator:
+    def __init__(self, risk_cap: float = 1.0, min_weight=0.0, max_weight=0.7, dd_cap=0.15):
+        self.risk_cap = risk_cap
+        self.min_weight = min_weight
+        self.max_weight = max_weight
+        self.dd_cap = dd_cap
+
+    def _base_score(self, s: StratStats):
+        if not s.eligible or s.trades_live < 50 or s.dd_live > self.dd_cap:
+            return 0.0
+        # Edge: PF > 1 roughly linear; penalize DD
+        return max(0.0, (s.pf_live - 1.0)) * (1.0 - s.dd_live)
+
+    def allocate(self, stats: List[StratStats]) -> Dict[str, float]:
+        # raw scores
+        raw = {s.name: self._base_score(s) for s in stats}
+        if sum(raw.values()) == 0:
+            return {s.name: 0.0 for s in stats}
+
+        # decorrelate: downweight highly correlated pairs (simple heuristic)
+        names = [s.name for s in stats]
+        weights = {n: r for n, r in raw.items()}
+        for i, si in enumerate(stats):
+            for j, sj in enumerate(stats):
+                if i >= j: continue
+                rho = si.corr_row.get(sj.name, 0.0)
+                if rho > 0.7:
+                    # damp higher of the two
+                    if weights[si.name] >= weights[sj.name]:
+                        weights[si.name] *= (1 - 0.5*(rho-0.7))
+                    else:
+                        weights[sj.name] *= (1 - 0.5*(rho-0.7))
+
+        # normalize and clip per constraints
+        total = sum(weights.values())
+        alloc = {n: (w/total) * self.risk_cap for n, w in weights.items()} if total>0 else {n:0 for n in names}
+        alloc = {n: min(self.max_weight, max(self.min_weight, a)) for n, a in alloc.items()}
+
+        # re-normalize to risk_cap
+        t = sum(alloc.values())
+        if t > 0:
+            alloc = {n: a * (self.risk_cap / t) for n, a in alloc.items()}
+        return alloc
+
+Using it
+
+from aqcore.allocator import MetaAllocator, StratStats
+
+stats = [
+  StratStats('mean_rev', pf_live=1.25, dd_live=0.08, trades_live=400, vol_target=0.15,
+             corr_row={'breakout':0.15,'trend_ma':0.35}, eligible=eligible['mean_rev']),
+  StratStats('breakout', pf_live=1.18, dd_live=0.10, trades_live=220, vol_target=0.2,
+             corr_row={'mean_rev':0.15,'trend_ma':0.55}, eligible=eligible['breakout']),
+  StratStats('trend_ma', pf_live=1.12, dd_live=0.09, trades_live=350, vol_target=0.18,
+             corr_row={'mean_rev':0.35,'breakout':0.55}, eligible=eligible['trend_ma'])
+]
+alloc = MetaAllocator(risk_cap=1.0, max_weight=0.6).allocate(stats)
+# alloc might return {'mean_rev':0.44, 'breakout':0.28, 'trend_ma':0.28}
+
+	•	Feed these weights into your position sizing—multiply each strategy’s per-trade risk % by its allocated weight.
+	•	Correlations can be computed from rolling daily PnL of each strategy stream.
+
+⸻
+
+3) Explore vs. Exploit (continuous learning)
+
+aqcore/explore.py
+
+import random, time
+from typing import Dict, List
+
+class ExploreExploit:
+    def __init__(self, explore_budget=0.10, min_trials=2, cool_down_min=30):
+        self.explore_budget = explore_budget      # fraction of risk for exploration
+        self.min_trials = min_trials
+        self.cool_down_min = cool_down_min
+        self.last_explore_ts = 0
+
+    def candidate_params(self, family: str, winners: List[Dict], space: Dict) -> List[Dict]:
+        """
+        winners: recent top parameter dicts for the family
+        space: search bounds (e.g., {'n':(10,60), 'k':(1.5,3.0), 'atr_stop':(1.0,2.0)})
+        returns: list of new trial param dicts
+        """
+        seeds = winners[:2] if winners else []
+        trials = []
+        # perturb winners (local search)
+        for w in seeds:
+            t = w.copy()
+            for k, bounds in space.items():
+                lo, hi = bounds
+                if random.random() < 0.5:
+                    t[k] = max(lo, min(hi, w[k] * (1 + random.uniform(-0.2, 0.2))))
+            trials.append(t)
+        # add random global samples
+        while len(trials) < max(self.min_trials, len(seeds)+1):
+            t = {k: random.uniform(*bounds) if isinstance(bounds, tuple) else random.choice(bounds)
+                 for k, bounds in space.items()}
+            trials.append(t)
+        return trials
+
+    def budget_weights(self, base_alloc: Dict[str, float]):
+        # carve out explore budget proportionally from all strategies
+        scaled = {k: v*(1-self.explore_budget) for k, v in base_alloc.items()}
+        return scaled, self.explore_budget
+
+Using it
+
+from aqcore.explore import ExploreExploit
+ex = ExploreExploit(explore_budget=0.10)
+
+# base allocations from meta-allocator
+alloc_base = alloc
+alloc_live, budget_explore = ex.budget_weights(alloc_base)
+
+# propose exploratory configs for, say, mean-rev
+param_space = {'n':(12,60), 'k':(1.5,3.0), 'time_stop':(10,80), 'atr_stop':(1.0,2.0)}
+new_trials = ex.candidate_params('mean_rev', winners_mean_rev_last_week, param_space)
+
+# run these new trials at micro size using the explore budget; if any beat thresholds consistently → promote
+
+Promotion rule (encode in code):
+	•	≥300 OOS paper trades (or 30 days), PF≥1.2, max DD≤cap, slippage under band → promote into allocator as a live candidate with small initial weight.
+	•	If live PF drifts below tolerance bands → demote or retire.
+
+⸻
+
+4) Tie-in to position sizing & risk
+
+When placing orders, use:
+
+effective_per_trade_risk_pct = global_per_trade_risk_pct * strategy_weight
+
+Then your existing per_trade_size() computes quantity from entry/stop distance. Circuit breakers and kill switches (day DD, slippage spike, fill ratio collapse, latency spike) still apply globally and per-strategy.
+
+⸻
+
+5) Minimal changes to your config
+
+config.yaml add:
+
+allocator:
+  risk_cap: 1.0
+  max_weight: 0.6
+  dd_cap: 0.15
+
+explore:
+  budget: 0.10
+  min_trials: 2
+
+regimes:
+  vol_lookback: 720
+  spread_bps_threshold: 6
+  range_norm: 0.012
+
+
+⸻
+
+6) Run loop sketch
+
+# 1) ingest data, compute latest spread/vol
+current_regime = regime.compute(df_recent, latest_spread_bps)
+eligible_flags = {...}
+
+# 2) compute per-strategy live stats (rolling PF/DD/trades) + corr matrix from PnL streams
+stats = collect_live_stats(eligible_flags)
+
+# 3) meta-allocate across strategies
+alloc = allocator.allocate(stats)
+
+# 4) split alloc into live vs explore
+alloc_live, explore_budget = explorer.budget_weights(alloc)
+
+# 5) execute: live strategies place trades with alloc_live weights
+trade_live_strategies(alloc_live)
+
+# 6) exploration: run micro-size trials from ex.candidate_params() in paper or tiny live
+run_experiments(explore_budget)
+
+# 7) end-of-day: evaluate, promote/demote, update winners lists, persist artifacts
+maintenance_rollover()
+
+
+⸻
+
+7) What I’ll add next (if you want)
+	•	A rolling PnL correlation calculator for the allocator.
+	•	A promote/demote service that edits configs safely and writes migration notes.
+	•	Drift bands (live PF vs. walk-forward PF) with auto scale-down.
+	•	A Streamlit dashboard panel for Regime + Allocations + Explore trials and promotions.
+
+Want me to package these modules into your repo and add the wiring so you can run:
+python app.py backtest, python app.py paper, python app.py live with the ensemble turned on?

@@ -1,0 +1,144 @@
+Yup—here’s the last mile stuff I’d bake into the first prompt and the codebase so you don’t learn it the hard way later.
+
+Add these lines to your system prompt
+	•	“Never report in-sample metrics as final. Only show out-of-sample and walk-forward results, with costs.”
+	•	“Reject configs that have high PF but rely on rare, high-leverage outliers or >X% of PnL from 3 best trades.”
+	•	“When a strategy ‘wins,’ explain why (market regime, volatility band, spread conditions) in 3 bullet points.”
+	•	“Always output: turnover, average slippage (bps), fill ratio, maker/taker mix, and latency histogram.”
+	•	“When proposing parameters, cap complexity (Occam’s razor): few knobs, wide robustness.”
+	•	“Promotion criteria: ≥300 trades (or 30 d) paper OOS, PF≥1.2, max DD≤cap, live drift ≤ control bands; else pause.”
+	•	“Write migration notes when altering data schemas or configs; maintain backward compatibility or an upgrader.”
+	•	“Produce a red-team section listing failure modes and how to detect/mitigate them in code.”
+
+Add these developer prompts (so the code gen stays disciplined)
+	•	“Generate idempotent order flow with clientOrderId patterns to avoid duplicate execution on retries.”
+	•	“Implement time sync (NTP drift check) and TZ-safe timestamps (UTC everywhere).”
+	•	“Persist every decision (signal, filters, position size calc, stop level) to a trade audit log.”
+	•	“Add kill switches: (a) slippage spike, (b) fill ratio drop, (c) latency spike, (d) day DD hit, (e) symbol halt.”
+	•	“Emit prometheus-friendly metrics for PnL, DD, turnover, slippage, fees, errors, latency.”
+
+⸻
+
+Code adds that pay off immediately
+
+1) Strict config schema (Pydantic)
+
+# aqcore/config.py
+from pydantic import BaseModel, Field, PositiveFloat, conlist
+class Fees(BaseModel):
+    taker_bps: PositiveFloat
+    maker_bps: PositiveFloat
+class Risk(BaseModel):
+    per_trade_risk_pct: PositiveFloat = Field(..., ge=0.05, le=2.0)
+    max_daily_loss_pct: PositiveFloat
+    max_drawdown_pct: PositiveFloat
+    kelly_cap: PositiveFloat
+class Settings(BaseModel):
+    symbols: conlist(str, min_items=1)
+    timeframe: str
+    exchange: str
+    fees: Fees
+    risk: Risk
+    # ...
+
+Fail fast on bad configs.
+
+2) Idempotent, retry-safe order wrapper
+
+# aqcore/execution/common.py
+import time, uuid
+def client_order_id(prefix:str)->str:
+    return f"{prefix}-{int(time.time()*1000)}-{uuid.uuid4().hex[:8]}"
+
+async def with_retries(fn, *a, retries=3, **kw):
+    for i in range(retries):
+        try: return await fn(*a, **kw)
+        except Exception as e:
+            if i==retries-1: raise
+            await asyncio.sleep(0.5*(2**i))
+
+3) Trade decision audit (for forensics)
+
+# aqcore/logtrade.py
+def log_decision(ts, symbol, signal, price, atr, stop, size, reason:str, meta:dict):
+    print({
+      "ts": ts, "symbol": symbol, "signal": signal, "price": price,
+      "atr": float(atr), "stop": float(stop), "size": float(size),
+      "reason": reason, "meta": meta
+    })
+
+4) Monte-Carlo robustness on equity curve
+
+# aqcore/evaluation.py (add)
+import numpy as np
+def mc_profit_factor(trade_pl, n=1000):
+    out=[]
+    for _ in range(n):
+        s=np.random.default_rng().permutation(trade_pl)
+        gains=s[s>0].sum(); losses=-s[s<0].sum()
+        out.append(gains/(losses if losses>0 else 1e-9))
+    return np.percentile(out, [5,50,95])  # stress bands
+
+5) Simple Reality-Check scaffold
+
+# aqcore/reality_check.py
+def white_reality_check(scores:list, bootstraps:int=1000):
+    # scores = strategy metric vs null; replace with a proper bootstrap of trade blocks
+    import numpy as np
+    null = np.array([np.random.normal(0,1,len(scores)).mean() for _ in range(bootstraps)])
+    observed = np.mean(scores)
+    p = (null > observed).mean()
+    return {"observed": observed, "p_value": float(p)}
+
+(You’ll replace this with a block-bootstrap of returns, but this keeps the interface ready.)
+
+6) Fee/slippage calibration hook
+
+Add a function that learns spread & slippage from live paper fills and feeds it back into backtests (close the realism loop).
+
+# aqcore/slippage_fit.py
+def fit_slippage_from_fills(fills_df):
+    # estimate effective bps from (fill - mid) / mid, group by symbol & time-of-day
+    return table_of_estimates
+
+7) Time & latency guards
+	•	Validate incoming candle timestamps are strictly increasing; drop/flag gaps.
+	•	Record order round-trip latency; if p95 > threshold → throttle or pause.
+
+8) Persistence schema (SQLite to start)
+
+Tables: candles(symbol, ts, o,h,l,c,v), trades(ts, symbol, side, qty, px, fee, order_id),
+signals(ts, symbol, sig, params_hash), runs(id, cfg_hash, start, end, metrics_json).
+
+9) CI checks
+	•	Unit tests for position sizing, ATR, Bollinger, walk-forward splits.
+	•	A golden backtest snapshot—fail CI if the same config suddenly changes metrics > tolerance.
+
+10) Secrets hygiene
+	•	Never commit keys. Use env vars + a local .env loader. Provide a secrets.example.env.
+
+⸻
+
+“Research loop” prompt (drop in your CLI)
+
+“Read /reports/leaderboard.csv and the latest /artifacts/live_metrics.json. Identify regimes and symbols with low PF or high DD. Propose 3 parameter tweaks per strategy family and 2 new strategies that: (a) reduce DD by ≥20% with ≤10% PF hit, or (b) keep DD but raise PF by ≥10%. Output patch-ready changes for configs and explain why they should help under current volatility/liquidity.”
+
+⸻
+
+Dashboard blocks (so you see what matters)
+	•	Strategy health: PF (OOS), max DD, trades count, turnover, win rate.
+	•	Microstructure: avg spread bps, maker/taker %, fill ratio, p95 latency.
+	•	Risk: day PnL, day DD, circuit breaker status, exposure by coin.
+	•	Drift monitor: live PF vs walk-forward PF with tolerance bands.
+
+⸻
+
+Final “don’t skip” checklist
+	•	Walk-forward only; Monte-Carlo trade-path bands; White’s RC p-value.
+	•	Realistic fees + slippage, calibrated from fills.
+	•	Kill switches and circuit breakers wired to flatten positions.
+	•	Idempotent orders & retries; UTC everywhere; NTP check.
+	•	Promotion rules encoded in code (not a Post-it).
+	•	Golden test backtest; CI fails if outputs drift.
+
+If you want, I’ll package these into your repo scaffold and add a tiny Streamlit dashboard so you can click: Backtest → Optimize → Paper → Live with all the guardrails above baked in.

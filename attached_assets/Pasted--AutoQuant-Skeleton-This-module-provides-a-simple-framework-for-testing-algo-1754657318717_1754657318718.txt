@@ -1,0 +1,105 @@
+"""
+AutoQuant Skeleton
+===================
+
+This module provides a simple framework for testing algorithmic trading strategies
+using synthetic data. It demonstrates how to generate synthetic price data,
+implement a moving-average crossover strategy, perform a simple backtest, and
+search for optimal parameters. The functions are designed to be easily
+extendable for real market data and additional strategies.
+
+Note: This code is for demonstration purposes only and does not constitute
+financial advice.
+"""
+
+import numpy as np
+import pandas as pd
+
+def generate_price_data(length: int = 200, seed: int = 42) -> pd.Series:
+    """Generate synthetic price data using a simple random walk.
+
+    Args:
+        length: Number of data points to generate.
+        seed: Random seed for reproducibility.
+
+    Returns:
+        A pandas Series representing synthetic price data.
+    """
+    rng = np.random.default_rng(seed)
+    # Generate log returns with a slight upward drift
+    log_returns = rng.normal(loc=0.0002, scale=0.01, size=length)
+    price = 100 * np.exp(np.cumsum(log_returns))
+    return pd.Series(price)
+
+def moving_average_crossover(prices: pd.Series, short_window: int, long_window: int) -> pd.DataFrame:
+    """Generate trading signals based on a moving-average crossover strategy.
+
+    Args:
+        prices: Series of price data.
+        short_window: Lookback period for the short moving average.
+        long_window: Lookback period for the long moving average.
+
+    Returns:
+        A DataFrame with price, moving averages, and buy/sell signals.
+    """
+    df = pd.DataFrame({'Price': prices})
+    df['MA_short'] = df['Price'].rolling(window=short_window).mean()
+    df['MA_long'] = df['Price'].rolling(window=long_window).mean()
+    df['Signal'] = 0
+    df.loc[df['MA_short'] > df['MA_long'], 'Signal'] = 1  # Long position
+    df.loc[df['MA_short'] < df['MA_long'], 'Signal'] = -1  # Short position
+    # Compute strategy returns: shift signals to align with next period's returns
+    df['Strategy_Return'] = df['Signal'].shift(1) * df['Price'].pct_change()
+    return df
+
+def backtest_strategy(prices: pd.Series, short_window: int, long_window: int) -> dict:
+    """Evaluate the performance of a moving-average crossover strategy.
+
+    Args:
+        prices: Series of price data.
+        short_window: Lookback period for the short moving average.
+        long_window: Lookback period for the long moving average.
+
+    Returns:
+        Dictionary containing cumulative returns and basic performance metrics.
+    """
+    df = moving_average_crossover(prices, short_window, long_window)
+    # Drop NaN values
+    df = df.dropna()
+    cumulative_return = (1 + df['Strategy_Return']).prod() - 1
+    win_rate = (df['Strategy_Return'] > 0).mean()
+    avg_win = df.loc[df['Strategy_Return'] > 0, 'Strategy_Return'].mean()
+    avg_loss = df.loc[df['Strategy_Return'] <= 0, 'Strategy_Return'].mean()
+    return {
+        'short_window': short_window,
+        'long_window': long_window,
+        'cumulative_return': cumulative_return,
+        'win_rate': win_rate,
+        'avg_win': avg_win,
+        'avg_loss': avg_loss,
+    }
+
+def optimize_parameters(prices: pd.Series, short_range: range, long_range: range) -> pd.DataFrame:
+    """Perform a grid search to find the best combination of moving-average windows.
+
+    Args:
+        prices: Series of price data.
+        short_range: Range of short MA windows to test.
+        long_range: Range of long MA windows to test.
+
+    Returns:
+        DataFrame of backtest results sorted by cumulative return.
+    """
+    results = []
+    for short_win in short_range:
+        for long_win in long_range:
+            if long_win > short_win:  # Ensure long window > short window
+                metrics = backtest_strategy(prices, short_win, long_win)
+                results.append(metrics)
+    return pd.DataFrame(results).sort_values(by='cumulative_return', ascending=False)
+
+if __name__ == "__main__":
+    # Example usage
+    prices = generate_price_data(length=250, seed=42)
+    result_df = optimize_parameters(prices, short_range=range(5, 20), long_range=range(10, 40))
+    print(result_df.head(10))

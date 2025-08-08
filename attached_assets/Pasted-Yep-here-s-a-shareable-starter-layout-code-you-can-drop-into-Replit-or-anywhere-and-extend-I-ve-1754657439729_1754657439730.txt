@@ -1,0 +1,340 @@
+Yep—here’s a shareable starter layout + code you can drop into Replit (or anywhere) and extend. I’ve also added the “quant tricks” + research checklist so it learns what humans don’t have time to test.
+
+⸻
+
+Repo layout (paste this into your README)
+
+autoquant/
+  app.py                  # CLI entrypoints (backtest, optimize, paper, live)
+  config.yaml             # symbols, fees, risk, data sources
+  requirements.txt
+  /aqcore
+    __init__.py
+    data.py               # load historical, live streams
+    indicators.py         # MA, ATR, Bollinger, z-score, etc.
+    strategies/
+      mean_rev.py         # z-score/Bollinger mean reversion
+      trend_ma.py         # MA crossover + filters
+      breakout.py         # range/ATR breakout
+    risk.py               # position sizing, Kelly cap, circuit breakers
+    slippage.py           # spread, taker/maker, impact model
+    backtest.py           # event loop + walk-forward CV
+    optimizer.py          # Bayesian tuning (Optuna)
+    evaluation.py         # PF, Sharpe, DD, PBO calc helpers
+    reality_check.py      # White’s Reality Check / bootstrap tests
+    execution/
+      binance.py          # paper/live via Binance (testnet/live)
+    regimes.py            # volatility/liquidity regime gating
+    utils.py              # logging, time, config helpers
+  /reports
+  /artifacts              # best params, models, plots
+
+requirements.txt (minimal)
+
+pandas
+numpy
+scipy
+optuna
+pydantic
+pyyaml
+websockets
+python-binance
+plotly
+
+config.yaml (example)
+
+symbols: ["BTCUSDT","ETHUSDT"]
+timeframe: "1m"
+exchange: "binance"
+fees:
+  taker_bps: 10      # 0.10%
+  maker_bps: 6       # 0.06%
+risk:
+  per_trade_risk_pct: 0.5
+  max_daily_loss_pct: 2.0
+  max_drawdown_pct: 10.0
+  kelly_cap: 0.5
+slippage:
+  spread_bps: 3
+  impact_bps_per_musd: 1.5
+walkforward:
+  train_days: 30
+  test_days: 7
+  folds: 8
+opt:
+  n_trials: 80
+  timeout_min: 30
+paper:
+  use_testnet: true
+
+
+⸻
+
+Core code you can use
+
+indicators.py
+
+import numpy as np
+import pandas as pd
+
+def ma(x: pd.Series, n: int) -> pd.Series:
+    return x.rolling(n, min_periods=n).mean()
+
+def atr(df: pd.DataFrame, n: int = 14) -> pd.Series:
+    h, l, c = df['high'], df['low'], df['close']
+    tr = np.maximum(h - l, np.maximum(abs(h - c.shift()), abs(l - c.shift())))
+    return pd.Series(tr).rolling(n, min_periods=n).mean()
+
+def bollinger(df: pd.DataFrame, n: int = 20, k: float = 2.0):
+    m = ma(df['close'], n)
+    s = df['close'].rolling(n, min_periods=n).std(ddof=0)
+    upper, lower = m + k*s, m - k*s
+    z = (df['close'] - m) / s
+    return m, upper, lower, z
+
+strategies/mean_rev.py
+
+import pandas as pd
+from aqcore.indicators import bollinger, atr
+
+def generate_signals(df: pd.DataFrame, n=20, k=2.0, time_stop=30, atr_stop=1.5):
+    m, u, l, z = bollinger(df, n, k)
+    a = atr(df, 14)
+    sig = pd.Series(0, index=df.index)    # 1 long, -1 short, 0 flat
+
+    # Entry
+    sig[z <= -k] = 1
+    sig[z >=  k] = -1
+
+    # Time stop: zero out signals older than time_stop bars
+    entry_idx = None
+    pos = 0
+    for i in range(len(sig)):
+        if sig.iat[i] != 0 and pos == 0:
+            pos = sig.iat[i]
+            entry_idx = i
+        elif pos != 0:
+            # ATR-based stop
+            entry = df['close'].iat[entry_idx]
+            if pos == 1 and df['close'].iat[i] <= entry - atr_stop * a.iat[i]:
+                pos = 0
+            elif pos == -1 and df['close'].iat[i] >= entry + atr_stop * a.iat[i]:
+                pos = 0
+            # time stop
+            if i - entry_idx >= time_stop:
+                pos = 0
+        sig.iat[i] = pos
+    return sig
+
+risk.py
+
+import numpy as np
+
+def kelly_fraction(win_rate, avg_win, avg_loss):
+    r = avg_win / max(1e-12, abs(avg_loss))
+    return max(0.0, min(1.0, win_rate - (1 - win_rate)/max(1e-12, r)))
+
+def per_trade_size(equity, per_trade_risk_pct, entry_price, stop_price):
+    risk = equity * (per_trade_risk_pct/100.0)
+    stop_dist = abs(entry_price - stop_price)
+    if stop_dist <= 0: 
+        return 0.0
+    qty = risk / stop_dist
+    return max(0.0, qty)
+
+def circuit_breaker(equity_start_day, equity_now, max_daily_loss_pct):
+    dd = 100.0*(equity_now - equity_start_day)/equity_start_day
+    return dd <= -abs(max_daily_loss_pct)  # True -> stop trading
+
+slippage.py
+
+def apply_costs(fill_price, side, notional, taker_bps, spread_bps, impact_bps):
+    # side: +1 buy, -1 sell
+    spread = fill_price * (spread_bps/10000.0)
+    impact = fill_price * (impact_bps/10000.0)
+    traded = fill_price + (spread+impact) * (1 if side>0 else -1)
+    fee = notional * (taker_bps/10000.0)
+    return traded, fee
+
+backtest.py (walk-forward CV + fee/slippage aware)
+
+import numpy as np, pandas as pd
+from aqcore.slippage import apply_costs
+from aqcore.risk import per_trade_size
+from aqcore.indicators import atr
+
+def walkforward_splits(df, train_days, test_days, folds):
+    df = df.copy()
+    df['date'] = df.index.tz_convert(None).date if hasattr(df.index, 'tzinfo') else df.index.date
+    uniq = sorted(df['date'].unique())
+    i = 0
+    for _ in range(folds):
+        train_end = i + train_days
+        test_end  = train_end + test_days
+        if test_end >= len(uniq): break
+        train_mask = df['date'].isin(uniq[i:train_end])
+        test_mask  = df['date'].isin(uniq[train_end:test_end])
+        yield df[train_mask], df[test_mask]
+        i += test_days
+
+def run_backtest(df, signals, cfg):
+    equity = 10000.0
+    equity_curve = []
+    fees_total = 0.0
+    a = atr(df, 14).fillna(method='bfill')
+    pos = 0.0
+    entry = 0.0
+
+    for i in range(1, len(df)):
+        price = df['close'].iat[i]
+        # Close/open logic when signal changes
+        if i > 1 and signals.iat[i] != np.sign(pos):
+            # close old position
+            if pos != 0:
+                notional = abs(pos) * price
+                traded, fee = apply_costs(price, -np.sign(pos), notional,
+                                          cfg['fees']['taker_bps'],
+                                          cfg['slippage']['spread_bps'],
+                                          cfg['slippage'].get('impact_bps_per_musd',0))
+                pnl = (traded - entry) * pos
+                equity += pnl - fee
+                fees_total += fee
+                pos = 0.0
+            # open new position
+            if signals.iat[i] != 0:
+                side = 1 if signals.iat[i] > 0 else -1
+                stop = price - side * cfg.get('atr_stop_mult',1.5) * a.iat[i]
+                qty = per_trade_size(equity, cfg['risk']['per_trade_risk_pct'], price, stop)
+                notional = qty * price
+                traded, fee = apply_costs(price, side, notional,
+                                          cfg['fees']['taker_bps'],
+                                          cfg['slippage']['spread_bps'],
+                                          cfg['slippage'].get('impact_bps_per_musd',0))
+                entry = traded
+                pos = qty * side
+                equity -= fee
+                fees_total += fee
+        equity_curve.append(equity)
+    pf = calc_profit_factor(equity_curve)
+    return {
+        "final_equity": equity,
+        "profit_factor": pf,
+        "max_drawdown": max_drawdown(equity_curve),
+        "fees": fees_total
+    }
+
+def max_drawdown(curve):
+    peak, dd = -1e9, 0.0
+    for x in curve:
+        peak = max(peak, x)
+        dd = max(dd, (peak - x)/peak if peak>0 else 0)
+    return dd
+
+def calc_profit_factor(curve):
+    # crude PF estimate from daily diffs
+    diffs = np.diff(curve)
+    gains = diffs[diffs>0].sum()
+    losses = -diffs[diffs<0].sum()
+    return gains / losses if losses>0 else np.inf
+
+optimizer.py (Bayesian)
+
+import optuna
+from aqcore.backtest import run_backtest
+from aqcore.strategies.mean_rev import generate_signals
+
+def objective(trial, df, cfg):
+    n = trial.suggest_int("n", 10, 60)
+    k = trial.suggest_float("k", 1.0, 3.0)
+    ts = trial.suggest_int("time_stop", 10, 80)
+    atrs = trial.suggest_float("atr_stop", 0.8, 2.5)
+    sig = generate_signals(df, n=n, k=k, time_stop=ts, atr_stop=atrs)
+    res = run_backtest(df, sig, cfg)
+    # Maximize PF, penalize DD
+    score = res["profit_factor"] - 2.0*res["max_drawdown"]
+    return score
+
+def tune(df, cfg):
+    study = optuna.create_study(direction="maximize")
+    study.optimize(lambda t: objective(t, df, cfg), n_trials=cfg["opt"]["n_trials"], timeout=cfg["opt"]["timeout_min"]*60)
+    return study.best_params, study.best_value
+
+execution/binance.py (paper/live toggle)
+
+from binance.client import Client
+from binance.enums import SIDE_BUY, SIDE_SELL, ORDER_TYPE_LIMIT, TIME_IN_FORCE_GTC
+
+def make_client(api_key, api_secret, testnet=True):
+    client = Client(api_key, api_secret, testnet=testnet)
+    return client
+
+def place_order(client, symbol, side, qty, price):
+    s = SIDE_BUY if side>0 else SIDE_SELL
+    return client.create_order(
+        symbol=symbol,
+        side=s,
+        type=ORDER_TYPE_LIMIT,
+        timeInForce=TIME_IN_FORCE_GTC,
+        quantity=round(qty, 6),
+        price=str(price)
+    )
+
+
+⸻
+
+Tips, tricks, and research tasks (so it “learns” properly)
+
+Edge preservation
+	•	Always test after fees + slippage. Tiny edges die to costs.
+	•	Walk-forward only; never report in-sample optimization as final performance.
+	•	Run Monte Carlo resampling on trade sequences to see if PF/Sharpe survives randomness.
+	•	Use White’s Reality Check or PBO to penalize lucky parameter sets.
+
+Execution realism
+	•	Prefer maker orders (post-only) when conditions allow; fall back to taker when signals are time-critical.
+	•	Watch fill ratio; if maker fills collapse during volatility spikes, scale down or switch to taker/IOC with tight price bands.
+
+Risk discipline
+	•	Per-trade risk: start 0.25–0.5% and only step up after 30 trading days of stable PF and low DD.
+	•	Daily circuit breaker (e.g., –2%). Weekly breaker (e.g., –5%). When hit, flat + cool-down.
+
+Regime detection
+	•	Compute rolling volatility (ATR%) and liquidity (volume, spread).
+	•	Gate strategies: trend systems during high-vol / expansion; mean-reversion during range-bound, tight spreads.
+
+Parameter hygiene
+	•	Keep parameter ranges sane (e.g., MA 5–200, z-threshold 1.5–3.0).
+	•	Use Bayesian optimization; log every trial and store winners to /artifacts.
+
+Data
+	•	Pull at least 6–18 months of 1-minute bars for BTC/ETH.
+	•	Include overnight/weekend windows—crypto never closes, regime shifts happen at odd hours.
+
+Promotion logic
+	•	Paper → live: require PF ≥ 1.2, max DD ≤ your cap, win rate ≥ 52–55%, ≥ 300 trades (or ≥ 30 trading days) on out-of-sample paper.
+
+⸻
+
+How to run (quick path)
+	1.	Paste these files into Replit (or local).
+	2.	Fill config.yaml + your Binance testnet keys as env vars.
+	3.	In app.py, wire basic CLI:
+
+import yaml, pandas as pd
+from aqcore.optimizer import tune
+from aqcore.strategies.mean_rev import generate_signals
+from aqcore.backtest import run_backtest
+
+cfg = yaml.safe_load(open("config.yaml"))
+df = pd.read_csv("BTCUSDT_1m.csv", parse_dates=['time'], index_col='time')  # or your loader
+
+best, score = tune(df, cfg)
+sig = generate_signals(df, **best)
+print(run_backtest(df, sig, cfg))
+print("Best params:", best, "Score:", score)
+
+If you want, I’ll bundle this into a single repo zip with a tiny Streamlit dashboard so you can click “Backtest,” “Optimize,” and “Paper Trade.”
+
+Want me to:
+	•	wrap this into a ready-to-run Replit?
+	•	or add the breakout and trend MA strategies + a walk-forward report and a Streamlit dashboard next?
