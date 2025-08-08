@@ -199,25 +199,6 @@ export class DatabaseMetaLearning implements MetaLearningService {
         },
         recentLearningActions: []
       };
-    } catch (error) {
-      console.error('Meta-learning analysis error:', error);
-      return {
-        metaLearningStats: {
-          totalRuleApplications: 0,
-          effectiveRules: 0,
-          avgRuleEffectiveness: 0,
-          totalInsights: 0,
-          validatedInsights: 0,
-          avgInsightAccuracy: 0,
-          feedbackRecords: 0
-        },
-        learningEvolution: {
-          rulesLearningRate: 0,
-          insightAccuracyTrend: 0,
-          metaLearningEffectiveness: 0
-        },
-        recentLearningActions: []
-      };
     }
   }
   
@@ -236,7 +217,7 @@ export class DatabaseMetaLearning implements MetaLearningService {
         totalApplications: recentApplications.length,
         winningApplications: winningApplications.length,
         losingApplications: losingApplications.length,
-        learningWinRate: recentApplicationions.length > 0 ? winningApplications.length / recentApplications.length : 0,
+        learningWinRate: recentApplications.length > 0 ? winningApplications.length / recentApplications.length : 0,
         avgEffectiveness: recentApplications.length > 0 
           ? recentApplications.reduce((sum: number, a: any) => sum + parseFloat(a.ruleEffectiveness || '0'), 0) / recentApplications.length 
           : 0
@@ -250,8 +231,7 @@ export class DatabaseMetaLearning implements MetaLearningService {
         learningWinRate: 0,
         avgEffectiveness: 0
       };
-    }
-  }atch (error) {
+    } catch (error: any) {
       console.error('Learning effectiveness error:', error);
       return {
         totalApplications: 0,

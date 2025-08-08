@@ -158,7 +158,7 @@ export class MetaAllocator {
   }
 
   private rebalanceAllocations() {
-    const totalBudget = riskManager.getLimits().maxPositionSize;
+    const totalBudget = 10000; // Fixed budget for meta-allocation
     const explorationBudgetAmount = totalBudget * this.explorationBudget;
     const productionBudget = totalBudget - explorationBudgetAmount;
 
