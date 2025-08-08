@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { useState, useEffect } from 'react';
 import { Link } from "wouter";
+import { TradesTable } from "@/components/trades-table";
 
 interface DashboardData {
   strategies: any[];
@@ -543,6 +544,77 @@ export function TradingDashboard() {
                 Learning Report
               </Button>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Recent Trades */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Trades ({finalData.recentTrades.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {finalData.recentTrades.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">
+                No trades executed yet
+              </p>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-muted/50 rounded-lg">
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-green-600">
+                      {finalData.recentTrades.length}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Total Trades</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-semibold">
+                      {finalData.recentTrades.filter((t: any) => t.side === 'buy').length}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Buy Orders</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-semibold">
+                      {finalData.recentTrades.filter((t: any) => t.side === 'sell').length}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Sell Orders</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-semibold">
+                      {finalData.recentTrades.slice(0, 5).length}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Recent</div>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  {finalData.recentTrades.slice(0, 10).map((trade: any, index: number) => (
+                    <div key={trade.id || index} className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <Badge variant={trade.side === 'buy' ? 'default' : 'secondary'}>
+                          {trade.side?.toUpperCase()}
+                        </Badge>
+                        <span className="font-medium">{trade.symbol}</span>
+                        <span className="text-sm text-muted-foreground">
+                          {parseFloat(trade.size || 0).toFixed(4)}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-medium">
+                          ${parseFloat(trade.entryPrice || 0).toFixed(2)}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {new Date(trade.executedAt || Date.now()).toLocaleTimeString()}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                <Button variant="outline" className="w-full">
+                  View All Trades
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
