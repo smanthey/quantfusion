@@ -733,18 +733,66 @@ export class TradingEngine {
 
   private shouldClosePosition(position: Position, currentPrice: string): boolean {
     const current = parseFloat(currentPrice);
+    const entry = parseFloat(position.entryPrice);
     const stop = parseFloat(position.stopPrice || '0');
 
-    if (isNaN(current) || isNaN(stop)) {
+    if (isNaN(current) || isNaN(entry)) {
         console.error(`Invalid values for closing check for position ${position.id}`);
         return false;
     }
 
+    // AGGRESSIVE CLOSING: Close positions more frequently to realize P&L
+    const priceDiff = Math.abs(current - entry) / entry;
+    const priceChange = (current - entry) / entry;
+    
+    // Close on profit targets (1% gain) or stop loss (2% loss)
     if (position.side === 'long') {
-      return current <= stop;
+      const profitTarget = priceChange >= 0.01; // 1% profit
+      const stopLoss = priceChange <= -0.02; // 2% loss
+      const timeBasedClose = this.shouldTimeBasedClose(position);
+      
+      if (profitTarget) {
+        console.log(`📈 PROFIT CLOSE: Long ${position.symbol} +${(priceChange * 100).toFixed(2)}%`);
+        return true;
+      }
+      if (stopLoss) {
+        console.log(`📉 STOP LOSS: Long ${position.symbol} ${(priceChange * 100).toFixed(2)}%`);
+        return true;
+      }
+      if (timeBasedClose) {
+        console.log(`⏰ TIME CLOSE: Long ${position.symbol} after holding period`);
+        return true;
+      }
     } else {
-      return current >= stop;
+      // Short position
+      const profitTarget = priceChange <= -0.01; // Price fell 1%
+      const stopLoss = priceChange >= 0.02; // Price rose 2%
+      const timeBasedClose = this.shouldTimeBasedClose(position);
+      
+      if (profitTarget) {
+        console.log(`📈 PROFIT CLOSE: Short ${position.symbol} +${(-priceChange * 100).toFixed(2)}%`);
+        return true;
+      }
+      if (stopLoss) {
+        console.log(`📉 STOP LOSS: Short ${position.symbol} ${(-priceChange * 100).toFixed(2)}%`);
+        return true;
+      }
+      if (timeBasedClose) {
+        console.log(`⏰ TIME CLOSE: Short ${position.symbol} after holding period`);
+        return true;
+      }
     }
+
+    return false;
+  }
+
+  private shouldTimeBasedClose(position: Position): boolean {
+    if (!position.openedAt) return false;
+    
+    const positionAge = Date.now() - new Date(position.openedAt).getTime();
+    const maxHoldTime = 5 * 60 * 1000; // Close after 5 minutes max
+    
+    return positionAge > maxHoldTime;
   }
 
   private async closePosition(position: Position, exitPrice: string): Promise<void> {
