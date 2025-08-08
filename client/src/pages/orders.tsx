@@ -19,7 +19,7 @@ export default function OrdersPage() {
     refetchInterval: 10000,
   });
 
-  // Transform recent trades into order-like display
+  // Transform recent trades into order-like display - use authenticated data only
   const recentTrades = dashboardData?.recentTrades || [];
   const marketData = dashboardData?.marketData || {};
   
@@ -101,7 +101,7 @@ export default function OrdersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {orders.map((order) => (
+                {orders.map((order: any) => (
                   <TableRow key={order.id}>
                     <TableCell className="font-medium">{order.id}</TableCell>
                     <TableCell>{order.symbol}</TableCell>
