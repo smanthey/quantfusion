@@ -272,6 +272,12 @@ export class TradingEngine {
 
         console.log(`📊 Processing ${symbol} for strategy ${strategy.name}: Price=$${marketPrice}`);
 
+        // Create ML prediction object for compatibility - MOVED TO TOP TO AVOID SCOPE ISSUES
+        const mlPrediction = {
+          priceDirection: Math.random() > 0.5 ? 'up' : 'down',
+          confidence: 0.6 + Math.random() * 0.2
+        };
+
         // PRIORITIZE ETHUSDT WINNER STRATEGY based on learning data
         let signal = null;
         if (symbol === 'ETHUSDT') {
@@ -281,10 +287,6 @@ export class TradingEngine {
         
         // Fallback to regular strategy if no ETHUSDT signal
         if (!signal) {
-          const mlPrediction = {
-            priceDirection: Math.random() > 0.5 ? 'up' : 'down',
-            confidence: 0.6 + Math.random() * 0.2
-          };
           signal = await this.generateSimpleSignal(strategy, symbol, marketData);
         }
         
@@ -310,7 +312,7 @@ export class TradingEngine {
           await this.createAlert("success", "Real Trade Executed", 
             `${position.side.toUpperCase()} ${position.size} ${position.symbol} at $${position.entryPrice} (Strategy: ${strategy.name})`);
 
-          // Record for ML learning
+          // Record for ML learning - mlPrediction now always defined
           await this.recordTradingDecision(signal, mlPrediction, position);
 
           // Feed trade result into adaptive learning system for improvement

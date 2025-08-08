@@ -494,13 +494,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Calculate P&L using separate profit and loss fields from database - SAME AS DASHBOARD
       let totalProfits = 0;
       let totalLosses = 0;
+      let totalFees = 0;
       let winCount = 0;
       let lossCount = 0;
       
-      // Use database profit/loss fields for accurate calculation
+      // Use database profit/loss/fees fields for accurate calculation
       for (const trade of allTrades) {
         const profit = parseFloat(trade.profit || '0');
         const loss = parseFloat(trade.loss || '0');
+        const fees = parseFloat(trade.fees || '0');
         
         if (profit > 0) {
           totalProfits += profit;
@@ -510,14 +512,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalLosses += loss;
           lossCount++;
         }
+        totalFees += fees; // Sum actual fees from database
       }
       
-      // Total P&L = Total Profits - Total Losses
-      const totalPnL = totalProfits - totalLosses;
+      // Total P&L = Total Profits - Total Losses - Total Fees
+      const totalPnL = totalProfits - totalLosses - totalFees;
 
       // Starting capital: $10,000  
       const startingCapital = 10000;
-      const totalFees = totalProfits + totalLosses; // Real fees from database
 
       // Account balance = Starting Capital + P&L
       const currentBalance = startingCapital + totalPnL;
