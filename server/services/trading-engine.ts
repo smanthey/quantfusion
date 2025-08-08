@@ -132,7 +132,7 @@ export class TradingEngine {
             threshold: 2.0,
             allocation: 0.3
           },
-          isActive: true
+          status: 'active'
         });
 
         const trendFollowingStrategy = await storage.createStrategy({
@@ -144,7 +144,7 @@ export class TradingEngine {
             slowMA: 30,
             allocation: 0.4
           },
-          isActive: true
+          status: 'active'
         });
 
         strategies = [meanReversionStrategy, trendFollowingStrategy];
@@ -423,8 +423,7 @@ export class TradingEngine {
   private async simulateTradeOutcome(position: Position, trade: Trade, strategy: Strategy): Promise<void> {
     try {
       // Get current market price for exit
-      const marketData = await this.marketData.getCurrentPrice(position.symbol);
-      const currentPrice = marketData.price;
+      const currentPrice = await this.marketData.getCurrentPrice(position.symbol);
       const entryPrice = parseFloat(position.entryPrice);
       const size = parseFloat(position.size);
 
@@ -620,7 +619,7 @@ export class TradingEngine {
       entryPrice: position.entryPrice,
       exitPrice,
       pnl: pnl.toString(),
-      fees: this.calculateFees(parseFloat(position.size), parseFloat(exitPrice)),
+      fees: this.calculateFees(parseFloat(position.size), parseFloat(exitPrice)).toString(),
       duration
     });
 
@@ -657,7 +656,7 @@ export class TradingEngine {
           threshold: 2.0,
           allocation: 0.4
         },
-        isActive: true
+        status: 'active'
       });
 
       // Create Trend Following Strategy for ETH
@@ -670,7 +669,7 @@ export class TradingEngine {
           slowMA: 30,
           allocation: 0.35
         },
-        isActive: true
+        status: 'active'
       });
 
       console.log(`✅ AUTO-CREATED 2 TRADING STRATEGIES - System is now actively trading`);
