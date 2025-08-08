@@ -44,7 +44,13 @@ export class MarketDataService {
       
       if (isConnected) {
         this.useLiveData = true;
-        await this.startLiveDataFeeds();
+        try {
+          await this.startLiveDataFeeds();
+        } catch (error) {
+          console.warn('Live data feeds failed, falling back to simulation:', error);
+          this.useLiveData = false;
+          this.startDataSimulation();
+        }
       } else {
         this.useLiveData = false;
         this.startDataSimulation();
@@ -137,13 +143,18 @@ export class MarketDataService {
   }
 
   private startDataSimulation() {
+    console.log('Starting simulated market data feeds...');
     const symbols = ['BTCUSDT', 'ETHUSDT'];
     
+    // Initialize simulated data immediately
+    symbols.forEach(symbol => {
+      this.startSymbolSimulation(symbol);
+    });
+    
+    // Continue updating every 1000ms
     setInterval(() => {
       symbols.forEach(symbol => {
-        if (!this.binanceSubscriptions.has(symbol)) {
-          this.startSymbolSimulation(symbol);
-        }
+        this.startSymbolSimulation(symbol);
       });
     }, 1000);
   }

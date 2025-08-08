@@ -350,9 +350,14 @@ export class BinanceClient {
   // Utility Methods
   async testConnectivity(): Promise<boolean> {
     try {
-      await fetch(`${this.baseUrl}/v3/ping`);
-      return true;
-    } catch {
+      const response = await fetch(`${this.baseUrl}/v3/ping`);
+      if (response.status === 451) {
+        console.warn('Binance API is geo-restricted in this region');
+        return false;
+      }
+      return response.ok;
+    } catch (error) {
+      console.warn('Binance connectivity test failed:', error);
       return false;
     }
   }

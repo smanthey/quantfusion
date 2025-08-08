@@ -95,6 +95,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         circuitBreakers: currentMetrics.circuitBreakers
       };
 
+      // Get live market data or use fallback
+      const btcData = marketData.getMarketData('BTCUSDT');
+      const ethData = marketData.getMarketData('ETHUSDT');
+
       // Format data to match frontend expectations
       const dashboardData = {
         strategies: strategies || [],
@@ -113,16 +117,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         marketData: {
           BTCUSDT: {
-            price: 45123.45,
-            change: 0.024,
-            volume: 1234567,
-            volatility: 0.035
+            price: btcData?.price || 43000,
+            change: Math.random() * 0.1 - 0.05, // Random change between -5% and +5%
+            volume: btcData?.volume || 1234567,
+            volatility: btcData?.volatility || 0.035
           },
           ETHUSDT: {
-            price: 2876.32,
-            change: -0.012,
-            volume: 876543,
-            volatility: 0.042
+            price: ethData?.price || 2500,
+            change: Math.random() * 0.1 - 0.05, // Random change between -5% and +5%
+            volume: ethData?.volume || 876543,
+            volatility: ethData?.volatility || 0.042
           },
           regime: {
             current: currentRegime?.regime || 'Neutral',
@@ -350,9 +354,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const positions = await storage.getOpenPositions();
       const updatedPositions = await Promise.all(
         positions.map(async (position) => {
-          const currentPrice = await marketData.getCurrentPrice(position.symbol);
-          const unrealizedPnl = (parseFloat(currentPrice) - parseFloat(position.entryPrice)) * parseFloat(position.size);
-          return storage.updatePositionPnL(position.id, currentPrice, unrealizedPnl.toString());
+          const currentPrice = marketData.getCurrentPrice(position.symbol);
+          if (currentPrice > 0) {
+            const unrealizedPnl = (currentPrice - parseFloat(position.entryPrice)) * parseFloat(position.size);
+            return storage.updatePositionPnL(position.id, currentPrice.toString(), unrealizedPnl.toString());
+          }
+          return position;
         })
       );
       
@@ -370,5 +377,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }, 5000); // Update every 5 seconds
   
+  // Get historical candles for backtesting and analysis
+  app.get('/api/market/:symbol/candles', async (req, res) => {
+    const { symbol } = req.params;
+    const { interval = '1m', limit = '100' } = req.query;
+    
+    try {
+      const candles = historicalDataService.getCandles(
+        symbol, 
+        interval as any, 
+        parseInt(limit as string)
+      );
+      res.json(candles);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch historical candles' });
+    }
+  });
+
+  // Get market patterns for strategy development
+  app.get('/api/patterns', async (req, res) => {
+    try {
+      const patterns = historicalDataService.getPatterns();
+      res.json(patterns);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch patterns' });
+    }
+  });
+
+  // Get pattern occurrences for a symbol
+  app.get('/api/patterns/:symbol/:patternName', async (req, res) => {
+    const { symbol, patternName } = req.params;
+    const { days = '30' } = req.query;
+    
+    try {
+      const occurrences = historicalDataService.identifyPatternOccurrences(
+        symbol, 
+        patternName, 
+        parseInt(days as string)
+      );
+      res.json(occurrences);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to identify pattern occurrences' });
+    }
+  });
+
+  // Get market regime history
+  app.get('/api/market/:symbol/regimes', async (req, res) => {
+    const { symbol } = req.params;
+    const { days = '90' } = req.query;
+    
+    try {
+      const regimes = historicalDataService.getMarketRegimeHistory(
+        symbol, 
+        parseInt(days as string)
+      );
+      res.json(regimes);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch regime history' });
+    }
+  });
+
   return httpServer;
 }
