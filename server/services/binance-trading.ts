@@ -22,11 +22,52 @@ export class BinanceTradingService {
 
   async getAccountBalance(): Promise<any> {
     // Use real market data service for account balance
-    return [
-      { asset: 'USDT', free: '10000.00', locked: '0.00' },
-      { asset: 'BTC', free: '0.00', locked: '0.00' },
-      { asset: 'ETH', free: '0.00', locked: '0.00' }
-    ];
+    // Calculate actual balance from trades and positions
+    try {
+      const { storage } = require('../storage');
+      const trades = await storage.getRecentTrades(1000);
+      const positions = await storage.getOpenPositions();
+      
+      let totalRealized = 0;
+      let totalUnrealized = 0;
+      
+      // Calculate realized P&L from completed trades
+      for (const trade of trades) {
+        if (trade.pnl) {
+          totalRealized += parseFloat(trade.pnl);
+        }
+      }
+      
+      // Calculate unrealized P&L from open positions
+      for (const position of positions) {
+        const currentPrice = parseFloat(position.currentPrice || '0');
+        const entryPrice = parseFloat(position.entryPrice || '0');
+        const size = parseFloat(position.size || '0');
+        
+        if (currentPrice > 0 && entryPrice > 0) {
+          const pnl = position.side === 'long' 
+            ? (currentPrice - entryPrice) * (size / entryPrice)
+            : (entryPrice - currentPrice) * (size / entryPrice);
+          totalUnrealized += pnl;
+        }
+      }
+      
+      const currentBalance = 10000 + totalRealized + totalUnrealized;
+      
+      return [
+        { asset: 'USDT', free: currentBalance.toFixed(2), locked: '0.00' },
+        { asset: 'BTC', free: '0.00', locked: '0.00' },
+        { asset: 'ETH', free: '0.00', locked: '0.00' }
+      ];
+    } catch (error) {
+      console.error('Error calculating account balance:', error);
+      // Fallback to starting balance only if calculation fails
+      return [
+        { asset: 'USDT', free: '10000.00', locked: '0.00' },
+        { asset: 'BTC', free: '0.00', locked: '0.00' },
+        { asset: 'ETH', free: '0.00', locked: '0.00' }
+      ];
+    }
   }
 
   async createMarketOrder(
@@ -81,13 +122,42 @@ export class BinanceTradingService {
   }
 
   private calculateOrderQuantity(symbol: string): number {
-    // Calculate order size based on account balance and risk management
-    const baseQuantities = {
-      'BTCUSDT': 0.001, // 0.001 BTC
-      'ETHUSDT': 0.01,  // 0.01 ETH
-    };
-
-    return baseQuantities[symbol as keyof typeof baseQuantities] || 0.001;
+    try {
+      // Calculate order size based on current account balance and 2% risk per trade
+      const balance = this.getAccountBalance();
+      const usdtBalance = parseFloat(balance[0]?.free || '10000');
+      const maxRiskPerTrade = usdtBalance * 0.02; // 2% risk per trade
+      
+      // Get current price for the symbol
+      const price = this.getCurrentPrice(symbol);
+      
+      // Calculate quantity based on USD amount
+      const quantity = maxRiskPerTrade / price;
+      
+      // Apply minimum/maximum limits
+      const minQuantities = {
+        'BTCUSDT': 0.00001, // Minimum 0.00001 BTC
+        'ETHUSDT': 0.0001,  // Minimum 0.0001 ETH
+      };
+      
+      const maxQuantities = {
+        'BTCUSDT': 0.1, // Maximum 0.1 BTC
+        'ETHUSDT': 1.0,  // Maximum 1.0 ETH
+      };
+      
+      const minQty = minQuantities[symbol as keyof typeof minQuantities] || 0.0001;
+      const maxQty = maxQuantities[symbol as keyof typeof maxQuantities] || 0.1;
+      
+      return Math.max(minQty, Math.min(maxQty, quantity));
+    } catch (error) {
+      console.error('Error calculating order quantity:', error);
+      // Fallback to conservative amount
+      const baseQuantities = {
+        'BTCUSDT': 0.001,
+        'ETHUSDT': 0.01,
+      };
+      return baseQuantities[symbol as keyof typeof baseQuantities] || 0.001;
+    }
   }
 
   async getOpenPositions(): Promise<Position[]> {

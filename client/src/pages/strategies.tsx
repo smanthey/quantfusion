@@ -1,4 +1,5 @@
 
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -6,35 +7,51 @@ import { ArrowLeft, Plus, Play, Pause, Settings } from "lucide-react";
 import { Link } from "wouter";
 
 export default function StrategiesPage() {
-  const strategies = [
-    {
-      id: "1",
-      name: "Mean Reversion BTCUSDT",
-      status: "ACTIVE",
-      pnl: 1245.67,
-      trades: 23,
-      winRate: 68.5,
-      symbol: "BTCUSDT"
-    },
-    {
-      id: "2", 
-      name: "Momentum ETH",
-      status: "PAUSED",
-      pnl: -234.12,
-      trades: 15,
-      winRate: 42.3,
-      symbol: "ETHUSDT"
-    },
-    {
-      id: "3",
-      name: "Grid Trading BTC",
-      status: "INACTIVE",
-      pnl: 2341.89,
-      trades: 156,
-      winRate: 71.2,
-      symbol: "BTCUSDT"
-    }
-  ];
+  const { data: dashboardData, isLoading } = useQuery({
+    queryKey: ['/api/dashboard'],
+    refetchInterval: 5000,
+  });
+
+  const { data: tradesData } = useQuery({
+    queryKey: ['/api/trades'],
+    refetchInterval: 10000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <div className="container mx-auto px-4 py-6">
+          <div className="animate-pulse space-y-6">
+            <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
+            <div className="grid grid-cols-3 gap-6">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="h-40 bg-gray-200 dark:bg-gray-700 rounded"></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const strategies = (dashboardData?.strategies || []).map((strategy: any) => {
+    // Calculate strategy performance from trades
+    const strategyTrades = (tradesData || []).filter((trade: any) => trade.strategyId === strategy.id);
+    const completedTrades = strategyTrades.filter((trade: any) => trade.pnl !== null);
+    const totalPnl = completedTrades.reduce((sum: number, trade: any) => sum + parseFloat(trade.pnl || '0'), 0);
+    const winningTrades = completedTrades.filter((trade: any) => parseFloat(trade.pnl || '0') > 0);
+    const winRate = completedTrades.length > 0 ? (winningTrades.length / completedTrades.length) * 100 : 0;
+
+    return {
+      id: strategy.id,
+      name: strategy.name,
+      status: strategy.status?.toUpperCase() || 'UNKNOWN',
+      pnl: totalPnl,
+      trades: strategyTrades.length,
+      winRate,
+      symbol: strategy.symbol || 'UNKNOWN'
+    };
+  });
 
   const getStatusColor = (status: string) => {
     switch (status) {

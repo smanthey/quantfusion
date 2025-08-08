@@ -253,6 +253,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to fetch dashboard data' });
     }
   });
+
+  // Add system status endpoint
+  app.get('/api/system/status', async (req, res) => {
+    try {
+      const trades = await storage.getRecentTrades(100);
+      const positions = await storage.getOpenPositions();
+      
+      // Check if trading engine is active (recent trades)
+      const recentTradeTime = trades.length > 0 ? new Date(trades[0].executedAt!) : null;
+      const isEngineActive = recentTradeTime && (Date.now() - recentTradeTime.getTime()) < 60000; // Within 1 minute
+      
+      // Check market data freshness
+      let marketDataStatus = 'live';
+      try {
+        await marketData.getCurrentData(['BTCUSDT']);
+      } catch {
+        marketDataStatus = 'offline';
+      }
+      
+      res.json({
+        tradingEngine: isEngineActive ? 'active' : 'inactive',
+        marketData: marketDataStatus,
+        riskManager: 'monitoring',
+        database: 'connected',
+        totalTrades: trades.length,
+        totalPositions: positions.length,
+        lastUpdate: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('System status error:', error);
+      res.json({
+        tradingEngine: 'error',
+        marketData: 'error', 
+        riskManager: 'error',
+        database: 'error',
+        totalTrades: 0,
+        totalPositions: 0,
+        lastUpdate: new Date().toISOString()
+      });
+    }
+  });
   
   // Account management
   app.get('/api/account', async (req, res) => {

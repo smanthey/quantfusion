@@ -1,47 +1,90 @@
 
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
 import { Link } from "wouter";
 
 export default function PortfolioPage() {
+  const { data: dashboardData, isLoading } = useQuery({
+    queryKey: ['/api/dashboard'],
+    refetchInterval: 5000,
+  });
+
+  const { data: accountData } = useQuery({
+    queryKey: ['/api/account'],
+    refetchInterval: 10000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <div className="container mx-auto px-4 py-6">
+          <div className="animate-pulse space-y-6">
+            <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4"></div>
+            <div className="grid grid-cols-4 gap-6">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const positions = dashboardData?.positions || [];
+  const performance = dashboardData?.performance || {};
+  const marketData = dashboardData?.marketData || {};
+  const balance = accountData?.balances?.[0] || { free: '10000' };
+
+  // Calculate portfolio metrics from real positions and account data
+  const totalValue = parseFloat(balance.free) + positions.reduce((sum: number, pos: any) => {
+    const currentPrice = parseFloat(pos.currentPrice || '0');
+    const size = parseFloat(pos.size || '0');
+    return sum + (currentPrice * size / currentPrice); // Convert to USD value
+  }, 0);
+
   const portfolioData = {
-    totalValue: 125467.89,
-    dayChange: 1234.56,
-    dayChangePercent: 1.02,
-    totalPnL: 25467.89,
-    totalPnLPercent: 25.47
+    totalValue,
+    dayChange: performance.dailyPnL || 0,
+    dayChangePercent: totalValue > 0 ? ((performance.dailyPnL || 0) / totalValue) * 100 : 0,
+    totalPnL: performance.totalPnl || 0,
+    totalPnLPercent: totalValue > 0 ? ((performance.totalPnl || 0) / 10000) * 100 : 0
   };
 
+  // Create holdings from actual positions plus cash
   const holdings = [
     {
-      symbol: "BTCUSDT",
-      amount: 2.5,
-      value: 107500,
-      avgPrice: 42000,
-      currentPrice: 43000,
-      pnl: 2500,
-      pnlPercent: 2.38
-    },
-    {
-      symbol: "ETHUSDT", 
-      amount: 5.2,
-      value: 12967.89,
-      avgPrice: 2400,
-      currentPrice: 2494,
-      pnl: 488.8,
-      pnlPercent: 3.92
-    },
-    {
       symbol: "USDT",
-      amount: 5000,
-      value: 5000,
+      amount: parseFloat(balance.free),
+      value: parseFloat(balance.free),
       avgPrice: 1,
       currentPrice: 1,
       pnl: 0,
       pnlPercent: 0
-    }
-  ];
+    },
+    ...positions.map((pos: any) => {
+      const currentPrice = parseFloat(pos.currentPrice || '0');
+      const entryPrice = parseFloat(pos.entryPrice || '0');
+      const size = parseFloat(pos.size || '0');
+      const value = currentPrice * (size / currentPrice); // USD value
+      const pnl = pos.side === 'long' 
+        ? (currentPrice - entryPrice) * (size / entryPrice)
+        : (entryPrice - currentPrice) * (size / entryPrice);
+      const pnlPercent = entryPrice > 0 ? (pnl / (entryPrice * size / entryPrice)) * 100 : 0;
+
+      return {
+        symbol: pos.symbol,
+        amount: size / currentPrice, // Token amount
+        value,
+        avgPrice: entryPrice,
+        currentPrice,
+        pnl,
+        pnlPercent
+      };
+    })
+  ].filter(holding => holding.value > 0);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
