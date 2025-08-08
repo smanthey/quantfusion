@@ -90,6 +90,17 @@ export class RiskManager {
     this.circuitBreakers = [];
   }
 
+  getLimits(): RiskLimits {
+    return {
+      maxPositionSize: 10000 * this.maxPositionSize, // 10% of $10k portfolio
+      maxDailyLoss: this.maxDailyLoss,
+      maxDrawdown: this.maxDrawdown,
+      perTradeRisk: 0.02, // 2% per trade
+      exploreBudget: 0.1, // 10% exploration budget
+      maxPositions: 10
+    };
+  }
+
   validateTradeSize(symbol: string, size: number, price: number): { allowed: boolean; reason?: string } {
     const positionValue = size * price;
     const maxPositionValue = 10000 * this.maxPositionSize;
