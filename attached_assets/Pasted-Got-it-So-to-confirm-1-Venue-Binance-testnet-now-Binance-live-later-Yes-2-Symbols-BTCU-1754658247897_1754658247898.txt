@@ -1,0 +1,70 @@
+Got it ✅
+So to confirm:
+	1.	Venue – Binance testnet now, Binance live later → Yes
+	2.	Symbols – BTCUSDT + ETHUSDT → Yes
+	3.	Risk defaults – per-trade 0.5%, daily loss cap 2%, max DD 10%, explore 10% → Yes
+
+⸻
+
+Here’s exactly what you’ll get in the first bundle I send:
+
+⸻
+
+A) Strategy Engine (multi-strat, adaptive)
+	•	Three families:
+	•	Mean-Reversion (z/Bollinger)
+	•	Breakout (ATR/range)
+	•	Trend-MA (MA/Donchian)
+	•	Run in parallel with MetaAllocator (risk-capped, correlation-aware)
+	•	Regime gates: trend/chop/off from vol + spread
+	•	Explore/Exploit loop: 10% of risk for new params, promotes winners
+	•	Promotion/Demotion: ≥300 OOS trades or 30d, PF≥1.2, DD≤cap
+	•	Walk-forward CV, Bayesian tuning, Monte-Carlo, Reality Check
+
+⸻
+
+B) Execution & Risk
+	•	Binance testnet/live connector, idempotent orders, async retry/backoff
+	•	Fee/Slippage model calibrated from fills (feedback loop)
+	•	Position sizing: per-trade %, ATR/time stops, capped-Kelly
+	•	Kill switches: day DD, slippage spike, fill drop, latency spike → flatten & pause
+	•	Circuit breakers (day/week), cool-downs, symbol halts
+	•	UTC everywhere, NTP drift check
+
+⸻
+
+C) Data & Metrics
+	•	SQLite schema: candles, signals, trades, runs, configs, fills
+	•	Audit log for every decision (signal, filters, size, stop)
+	•	Prometheus-friendly metrics: PnL, DD, turnover, slippage, maker/taker %, fill %, latency
+	•	Drift monitor: live PF vs walk-forward PF ± bands; auto de-weight on drift
+	•	Golden backtest snapshot for CI regression tests
+
+⸻
+
+D) Dev Experience
+	•	/ai brain in repo: prompts, decisions, TODOs
+	•	CLI commands:
+	•	backtest – run walk-forward CV + optimize
+	•	paper – connect to Binance testnet
+	•	live – connect to Binance live
+	•	CI checks for reproducibility + metric drift alerts
+
+⸻
+
+E) Extensibility
+	•	FX integration (OANDA) ready to add after crypto is stable
+	•	Modular strategy loader → drop in new strats without touching core
+	•	Allocator supports cross-market portfolios (crypto + FX)
+
+⸻
+
+If you want, I can deliver the repo with:
+	•	Install script for dependencies
+	•	One-command start for each mode (python app.py backtest, python app.py paper, python app.py live)
+	•	Example config for Binance keys, symbols, risk, explore budget
+	•	Dashboard (Streamlit) showing: allocations, regime, live stats, explore trials
+
+⸻
+
+Do you want me to build this first version with just BTCUSDT & ETHUSDT live-ready, and then once stable we’ll bolt on the Forex module? That way the same allocator/regime logic can run BTC/ETH + EURUSD/GBPUSD later with no rework.

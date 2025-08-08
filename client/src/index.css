@@ -1,0 +1,156 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto+Mono:wght@300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: hsl(0 0% 100%);
+  --foreground: hsl(240 10% 3.9%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(240 10% 3.9%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(240 10% 3.9%);
+  --primary: hsl(240 5.9% 10%);
+  --primary-foreground: hsl(0 0% 98%);
+  --secondary: hsl(240 4.8% 95.9%);
+  --secondary-foreground: hsl(240 5.9% 10%);
+  --muted: hsl(240 4.8% 95.9%);
+  --muted-foreground: hsl(240 3.8% 46.1%);
+  --accent: hsl(240 4.8% 95.9%);
+  --accent-foreground: hsl(240 5.9% 10%);
+  --destructive: hsl(0 84.2% 60.2%);
+  --destructive-foreground: hsl(0 0% 98%);
+  --border: hsl(240 5.9% 90%);
+  --input: hsl(240 5.9% 90%);
+  --ring: hsl(240 5.9% 10%);
+  --chart-1: hsl(12 76% 61%);
+  --chart-2: hsl(173 58% 39%);
+  --chart-3: hsl(197 37% 24%);
+  --chart-4: hsl(43 74% 66%);
+  --chart-5: hsl(27 87% 67%);
+  --radius: 0.5rem;
+
+  /* Custom dark theme colors matching the design */
+  --dark-bg: hsl(0 0% 11.8%);
+  --dark-secondary: hsl(0 0% 17.6%);
+  --dark-tertiary: hsl(0 0% 22.7%);
+  --success: hsl(164 76% 42%);
+  --danger: hsl(357 89% 64%);
+  --info: hsl(231 80% 59%);
+  --warning: hsl(36 100% 52%);
+  --text-primary: hsl(225 9% 94%);
+  --text-secondary: hsl(217 15% 70%);
+
+  /* Fonts */
+  --font-sans: "Inter", sans-serif;
+  --font-mono: "Roboto Mono", monospace;
+}
+
+.dark {
+  --background: var(--dark-bg);
+  --foreground: var(--text-primary);
+  --card: var(--dark-secondary);
+  --card-foreground: var(--text-primary);
+  --popover: var(--dark-bg);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--success);
+  --primary-foreground: var(--dark-bg);
+  --secondary: var(--dark-tertiary);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--dark-tertiary);
+  --muted-foreground: var(--text-secondary);
+  --accent: var(--dark-tertiary);
+  --accent-foreground: var(--text-primary);
+  --destructive: var(--danger);
+  --destructive-foreground: var(--text-primary);
+  --border: var(--dark-tertiary);
+  --input: var(--dark-tertiary);
+  --ring: var(--success);
+  --chart-1: var(--success);
+  --chart-2: var(--info);
+  --chart-3: var(--warning);
+  --chart-4: var(--danger);
+  --chart-5: hsl(280 89% 64%);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  .dark body {
+    background: var(--dark-bg);
+    color: var(--text-primary);
+  }
+}
+
+@layer utilities {
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+
+  .text-success {
+    color: var(--success);
+  }
+
+  .text-danger {
+    color: var(--danger);
+  }
+
+  .text-info {
+    color: var(--info);
+  }
+
+  .text-warning {
+    color: var(--warning);
+  }
+
+  .text-text-primary {
+    color: var(--text-primary);
+  }
+
+  .text-text-secondary {
+    color: var(--text-secondary);
+  }
+
+  .bg-dark-bg {
+    background-color: var(--dark-bg);
+  }
+
+  .bg-dark-secondary {
+    background-color: var(--dark-secondary);
+  }
+
+  .bg-dark-tertiary {
+    background-color: var(--dark-tertiary);
+  }
+
+  .bg-success {
+    background-color: var(--success);
+  }
+
+  .bg-danger {
+    background-color: var(--danger);
+  }
+
+  .bg-info {
+    background-color: var(--info);
+  }
+
+  .bg-warning {
+    background-color: var(--warning);
+  }
+
+  .border-dark-tertiary {
+    border-color: var(--dark-tertiary);
+  }
+
+  .border-success {
+    border-color: var(--success);
+  }
+}
