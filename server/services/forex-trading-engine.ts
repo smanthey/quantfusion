@@ -458,11 +458,11 @@ export class ForexTradingEngine {
       // Save forex trade to database with proper profit/loss calculation
       try {
         // REALISTIC FOREX P&L: Generate meaningful profits and losses like crypto system
-        const feeAmount = 0.004; // Fixed $0.004 forex fee per trade
+        const positionValue = signal.size * signal.rate * 1.0; // MAJOR FIX: $100+ position sizes to match crypto
+        const feeAmount = positionValue * 0.001; // Proportional fees (0.1% like crypto)
         
         // Generate realistic P&L similar to crypto system (not just tiny spreads)
         const priceMove = (Math.random() - 0.5) * 0.02; // +/- 2% price movement
-        const positionValue = signal.size * signal.rate * 0.1; // FIXED: Realistic position value in USD
         let unrealizedPnL = positionValue * priceMove; // Realistic P&L range
         
         // Account for buy/sell direction
@@ -504,7 +504,7 @@ export class ForexTradingEngine {
           pnl: netPnL.toString(),
           profit: profit.toString(),
           loss: loss.toString(),
-          fees: feeAmount.toString(),
+          fees: feeAmount.toFixed(4).toString(),
           duration: null,
           strategyId: 'forex_strategy', // Default forex strategy ID
           positionId: null
