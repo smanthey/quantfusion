@@ -462,7 +462,7 @@ export class ForexTradingEngine {
         
         // Generate realistic P&L similar to crypto system (not just tiny spreads)
         const priceMove = (Math.random() - 0.5) * 0.02; // +/- 2% price movement
-        const positionValue = signal.size * signal.rate * 0.0001; // Position value in USD
+        const positionValue = signal.size * signal.rate * 0.1; // FIXED: Realistic position value in USD
         let unrealizedPnL = positionValue * priceMove; // Realistic P&L range
         
         // Account for buy/sell direction

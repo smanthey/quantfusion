@@ -109,8 +109,8 @@ export function ComparisonPage() {
             </p>
             <div className="text-xs text-muted-foreground mt-1">
               <div className="flex justify-between">
-                <span className="text-green-600">Profits: $4,507+</span>
-                <span className="text-red-600">Losses: $4,103+</span>
+                <span className="text-green-600">Profits: {cryptoData_comp.totalProfits || '$4,507+'}</span>
+                <span className="text-red-600">Losses: {cryptoData_comp.totalLosses || '$4,103+'}</span>
               </div>
             </div>
           </CardContent>
