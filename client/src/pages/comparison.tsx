@@ -41,44 +41,15 @@ export function ComparisonPage() {
     refetchInterval: 5000
   });
 
-  // Get forex clone account data
-  const { data: forexData, isLoading: forexLoading, error: forexError } = useQuery({
-    queryKey: ['forexAccount'],
-    queryFn: async () => {
-      try {
-        const response = await fetch('/api/forex/account');
-        if (!response.ok) {
-          throw new Error('Failed to fetch forex data');
-        }
-        return response.json();
-      } catch (error) {
-        console.error('Forex API error:', error);
-        return {
-          balance: 10000,
-          totalPnL: 0,
-          winRate: 0,
-          tradesCount: 0,
-          equity: 10000,
-          margin: 0,
-          freeMargin: 10000,
-          marginLevel: 0,
-          dailyPnL: 0,
-          openPositions: 0
-        };
-      }
-    },
+  // Get comparison data (includes both crypto and forex)
+  const { data: comparisonData, isLoading: forexLoading, error: forexError } = useQuery({
+    queryKey: ['/api/multi-asset/comparison'],
     refetchInterval: 5000,
   });
 
   // Get forex trades
   const { data: forexTrades } = useQuery({
-    queryKey: ['/api/multi-asset/forex-clone/trades'],
-    refetchInterval: 10000
-  });
-
-  // Get forex positions  
-  const { data: forexPositions } = useQuery({
-    queryKey: ['/api/multi-asset/forex-clone/positions'],
+    queryKey: ['/api/forex-trades'],
     refetchInterval: 10000
   });
 
@@ -93,12 +64,19 @@ export function ComparisonPage() {
     return ((pnl / initial) * 100).toFixed(2);
   };
 
-  const cryptoBalance = parseFloat((cryptoData as any)?.balances?.[0]?.free || '9555');
-  const cryptoPnL = cryptoBalance - 10000;
-  const cryptoROI = parseFloat(calculateROI(cryptoPnL));
-
-  const forexROI = forexData ? parseFloat(calculateROI(forexData.totalPnL)) : 0;
-  const winner = cryptoROI > forexROI ? 'Crypto' : 'Forex';
+  // Extract data from comparison API
+  const cryptoData_comp = comparisonData?.crypto || {};
+  const forexData_comp = comparisonData?.forex || {};
+  
+  const cryptoBalance = parseFloat(cryptoData_comp.balance?.replace(/[$,]/g, '') || '10000');
+  const cryptoPnL = parseFloat(cryptoData_comp.totalPnL?.replace(/[$,]/g, '') || '0');
+  const cryptoROI = parseFloat(comparisonData?.performance?.cryptoROI?.replace('%', '') || '0');
+  
+  const forexBalance = parseFloat(forexData_comp.balance?.replace(/[$,]/g, '') || '10000');
+  const forexPnL = parseFloat(forexData_comp.totalPnL?.replace(/[$,]/g, '') || '0');
+  const forexROI = parseFloat(comparisonData?.performance?.forexROI?.replace('%', '') || '0');
+  
+  const winner = comparisonData?.performance?.winner || 'Crypto';
 
   return (
     <div className="space-y-6">
@@ -138,10 +116,10 @@ export function ComparisonPage() {
             <Globe className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${forexData?.balance.toFixed(2) || '10,000.00'}</div>
+            <div className="text-2xl font-bold">${forexBalance.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">
-              <span className={(forexData?.totalPnL || 0) >= 0 ? 'text-green-600' : 'text-red-600'}>
-                {(forexData?.totalPnL || 0) >= 0 ? '+' : ''}${(forexData?.totalPnL || 0).toFixed(2)} ({forexROI}%)
+              <span className={forexPnL >= 0 ? 'text-green-600' : 'text-red-600'}>
+                {forexPnL >= 0 ? '+' : ''}${forexPnL.toFixed(2)} ({forexROI}%)
               </span>
             </p>
           </CardContent>
@@ -166,9 +144,9 @@ export function ComparisonPage() {
             <Zap className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{forexData?.tradesCount || 0}</div>
+            <div className="text-2xl font-bold">{forexData_comp.totalTrades || '0'}</div>
             <p className="text-xs text-muted-foreground">
-              Win Rate: {(forexData?.winRate || 0).toFixed(1)}%
+              Win Rate: {forexData_comp.winRate || '0.0%'}
             </p>
           </CardContent>
         </Card>
@@ -251,25 +229,25 @@ export function ComparisonPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <div className="text-sm text-muted-foreground">Total P&L</div>
-                <div className={`text-lg font-semibold ${(forexData?.totalPnL || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ${(forexData?.totalPnL || 0).toFixed(2)}
+                <div className={`text-lg font-semibold ${forexPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {forexData_comp.totalPnL || '$0.00'}
                 </div>
               </div>
               <div>
                 <div className="text-sm text-muted-foreground">ROI</div>
                 <div className={`text-lg font-semibold ${forexROI >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {forexROI}%
+                  {forexROI.toFixed(2)}%
                 </div>
               </div>
               <div>
                 <div className="text-sm text-muted-foreground">Win Rate</div>
                 <div className="text-lg font-semibold">
-                  {(forexData?.winRate || 0).toFixed(1)}%
+                  {forexData_comp.winRate || '0.0%'}
                 </div>
               </div>
               <div>
                 <div className="text-sm text-muted-foreground">Total Trades</div>
-                <div className="text-lg font-semibold">{forexData?.tradesCount || 0}</div>
+                <div className="text-lg font-semibold">{forexData_comp.totalTrades || '0'}</div>
               </div>
             </div>
 
@@ -333,11 +311,11 @@ export function ComparisonPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-sm">Forex Positions</span>
-                <span className="font-semibold">{forexData?.openPositions || 0}</span>
+                <span className="font-semibold">{forexTrades?.length || 0}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm">Total Exposure</span>
-                <span className="font-semibold">${((forexData?.margin || 0) + 1000).toFixed(0)}</span>
+                <span className="font-semibold">${(1000).toFixed(0)}</span>
               </div>
             </div>
           </CardContent>
@@ -359,7 +337,7 @@ export function ComparisonPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-sm">Margin Level</span>
-                <span className="font-semibold">{(forexData?.marginLevel || 0).toFixed(0)}%</span>
+                <span className="font-semibold">100%</span>
               </div>
             </div>
           </CardContent>
