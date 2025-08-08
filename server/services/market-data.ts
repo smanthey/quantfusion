@@ -34,6 +34,7 @@ export class MarketDataService {
   private simulationInterval?: NodeJS.Timeout;
   private unsubscribeFunctions: (() => void)[] = [];
   private pollIntervals?: Map<string, NodeJS.Timeout>;
+  private symbols = ['BTCUSDT', 'ETHUSDT'];
 
   constructor() {
     this.initializeService();
