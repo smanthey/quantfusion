@@ -185,32 +185,62 @@ router.get('/comparison', async (req, res) => {
     // Import storage to access real data directly
     const { storage } = await import('../storage');
     
-    // Get direct crypto data without HTTP calls
+    // Get ALL trades and separate crypto from forex
     const allTrades = await storage.getAllTrades();
-    const cryptoTrades = allTrades.length;
     
-    // Calculate crypto metrics using profit/loss fields - SAME AS ALL OTHER ENDPOINTS
-    let totalProfits = 0;
-    let totalLosses = 0;
-    let winCount = 0;
-    let lossCount = 0;
+    // Properly separate crypto and forex trades by symbol
+    const cryptoSymbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'ADAUSDT', 'DOGEUSDT'];
+    const forexSymbols = ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'USDCAD', 'NZDUSD', 'EURJPY'];
     
-    for (const trade of allTrades) {
+    const cryptoTrades = allTrades.filter(trade => cryptoSymbols.includes(trade.symbol));
+    const forexTrades = allTrades.filter(trade => forexSymbols.includes(trade.symbol));
+    
+    console.log(`📊 TRADE SEPARATION: Crypto=${cryptoTrades.length}, Forex=${forexTrades.length}, Total=${allTrades.length}`);
+    
+    // Calculate CRYPTO metrics using only crypto trades
+    let cryptoProfits = 0;
+    let cryptoLosses = 0;
+    let cryptoWinCount = 0;
+    let cryptoLossCount = 0;
+    
+    for (const trade of cryptoTrades) {
       const profit = parseFloat(trade.profit || '0');
       const loss = parseFloat(trade.loss || '0');
       
       if (profit > 0) {
-        totalProfits += profit;
-        winCount++;
+        cryptoProfits += profit;
+        cryptoWinCount++;
       }
       if (loss > 0) {
-        totalLosses += loss;
-        lossCount++;
+        cryptoLosses += loss;
+        cryptoLossCount++;
       }
     }
     
-    const cryptoPnL = totalProfits - totalLosses; // Net P&L from database
-    const cryptoWinRate = allTrades.length > 0 ? (winCount / allTrades.length) * 100 : 0;
+    // Calculate FOREX metrics using only forex trades
+    let forexProfits = 0;
+    let forexLosses = 0;
+    let forexWinCount = 0;
+    let forexLossCount = 0;
+    
+    for (const trade of forexTrades) {
+      const profit = parseFloat(trade.profit || '0');
+      const loss = parseFloat(trade.loss || '0');
+      
+      if (profit > 0) {
+        forexProfits += profit;
+        forexWinCount++;
+      }
+      if (loss > 0) {
+        forexLosses += loss;
+        forexLossCount++;
+      }
+    }
+    
+    const cryptoPnL = cryptoProfits - cryptoLosses; // Net crypto P&L
+    const forexPnL = forexProfits - forexLosses; // Net forex P&L
+    const cryptoWinRate = cryptoTrades.length > 0 ? (cryptoWinCount / cryptoTrades.length) * 100 : 0;
+    const forexWinRate = forexTrades.length > 0 ? (forexWinCount / forexTrades.length) * 100 : 0;
     
     // Get current balance from account endpoint (which uses the unified calculation)
     let cryptoBalance = 10000 + cryptoPnL; // Starting balance + P&L (fallback)
@@ -222,36 +252,33 @@ router.get('/comparison', async (req, res) => {
       // Use calculated balance as fallback
     }
     
-    // Get forex data
-    const engine = await getForexEngine();
-    const forexAccount = engine.getForexAccountStatus();
-    
-    console.log(`📊 Crypto: ${cryptoTrades} trades, $${cryptoPnL.toFixed(2)} P&L`);
-    console.log(`📊 Forex: ${forexAccount.tradesCount} trades, $${forexAccount.totalPnL.toFixed(2)} P&L`);
+    console.log(`📊 Crypto: ${cryptoTrades.length} trades, $${cryptoPnL.toFixed(2)} P&L`);
+    console.log(`📊 Forex: ${forexTrades.length} trades, $${forexPnL.toFixed(2)} P&L`);
     
     // Calculate real ROI values
+    const forexBalance = 10000 + forexPnL; // Starting balance + forex P&L
     const cryptoROI = ((cryptoBalance - 10000) / 10000 * 100).toFixed(2) + '%';
-    const forexROI = ((forexAccount.balance - 10000) / 10000 * 100).toFixed(2) + '%';
+    const forexROI = ((forexBalance - 10000) / 10000 * 100).toFixed(2) + '%';
     
     const comparison = {
       crypto: {
         account: 'Crypto System',
-        totalTrades: cryptoTrades.toLocaleString(),
+        totalTrades: cryptoTrades.length.toLocaleString(),
         winRate: cryptoWinRate.toFixed(1) + '%',
         totalPnL: '$' + cryptoPnL.toFixed(2),
         balance: '$' + cryptoBalance.toFixed(2)
       },
       forex: {
         account: 'Forex System', 
-        totalTrades: forexAccount.tradesCount,
-        winRate: forexAccount.winRate.toFixed(1) + '%',
-        totalPnL: '$' + forexAccount.totalPnL.toFixed(2),
-        balance: '$' + forexAccount.balance.toFixed(2)
+        totalTrades: forexTrades.length,
+        winRate: forexWinRate.toFixed(1) + '%',
+        totalPnL: '$' + forexPnL.toFixed(2),
+        balance: '$' + forexBalance.toFixed(2)
       },
       performance: {
         cryptoROI,
         forexROI,
-        winner: forexAccount.totalPnL >= cryptoPnL ? 'Forex' : 'Crypto'
+        winner: forexPnL >= cryptoPnL ? 'Forex' : 'Crypto'
       }
     };
     
