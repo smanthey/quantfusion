@@ -68,11 +68,11 @@ export function ComparisonPage() {
   const cryptoData_comp = (comparisonData as ComparisonData)?.crypto || {} as any;
   const forexData_comp = (comparisonData as ComparisonData)?.forex || {} as any;
   
-  const cryptoBalance = parseFloat(cryptoData_comp.balance?.replace(/[$,]/g, '') || '10000');
-  const cryptoPnL = parseFloat(cryptoData_comp.totalPnL?.replace(/[$,]/g, '') || '0');
-  const cryptoROI = parseFloat((comparisonData as ComparisonData)?.performance?.cryptoROI?.replace('%', '') || '0');
+  const cryptoBalance = parseFloat(String(cryptoData_comp.balance || '10000').replace(/[$,]/g, ''));
+  const cryptoPnL = parseFloat(String(cryptoData_comp.totalPnL || '0').replace(/[$,]/g, ''));
+  const cryptoROI = parseFloat(String((comparisonData as ComparisonData)?.performance?.cryptoROI || '0').replace('%', ''));
   
-  const forexBalance = parseFloat(forexData_comp.balance?.replace(/[$,]/g, '') || '10000');
+  const forexBalance = parseFloat(String(forexData_comp.balance || '10000').replace(/[$,]/g, ''));
   const forexPnL = parseFloat(forexData_comp.totalPnL?.replace(/[$,]/g, '') || '0');
   const forexROI = parseFloat((comparisonData as ComparisonData)?.performance?.forexROI?.replace('%', '') || '0');
   
