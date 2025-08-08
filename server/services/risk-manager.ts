@@ -29,299 +29,86 @@ export interface Trade {
 }
 
 export class RiskManager {
-  private limits: RiskLimits = {
-    maxPositionSize: 10000,
-    maxDailyLoss: 500,
-    maxDrawdown: 2000,
-    perTradeRisk: 100,
-    exploreBudget: 200,
-    maxPositions: 10
+  private maxDrawdown = 0.15; // 15% max drawdown
+  private maxDailyLoss = 500; // $500 max daily loss
+  private maxPositionSize = 0.1; // 10% of portfolio per position
+  private isHalted = false;
+  private circuitBreakers: string[] = [];
+
+  private currentMetrics: RiskMetrics = {
+    currentDrawdown: 0,
+    dailyPnL: 0,
+    totalPositionSize: 0,
+    riskUtilization: 0,
+    isHalted: false,
+    circuitBreakers: []
   };
 
-  private isTradeHalted = false;
-  private dailyStartEquity = 10000;
-  private currentEquity = 10000;
-  private peakEquity = 10000;
-  private todaysStart = new Date().toDateString();
-  private trades: Trade[] = [];
+  getCurrentMetrics(): RiskMetrics {
+    return { ...this.currentMetrics };
+  }
 
-  constructor(limits?: Partial<RiskLimits>) {
-    if (limits) {
-      this.limits = { ...this.limits, ...limits };
+  updateMetrics(totalPnL: number, dailyPnL: number, totalPositionSize: number): void {
+    const startingBalance = 10000;
+    this.currentMetrics.currentDrawdown = Math.max(0, -totalPnL);
+    this.currentMetrics.dailyPnL = dailyPnL;
+    this.currentMetrics.totalPositionSize = totalPositionSize;
+    this.currentMetrics.riskUtilization = Math.min(1, totalPositionSize / startingBalance);
+
+    // Check circuit breakers
+    this.checkCircuitBreakers(totalPnL, dailyPnL);
+
+    this.currentMetrics.isHalted = this.isHalted;
+    this.currentMetrics.circuitBreakers = [...this.circuitBreakers];
+  }
+
+  private checkCircuitBreakers(totalPnL: number, dailyPnL: number): void {
+    this.circuitBreakers = [];
+
+    const drawdownPercent = Math.abs(totalPnL) / 10000;
+    if (drawdownPercent > this.maxDrawdown) {
+      this.circuitBreakers.push(`Max drawdown exceeded: ${(drawdownPercent * 100).toFixed(1)}%`);
+      this.isHalted = true;
+    }
+
+    if (dailyPnL < -this.maxDailyLoss) {
+      this.circuitBreakers.push(`Daily loss limit exceeded: $${Math.abs(dailyPnL).toFixed(2)}`);
+      this.isHalted = true;
+    }
+
+    if (this.currentMetrics.riskUtilization > 0.8) {
+      this.circuitBreakers.push(`High risk utilization: ${(this.currentMetrics.riskUtilization * 100).toFixed(1)}%`);
     }
   }
 
-  validateTrade(trade: Partial<Trade>): { valid: boolean; reason?: string } {
-    if (this.isTradeHalted) {
-      return { valid: false, reason: 'Trading is currently halted due to risk limits' };
-    }
-
-    const metrics = this.getCurrentMetrics();
-
-    // Check daily loss limit
-    if (metrics.dailyPnL <= -this.limits.maxDailyLoss) {
-      this.haltTrading('Daily loss limit exceeded');
-      return { valid: false, reason: 'Daily loss limit exceeded' };
-    }
-
-    // Check max drawdown
-    if (metrics.currentDrawdown >= this.limits.maxDrawdown) {
-      this.haltTrading('Maximum drawdown exceeded');
-      return { valid: false, reason: 'Maximum drawdown exceeded' };
-    }
-
-    // Check position size
-    if (trade.size && trade.size > this.limits.maxPositionSize) {
-      return { valid: false, reason: 'Position size exceeds maximum allowed' };
-    }
-
-    // Check per-trade risk
-    if (trade.size && trade.price) {
-      const tradeValue = trade.size * trade.price;
-      if (tradeValue > this.limits.perTradeRisk) {
-        return { valid: false, reason: 'Trade value exceeds per-trade risk limit' };
-      }
-    }
-
-    return { valid: true };
+  shouldHaltTrading(): boolean {
+    return this.isHalted;
   }
 
-  recordTrade(trade: Trade) {
-    this.trades.push(trade);
-    
-    // Update equity if PnL is provided
-    if (trade.pnl !== undefined) {
-      this.currentEquity += trade.pnl;
-      this.peakEquity = Math.max(this.peakEquity, this.currentEquity);
-    }
-
-    // Reset daily tracking if new day
-    const today = new Date().toDateString();
-    if (today !== this.todaysStart) {
-      this.todaysStart = today;
-      this.dailyStartEquity = this.currentEquity;
-    }
+  resetHalt(): void {
+    this.isHalted = false;
+    this.circuitBreakers = [];
   }
 
-  async checkConstraints(): Promise<{ canTrade: boolean; reason?: string; riskLevel?: 'low' | 'medium' | 'high' }> {
-    if (this.isTradeHalted) {
+  validateTradeSize(symbol: string, size: number, price: number): { allowed: boolean; reason?: string } {
+    const positionValue = size * price;
+    const maxPositionValue = 10000 * this.maxPositionSize;
+
+    if (positionValue > maxPositionValue) {
       return {
-        canTrade: false,
-        reason: 'Trading halted due to risk limits',
-        riskLevel: 'high'
+        allowed: false,
+        reason: `Position size too large: $${positionValue.toFixed(2)} > $${maxPositionValue.toFixed(2)}`
       };
     }
 
-    try {
-      const metrics = this.getCurrentMetrics();
-    
-    // Check daily loss limit
-    if (metrics.dailyPnL <= -this.limits.maxDailyLoss) {
-      this.haltTrading('Daily loss limit exceeded');
-      return { canTrade: false, reason: 'Daily loss limit exceeded', riskLevel: 'high' };
+    if (this.isHalted) {
+      return {
+        allowed: false,
+        reason: 'Trading halted due to circuit breaker'
+      };
     }
 
-    // Check max drawdown
-    if (metrics.currentDrawdown >= this.limits.maxDrawdown) {
-      this.haltTrading('Maximum drawdown exceeded');
-      return { canTrade: false, reason: 'Maximum drawdown exceeded', riskLevel: 'high' };
-    }
-
-    // Calculate risk level
-    const riskUtilization = Math.max(
-      Math.abs(metrics.dailyPnL) / this.limits.maxDailyLoss,
-      metrics.currentDrawdown / this.limits.maxDrawdown
-    );
-
-    let riskLevel: 'low' | 'medium' | 'high' = 'low';
-    if (riskUtilization > 0.7) riskLevel = 'high';
-    else if (riskUtilization > 0.4) riskLevel = 'medium';
-
-    return { canTrade: true, riskLevel };
-    } catch (error) {
-      console.error('Error in risk constraint checking:', error);
-      return { canTrade: false, reason: 'Risk system error', riskLevel: 'high' };
-    }
-  }
-
-  
-
-  getCurrentMetrics(): RiskMetrics {
-    const today = new Date().toDateString();
-    if (today !== this.todaysStart) {
-      this.todaysStart = today;
-      this.dailyStartEquity = this.currentEquity;
-    }
-
-    const dailyPnL = this.currentEquity - this.dailyStartEquity;
-    const currentDrawdown = this.peakEquity - this.currentEquity;
-    
-    const totalPositionSize = this.trades
-      .filter(t => Date.now() - t.timestamp < 24 * 60 * 60 * 1000) // Last 24 hours
-      .reduce((sum, t) => sum + (t.size * t.price), 0);
-
-    const riskUtilization = Math.max(
-      Math.abs(dailyPnL) / this.limits.maxDailyLoss,
-      currentDrawdown / this.limits.maxDrawdown,
-      totalPositionSize / (this.limits.maxPositionSize * 5) // Allow 5 max positions
-    );
-
-    const circuitBreakers = [];
-    if (dailyPnL <= -this.limits.maxDailyLoss * 0.8) {
-      circuitBreakers.push('Daily loss warning');
-    }
-    if (currentDrawdown >= this.limits.maxDrawdown * 0.8) {
-      circuitBreakers.push('Drawdown warning');
-    }
-
-    return {
-      currentDrawdown,
-      dailyPnL,
-      totalPositionSize,
-      riskUtilization,
-      isHalted: this.isTradeHalted,
-      circuitBreakers
-    };
-  }
-
-  haltTrading(reason: string) {
-    this.isTradeHalted = true;
-    console.log(`Trading halted: ${reason}`);
-  }
-
-  resumeTrading() {
-    this.isTradeHalted = false;
-    console.log('Trading resumed');
-  }
-
-  calculatePositionSize(symbol: string, riskAmount: number): number {
-    const price = marketDataService.getCurrentPrice(symbol);
-    const volatility = marketDataService.getVolatility(symbol);
-    
-    if (!price || !volatility) return 0;
-
-    // Simple position sizing based on volatility
-    const atrStop = price * volatility * 0.02; // 2% of daily volatility
-    const positionSize = Math.min(
-      riskAmount / atrStop,
-      this.limits.maxPositionSize
-    );
-
-    return Math.max(0, positionSize);
-  }
-
-  getStopLoss(symbol: string, side: 'buy' | 'sell', entryPrice: number): number {
-    const volatility = marketDataService.getVolatility(symbol);
-    const atr = entryPrice * volatility * 0.02;
-
-    if (side === 'buy') {
-      return entryPrice - atr * 2; // 2x ATR stop
-    } else {
-      return entryPrice + atr * 2;
-    }
-  }
-
-  checkCircuitBreakers(): { triggered: boolean; reasons: string[] } {
-    const metrics = this.getCurrentMetrics();
-    const reasons = [];
-
-    // Check for sudden equity drops
-    const recentTrades = this.trades.filter(t => Date.now() - t.timestamp < 60000); // Last minute
-    const recentPnL = recentTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
-    
-    if (recentPnL < -this.limits.perTradeRisk * 2) {
-      reasons.push('Rapid loss detected');
-    }
-
-    // Check for latency spikes (simplified)
-    const now = Date.now();
-    const latencyCheck = now % 1000 > 900; // Simulate occasional latency
-    if (latencyCheck) {
-      reasons.push('High latency detected');
-    }
-
-    if (reasons.length > 0) {
-      this.haltTrading(reasons.join(', '));
-      return { triggered: true, reasons };
-    }
-
-    return { triggered: false, reasons: [] };
-  }
-
-  getLimits(): RiskLimits {
-    return { ...this.limits };
-  }
-
-  updateLimits(newLimits: Partial<RiskLimits>) {
-    this.limits = { ...this.limits, ...newLimits };
-  }
-
-  getRecentTrades(hours = 24): Trade[] {
-    const cutoff = Date.now() - (hours * 60 * 60 * 1000);
-    return this.trades.filter(t => t.timestamp > cutoff);
-  }
-
-  reset() {
-    this.isTradeHalted = false;
-    this.currentEquity = 10000;
-    this.peakEquity = 10000;
-    this.dailyStartEquity = 10000;
-    this.trades = [];
-    this.todaysStart = new Date().toDateString();
-  }
-
-  async calculateMetrics(): Promise<Omit<import('@shared/schema').RiskMetric, 'id' | 'timestamp'>> {
-    const metrics = this.getCurrentMetrics();
-    
-    return {
-      dailyPnl: metrics.dailyPnL.toString(),
-      dailyRisk: metrics.riskUtilization.toString(),
-      maxDrawdown: (metrics.currentDrawdown / this.currentEquity).toString(),
-      totalExposure: metrics.totalPositionSize.toString()
-    };
-  }
-
-  
-
-  async canExecuteTrade(signal: any): Promise<boolean> {
-    try {
-      const constraints = await this.checkConstraints();
-      if (!constraints.canTrade) {
-        return false;
-      }
-
-      // Additional signal-specific checks
-      const positionSize = await this.calculatePositionSizeForSignal(signal);
-      return positionSize > 0;
-    } catch (error) {
-      console.error('Error checking trade constraints:', error);
-      return false;
-    }
-  }
-
-  async calculatePositionSizeForSignal(signal: any): Promise<number> {
-    try {
-      // Simple calculation without storage dependency
-      const baseSize = this.limits.maxPositionSize / 10; // Conservative sizing
-      const confidenceMultiplier = signal.confidence || 0.5;
-      
-      return Math.floor(baseSize * confidenceMultiplier);
-    } catch (error) {
-      console.error('Error calculating position size:', error);
-      return 0;
-    }
-  }
-
-  async flattenAllPositions(): Promise<void> {
-    try {
-      const openPositions = await storage.getOpenPositions();
-      for (const position of openPositions) {
-        await storage.updatePositionPnL(position.id, "0", "closed");
-      }
-      console.log(`Emergency stop: Flattened ${openPositions.length} positions`);
-    } catch (error) {
-      console.error('Error flattening positions:', error);
-    }
+    return { allowed: true };
   }
 }
 

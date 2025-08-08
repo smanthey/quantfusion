@@ -77,12 +77,15 @@ export class HistoricalDataService {
         
         // Generate OHLC data with proper bounds checking
         const volatilityRange = currentPrice * volatility;
-        const high = Math.max(currentPrice + Math.random() * volatilityRange, currentPrice);
-        const low = Math.min(currentPrice - Math.random() * volatilityRange, currentPrice);
         const open = currentPrice + (Math.random() - 0.5) * volatilityRange * 0.5;
+        const high = Math.max(open, currentPrice) + Math.random() * volatilityRange * 0.3;
+        const low = Math.min(open, currentPrice) - Math.random() * volatilityRange * 0.3;
         
-        // Ensure OHLC relationships are valid
-        if (isNaN(high) || isNaN(low) || isNaN(open) || isNaN(currentPrice)) {
+        // Ensure OHLC relationships are valid: high >= max(open,close), low <= min(open,close)
+        const validHigh = Math.max(high, open, currentPrice);
+        const validLow = Math.min(low, open, currentPrice);
+        
+        if (isNaN(validHigh) || isNaN(validLow) || isNaN(open) || isNaN(currentPrice)) {
           console.error(`Invalid OHLC data generated for ${symbol} at ${timestamp}`);
           continue;
         }
@@ -95,8 +98,8 @@ export class HistoricalDataService {
         data.push({
           timestamp,
           open,
-          high: Math.max(open, currentPrice, high),
-          low: Math.min(open, currentPrice, low),
+          high: validHigh,
+          low: validLow,
           close: currentPrice,
           volume,
           symbol

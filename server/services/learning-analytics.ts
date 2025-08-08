@@ -77,6 +77,49 @@ export class LearningAnalyticsEngine {
 
   private async analyzeTimePatterns(trades: any[]): Promise<LearningPattern[]> {
     const patterns: LearningPattern[] = [];
+    
+    if (trades.length === 0) return patterns;
+    
+    // Analyze hourly performance patterns
+    const hourlyPerformance = new Map<number, { wins: number; losses: number; totalPnL: number }>();
+    
+    trades.forEach(trade => {
+      const hour = new Date(trade.executedAt).getHours();
+      const pnl = this.calculateTradePnL(trade);
+      
+      if (!hourlyPerformance.has(hour)) {
+        hourlyPerformance.set(hour, { wins: 0, losses: 0, totalPnL: 0 });
+      }
+      
+      const stats = hourlyPerformance.get(hour)!;
+      stats.totalPnL += pnl;
+      if (pnl > 0) stats.wins++;
+      else stats.losses++;
+    });
+    
+    // Find problematic hours
+    hourlyPerformance.forEach((stats, hour) => {
+      const totalTrades = stats.wins + stats.losses;
+      if (totalTrades >= 10) {
+        const winRate = stats.wins / totalTrades;
+        const avgPnL = stats.totalPnL / totalTrades;
+        
+        if (winRate < 0.3 || avgPnL < -0.1) {
+          patterns.push({
+            id: `time_pattern_hour_${hour}`,
+            type: 'time_based',
+            description: `Poor performance during hour ${hour}:00 - ${winRate.toFixed(2)} win rate, $${avgPnL.toFixed(2)} avg P&L`,
+            confidence: Math.min(0.9, totalTrades / 50),
+            impact: Math.abs(stats.totalPnL),
+            frequency: totalTrades,
+            conditions: { hour, minTrades: 5 },
+            recommendation: `Avoid trading during hour ${hour}:00 or adjust strategy parameters`
+          });
+        }
+      }
+    });
+    
+    return patterns; = [];
 
     // Group trades by hour
     const hourlyPerformance = new Map<number, { wins: number; losses: number; totalPnL: number }>();
