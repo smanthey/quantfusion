@@ -186,8 +186,12 @@ export class TradingEngine {
         }
       }
 
-      // 4. Update position management
-      await this.updatePositions();
+      // 4. Update position management with A/B testing
+      await this.updatePositionsWithABTesting();
+      
+      // 5. Record A/B test results
+      await this.recordABTestResults();
+      
       console.log('✅ Trading loop completed successfully');
     } catch (error) {
       console.error('❌ Trading loop error:', error);
@@ -495,20 +499,26 @@ export class TradingEngine {
   }
 
   private calculatePositionSize(signal: any, price: number): number {
-    // Base position size from signal, with risk management
-    const baseSize = signal.size || 100;
-    const riskLimit = 500; // Maximum position size
-    const confidenceMultiplier = signal.confidence || 0.7;
-
-    // Scale position size based on signal confidence
+    // Get A/B test variant for position sizing
+    const variant = abTesting.getVariantForStrategy(signal.strategyId, 'position-sizing-v1');
+    
+    let baseSize = signal.size || 300;
+    let confidenceMultiplier = signal.confidence || 0.6;
+    let maxRisk = 0.015; // 1.5% default
+    
+    if (variant) {
+      baseSize = variant.config.baseSize;
+      confidenceMultiplier = variant.config.confidenceMultiplier;
+      maxRisk = variant.config.maxRiskPerTrade;
+      
+      console.log(`🧪 A/B TEST: Using ${variant.name} for position sizing`);
+    }
+    
     const adjustedSize = baseSize * confidenceMultiplier;
-
-    // Apply risk limits
-    const finalSize = Math.min(adjustedSize, riskLimit);
     
-    console.log(`📐 Position size calculation: base=${baseSize}, confidence=${confidenceMultiplier}, adjusted=${adjustedSize}, final=${finalSize}`);
+    console.log(`📐 Position size calculation: base=${baseSize}, confidence=${confidenceMultiplier}, adjusted=${adjustedSize}, final=${adjustedSize}`);
     
-    return finalSize;
+    return adjustedSize;
   }
 
   // Generate realistic trading signals based on current market conditions
@@ -794,6 +804,162 @@ export class TradingEngine {
     const maxHoldTime = 5 * 60 * 1000; // Close after 5 minutes max
     
     return positionAge > maxHoldTime;
+  }
+
+  private async updatePositionsWithABTesting(): Promise<void> {
+    const openPositions = await storage.getOpenPositions();
+    
+    for (const position of openPositions) {
+      try {
+        const currentPrice = await this.marketData.getCurrentPrice(position.symbol);
+        
+        // Get A/B test variant for stop loss strategy
+        const variant = abTesting.getVariantForStrategy(position.strategyId, 'stop-loss-v1');
+        
+        let shouldClose = false;
+        let closeReason = '';
+        
+        if (variant) {
+          const entry = parseFloat(position.entryPrice);
+          const current = parseFloat(currentPrice.toString());
+          const priceChange = (current - entry) / entry;
+          
+          const { stopLossPercent, takeProfitPercent, timeLimit } = variant.config;
+          
+          if (position.side === 'long') {
+            if (priceChange >= takeProfitPercent) {
+              shouldClose = true;
+              closeReason = `🧪 A/B PROFIT: ${variant.name} +${(priceChange * 100).toFixed(2)}%`;
+            } else if (priceChange <= -stopLossPercent) {
+              shouldClose = true;
+              closeReason = `🧪 A/B STOP: ${variant.name} ${(priceChange * 100).toFixed(2)}%`;
+            }
+          } else {
+            if (priceChange <= -takeProfitPercent) {
+              shouldClose = true;
+              closeReason = `🧪 A/B PROFIT: ${variant.name} +${(-priceChange * 100).toFixed(2)}%`;
+            } else if (priceChange >= stopLossPercent) {
+              shouldClose = true;
+              closeReason = `🧪 A/B STOP: ${variant.name} ${(-priceChange * 100).toFixed(2)}%`;
+            }
+          }
+          
+          // Time-based closure with A/B test limits
+          const positionAge = Date.now() - new Date(position.openedAt!).getTime();
+          if (positionAge > timeLimit * 1000) {
+            shouldClose = true;
+            closeReason = `🧪 A/B TIME: ${variant.name} after ${Math.floor(positionAge/1000)}s`;
+          }
+        } else {
+          // Fallback to regular position management
+          shouldClose = this.shouldClosePosition(position, currentPrice.toString());
+          closeReason = 'Regular position management';
+        }
+        
+        if (shouldClose) {
+          console.log(closeReason);
+          await this.closePosition(position, currentPrice);
+          
+          // Record A/B test result
+          if (variant) {
+            await this.recordPositionResult(position, variant, currentPrice);
+          }
+        }
+      } catch (error) {
+        console.error(`Error updating position ${position.id}:`, error);
+      }
+    }
+  }
+
+  private async recordPositionResult(position: Position, variant: any, currentPrice: number): Promise<void> {
+    try {
+      const entry = parseFloat(position.entryPrice);
+      const pnl = this.calculatePnL(position, currentPrice.toString());
+      const isWin = pnl > 0;
+      
+      const metrics = {
+        winRate: isWin ? 1 : 0,
+        totalPnL: pnl,
+        avgTradeReturn: (currentPrice - entry) / entry,
+        avgTradeDuration: position.openedAt ? 
+          (Date.now() - new Date(position.openedAt).getTime()) / 1000 : 0
+      };
+      
+      await abTesting.recordTestResult('stop-loss-v1', variant.id, metrics);
+    } catch (error) {
+      console.error('Error recording A/B test result:', error);
+    }
+  }
+
+  private async recordABTestResults(): Promise<void> {
+    try {
+      // Get recent strategy performance
+      const strategies = await storage.getActiveStrategies();
+      
+      for (const strategy of strategies) {
+        const trades = await storage.getTradesByStrategy(strategy.id);
+        const recentTrades = trades.slice(-10); // Last 10 trades
+        
+        if (recentTrades.length === 0) continue;
+        
+        const completedTrades = recentTrades.filter(t => t.pnl !== null);
+        if (completedTrades.length === 0) continue;
+        
+        const winRate = completedTrades.filter(t => parseFloat(t.pnl!) > 0).length / completedTrades.length;
+        const totalPnL = completedTrades.reduce((sum, t) => sum + parseFloat(t.pnl!), 0);
+        const avgReturn = totalPnL / completedTrades.length;
+        
+        // Record results for all active tests
+        const metrics = { winRate, totalPnL, avgReturn, tradesPerHour: recentTrades.length };
+        
+        // Record for position sizing test
+        const positionVariant = abTesting.getVariantForStrategy(strategy.id, 'position-sizing-v1');
+        if (positionVariant) {
+          await abTesting.recordTestResult('position-sizing-v1', positionVariant.id, metrics);
+        }
+        
+        // Record for ML confidence test
+        const mlVariant = abTesting.getVariantForStrategy(strategy.id, 'ml-confidence-v1');
+        if (mlVariant) {
+          await abTesting.recordTestResult('ml-confidence-v1', mlVariant.id, metrics);
+        }
+      }
+    } catch (error) {
+      console.error('Error recording A/B test results:', error);
+    }
+  }
+
+  private async closePosition(position: Position, currentPrice: number): Promise<void> {
+    try {
+      const size = parseFloat(position.size);
+      const pnl = this.calculatePnL(position, currentPrice.toString());
+      const fees = this.calculateFees(size, currentPrice);
+      const finalPnl = pnl - fees;
+      
+      // Close the position
+      await storage.updatePositionStatus(position.id, 'closed');
+      
+      // Create trade closure record
+      const duration = Math.floor(Date.now() / 1000) - Math.floor(new Date(position.openedAt!).getTime() / 1000);
+      
+      await storage.createTrade({
+        strategyId: position.strategyId,
+        positionId: position.id,
+        symbol: position.symbol,
+        side: position.side === 'long' ? 'short' : 'long',
+        size: position.size,
+        entryPrice: position.entryPrice,
+        exitPrice: currentPrice.toString(),
+        pnl: finalPnl.toString(),
+        fees: fees.toString(),
+        duration
+      });
+      
+      console.log(`💰 POSITION CLOSED: ${position.side} ${position.symbol} - PnL: $${finalPnl.toFixed(2)}`);
+      
+    } catch (error) {
+      console.error('Error closing position:', error);
+    }
   }
 
   private async closePosition(position: Position, exitPrice: string): Promise<void> {
