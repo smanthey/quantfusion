@@ -320,7 +320,7 @@ export class RiskManager {
       }
 
       // Additional signal-specific checks
-      const positionSize = await this.calculatePositionSize2(signal);
+      const positionSize = await this.calculatePositionSizeForSignal(signal);
       return positionSize > 0;
     } catch (error) {
       console.error('Error checking trade constraints:', error);
@@ -328,7 +328,7 @@ export class RiskManager {
     }
   }
 
-  async calculatePositionSize2(signal: any): Promise<number> {
+  async calculatePositionSizeForSignal(signal: any): Promise<number> {
     try {
       const portfolio = await storage.getPortfolioSummary();
       const maxPositionValue = portfolio.totalValue * (this.limits.maxPositionSize / 100000); // Convert to percentage

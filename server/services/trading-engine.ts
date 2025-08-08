@@ -126,7 +126,7 @@ export class TradingEngine {
 
   private async executeTrade(strategy: Strategy, signal: any): Promise<Position | null> {
     // Calculate position size based on risk management
-    const positionSize = await this.riskManager.calculatePositionSize(signal);
+    const positionSize = await this.riskManager.calculatePositionSizeForSignal(signal);
     if (positionSize <= 0) {
       return null;
     }
