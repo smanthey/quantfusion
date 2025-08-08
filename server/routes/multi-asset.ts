@@ -6,7 +6,17 @@ import { ForexTradingEngine } from '../services/forex-trading-engine';
 const router = Router();
 const multiAssetEngine = new MultiAssetEngine();
 const forexData = new ForexDataService();
-const forexEngine = new ForexTradingEngine();
+
+// Create a global forex engine instance that gets replaced by the main server instance
+let globalForexEngine: ForexTradingEngine | null = null;
+
+export function setGlobalForexEngine(engine: ForexTradingEngine) {
+  globalForexEngine = engine;
+}
+
+async function getForexEngine() {
+  return globalForexEngine || new ForexTradingEngine();
+}
 
 /**
  * Get all forex rates
@@ -128,7 +138,8 @@ router.get('/forex/market-status', async (req, res) => {
  */
 router.get('/forex-clone/account', async (req, res) => {
   try {
-    const forexAccount = forexEngine.getForexAccountStatus();
+    const engine = await getForexEngine();
+    const forexAccount = engine.getForexAccountStatus();
     res.json(forexAccount);
   } catch (error) {
     console.error('Error fetching forex account:', error);
@@ -141,7 +152,8 @@ router.get('/forex-clone/account', async (req, res) => {
  */
 router.get('/forex-clone/trades', async (req, res) => {
   try {
-    const trades = forexEngine.getForexTrades();
+    const engine = await getForexEngine();
+    const trades = engine.getForexTrades();
     res.json(trades);
   } catch (error) {
     console.error('Error fetching forex trades:', error);
@@ -154,7 +166,8 @@ router.get('/forex-clone/trades', async (req, res) => {
  */
 router.get('/forex-clone/positions', async (req, res) => {
   try {
-    const positions = forexEngine.getForexPositionsArray();
+    const engine = await getForexEngine();
+    const positions = engine.getForexPositionsArray();
     res.json(positions);
   } catch (error) {
     console.error('Error fetching forex positions:', error);
@@ -167,25 +180,55 @@ router.get('/forex-clone/positions', async (req, res) => {
  */
 router.get('/comparison', async (req, res) => {
   try {
-    // This would be called from the main trading engine to get crypto stats
-    // For now, return placeholder structure
-    // Get real data from both systems
-    const forexAccount = forexEngine.getForexAccountStatus();
+    console.log('📊 Fetching comparison data...');
+    
+    // Import storage to access real data directly
+    const { storage } = await import('../storage');
+    
+    // Get direct crypto data without HTTP calls
+    const allTrades = await storage.getAllTrades();
+    const cryptoTrades = allTrades.length;
+    
+    // Calculate crypto metrics directly
+    const closedTrades = allTrades.filter(t => t.exitPrice !== null);
+    const winningTrades = closedTrades.filter(t => {
+      const pnl = parseFloat(t.pnl || '0');
+      return pnl > 0;
+    });
+    const cryptoWinRate = closedTrades.length > 0 ? (winningTrades.length / closedTrades.length) * 100 : 0;
+    const cryptoPnL = closedTrades.reduce((sum, trade) => sum + parseFloat(trade.pnl || '0'), 0);
+    
+    // Get current balance from account endpoint (which uses the unified calculation)
+    let cryptoBalance = 10000 + cryptoPnL; // Starting balance + P&L (fallback)
+    try {
+      const accountResponse = await fetch('http://localhost:5000/api/account');
+      const accountData = await accountResponse.json();
+      cryptoBalance = parseFloat(accountData.balances[0].free);
+    } catch {
+      // Use calculated balance as fallback
+    }
+    
+    // Get forex data
+    const engine = await getForexEngine();
+    const forexAccount = engine.getForexAccountStatus();
+    
+    console.log(`📊 Crypto: ${cryptoTrades} trades, $${cryptoPnL.toFixed(2)} P&L`);
+    console.log(`📊 Forex: ${forexAccount.tradesCount} trades, $${forexAccount.totalPnL.toFixed(2)} P&L`);
     
     // Calculate real ROI values
-    const cryptoROI = ((9500 - 10000) / 10000 * 100).toFixed(2) + '%'; // Approximate from recent data
+    const cryptoROI = ((cryptoBalance - 10000) / 10000 * 100).toFixed(2) + '%';
     const forexROI = ((forexAccount.balance - 10000) / 10000 * 100).toFixed(2) + '%';
     
     const comparison = {
       crypto: {
         account: 'Crypto System',
-        totalTrades: '4,980+', 
-        winRate: '18.4%',
-        totalPnL: '-$252.90',
-        balance: '$9,498'
+        totalTrades: cryptoTrades.toLocaleString(),
+        winRate: cryptoWinRate.toFixed(1) + '%',
+        totalPnL: '$' + cryptoPnL.toFixed(2),
+        balance: '$' + cryptoBalance.toFixed(2)
       },
       forex: {
-        account: 'Forex System',
+        account: 'Forex System', 
         totalTrades: forexAccount.tradesCount,
         winRate: forexAccount.winRate.toFixed(1) + '%',
         totalPnL: '$' + forexAccount.totalPnL.toFixed(2),
@@ -194,7 +237,7 @@ router.get('/comparison', async (req, res) => {
       performance: {
         cryptoROI,
         forexROI,
-        winner: forexAccount.totalPnL >= -252.90 ? 'Forex' : 'Crypto'
+        winner: forexAccount.totalPnL >= cryptoPnL ? 'Forex' : 'Crypto'
       }
     };
     

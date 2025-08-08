@@ -5,6 +5,7 @@ import { TradingEngine } from './services/trading-engine';
 import { MultiAssetEngine } from './services/multi-asset-engine';
 import { ABTestingService } from './services/ab-testing';
 import { ForexTradingEngine } from './services/forex-trading-engine';
+import { setGlobalForexEngine } from './routes/multi-asset';
 
 const app = express();
 app.use(express.json());
@@ -71,6 +72,9 @@ app.use((req, res, next) => {
   const tradingEngine = new TradingEngine();
   const multiAssetEngine = new MultiAssetEngine();
   const forexEngine = new ForexTradingEngine();
+  
+  // Set the global forex engine instance for routes to use
+  setGlobalForexEngine(forexEngine);
 
   async function startServer() {
     try {

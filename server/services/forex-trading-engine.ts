@@ -577,8 +577,12 @@ export class ForexTradingEngine {
     const closedTrades = allTrades.filter(t => t.status === 'closed');
     const winningTrades = closedTrades.filter(t => (t.pnl || 0) > 0);
     
+    // Calculate total P&L from closed trades
+    const totalPnL = closedTrades.reduce((sum, trade) => sum + (trade.pnl || 0), 0);
+    
     return {
       ...this.forexAccount,
+      totalPnL: totalPnL, // Use calculated P&L from actual trades
       tradesCount: allTrades.length, // Show total trades executed
       winRate: closedTrades.length > 0 ? (winningTrades.length / closedTrades.length) * 100 : 0
     };
