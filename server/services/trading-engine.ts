@@ -22,6 +22,7 @@ export class TradingEngine {
   private learningIntervalId?: NodeJS.Timeout;
   private dataCollectionId?: NodeJS.Timeout;
   private portfolio: Map<string, { symbol: string; quantity: number; avgPrice: number; unrealizedPnL: number; realizedPnL: number }> = new Map();
+  private adaptiveLearning?: any;
 
 
   constructor() {
@@ -31,6 +32,19 @@ export class TradingEngine {
     this.orderManager = new AdvancedOrderManager();
     this.portfolioOptimizer = new PortfolioOptimizer();
     this.indicatorEngine = new CustomIndicatorEngine();
+    
+    // Initialize adaptive learning engine
+    this.initializeAdaptiveLearning();
+  }
+  
+  private async initializeAdaptiveLearning() {
+    try {
+      const { AdaptiveLearningEngine } = await import('./adaptive-learning');
+      this.adaptiveLearning = new AdaptiveLearningEngine(this.storage);
+      console.log('🧠 Adaptive learning engine initialized');
+    } catch (error) {
+      console.error('❌ Failed to initialize adaptive learning:', error);
+    }
   }
 
   async start(): Promise<void> {
@@ -202,10 +216,25 @@ export class TradingEngine {
         console.log(`📊 Processing ${symbol} for strategy ${strategy.name}: Price=$${marketPrice}`);
 
         // Generate ML prediction
-        const mlPrediction = await mlPredictor.predict(symbol, '1h');
-        console.log(`🤖 ML Prediction for ${symbol}: direction=${mlPrediction.priceDirection}, confidence=${mlPrediction.confidence}`);
+        const basePrediction = await mlPredictor.predict(symbol, '1h');
+        console.log(`🤖 ML Prediction for ${symbol}: direction=${basePrediction.priceDirection}, confidence=${basePrediction.confidence}`);
 
-        // Create realistic trading signals based on market data and ML
+        // Apply adaptive learning to improve prediction
+        let mlPrediction = basePrediction;
+        if (this.adaptiveLearning) {
+          const adaptedPrediction = await this.adaptiveLearning.getAdaptedPrediction(symbol, basePrediction);
+          mlPrediction = {
+            priceDirection: adaptedPrediction.priceDirection || basePrediction.priceDirection,
+            confidence: adaptedPrediction.confidence || basePrediction.confidence,
+            trendStrength: adaptedPrediction.trendStrength || basePrediction.trendStrength,
+            volatilityForecast: adaptedPrediction.volatilityForecast || basePrediction.volatilityForecast
+          };
+          if (adaptedPrediction.adaptationApplied) {
+            console.log(`🧠 Learning adapted prediction: ${adaptedPrediction.adaptationReason}`);
+          }
+        }
+
+        // Create realistic trading signals based on market data and adapted ML
         const signal = await this.generateTradingSignal(strategy, symbol, marketData, mlPrediction);
         console.log(`🎯 Signal generated for ${symbol}:`, signal ? `${signal.action} at $${signal.price} (confidence: ${signal.confidence})` : 'No signal generated');
         if (!signal) continue;
@@ -222,6 +251,16 @@ export class TradingEngine {
 
           // Record for ML learning
           await this.recordTradingDecision(signal, mlPrediction, position);
+
+          // Feed trade result into adaptive learning system for improvement
+          if (this.adaptiveLearning) {
+            await this.adaptiveLearning.processTradeFeedback({
+              ...position,
+              id: position.id || 'unknown',
+              strategyId: position.strategyId || signal.strategyId
+            });
+            console.log(`🧠 Trade feedback processed for learning system`);
+          }
 
           // Create historical record for learning
           await this.storeMarketDataPoint(symbol, marketData, signal.action, position.id);
@@ -772,18 +811,47 @@ export class TradingEngine {
   // CONTINUOUS LEARNING LOOP - ML Model Self-Improvement
   private async continuousLearningLoop(): Promise<void> {
     try {
-      console.log("🧠 LEARNING LOOP: Updating ML models...");
-      const symbols = ["BTCUSDT", "ETHUSDT"];
+      console.log('🧠 LEARNING LOOP: Updating ML models and analyzing performance...');
+      
+      // Get recent trading results
+      const recentTrades = await this.storage.getAllTrades();
+      const performanceTrades = recentTrades.slice(-100); // Last 100 trades
+      
+      if (performanceTrades.length < 10) {
+        console.log('📚 Not enough trades for learning analysis yet');
+        return;
+      }
 
-      for (const symbol of symbols) {
-        try {
-          const currentPrice = await this.marketData.getCurrentPrice(symbol);
-          const prediction = await mlPredictor.predict(symbol, '1h');
-          console.log(`🔮 ML Prediction: ${symbol} - ${prediction.priceDirection} (${(prediction.confidence * 100).toFixed(1)}% confidence)`);
-        } catch (error) {
-          console.error(`Learning error for ${symbol}:`, error);
+      // Generate learning metrics and failure analysis from adaptive learning
+      if (this.adaptiveLearning) {
+        const learningMetrics = await this.adaptiveLearning.getLearningMetrics();
+        const failurePatterns = await this.adaptiveLearning.analyzeFailurePatterns();
+        
+        console.log(`📈 Learning Metrics: Win Rate=${(learningMetrics.recentWinRate * 100).toFixed(1)}%, Rules=${learningMetrics.adaptationRulesCount}, Velocity=${(learningMetrics.learningVelocity * 100).toFixed(2)}%`);
+        
+        if (failurePatterns.recommendations.length > 0) {
+          console.log(`💡 Learning Recommendations: ${failurePatterns.recommendations[0]}`);
+          await this.createAlert("info", "Learning Insight", failurePatterns.recommendations[0]);
+        }
+        
+        // Alert if performance is improving
+        if (learningMetrics.learningVelocity > 0.05) {
+          await this.createAlert("success", "Learning Progress", 
+            `System is improving! Win rate increased by ${(learningMetrics.learningVelocity * 100).toFixed(2)}% with ${learningMetrics.adaptationRulesCount} learned patterns.`);
+        } else if (learningMetrics.learningVelocity < -0.05) {
+          await this.createAlert("warning", "Performance Decline", 
+            `Performance declining. Analyzing ${failurePatterns.commonFailureConditions.length} failure patterns for optimization.`);
         }
       }
+
+      // Get predictions for the current market state
+      const symbols = ["BTCUSDT", "ETHUSDT"];
+      for (const symbol of symbols) {
+        const basePrediction = await mlPredictor.predict(symbol, '1h');
+        console.log(`🔮 ML Prediction: ${symbol} - ${basePrediction.priceDirection} (${(basePrediction.confidence * 100).toFixed(1)}% confidence)`);
+      }
+
+
 
     } catch (error) {
       console.error("Continuous learning error:", error);

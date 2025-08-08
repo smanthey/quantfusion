@@ -1,5 +1,15 @@
 import { IStorage } from '../storage';
 
+interface Trade {
+  id: string;
+  symbol: string;
+  side: string;
+  size: string;
+  entryPrice: string;
+  executedAt: string;
+  strategyId: string;
+}
+
 export interface LearningPattern {
   id: string;
   patternType: string;
@@ -101,7 +111,7 @@ export class LearningAnalyticsEngine {
     });
     
     // Find profitable time windows
-    for (const [hour, stats] of hourlyStats.entries()) {
+    for (const [hour, stats] of Array.from(hourlyStats.entries())) {
       if (stats.count > 10) { // Minimum sample size
         const winRate = stats.wins / stats.count;
         const avgPnL = stats.totalPnL / stats.count;
@@ -153,7 +163,7 @@ export class LearningAnalyticsEngine {
       volatilityBuckets.set(volatilityLevel, stats);
     });
     
-    for (const [condition, stats] of volatilityBuckets.entries()) {
+    for (const [condition, stats] of Array.from(volatilityBuckets.entries())) {
       if (stats.count > 20) {
         const winRate = stats.wins / stats.count;
         const avgPnL = stats.totalPnL / stats.count;
@@ -234,7 +244,7 @@ export class LearningAnalyticsEngine {
       confidenceBuckets.set(confidenceLevel, stats);
     });
     
-    for (const [confidence, stats] of confidenceBuckets.entries()) {
+    for (const [confidence, stats] of Array.from(confidenceBuckets.entries())) {
       if (stats.count > 20) {
         const winRate = stats.wins / stats.count;
         const avgPnL = stats.totalPnL / stats.count;

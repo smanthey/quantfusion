@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { useState, useEffect } from 'react';
 import { Link } from "wouter";
+import { Brain } from "lucide-react";
 import { TradesTable } from "@/components/trades-table";
 
 interface DashboardData {
@@ -197,6 +198,12 @@ export function TradingDashboard() {
             </Button>
             <Button asChild variant="outline" size="sm" className="text-xs">
               <Link href="/analytics">Analytics</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="text-xs flex items-center gap-1">
+              <Link href="/learning">
+                <Brain className="w-3 h-3" />
+                Learning
+              </Link>
             </Button>
             <Button asChild variant="outline" size="sm" className="text-xs">
               <Link href="/settings">Settings</Link>

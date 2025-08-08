@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Brain, TrendingUp, TrendingDown, AlertTriangle, CheckCircle } from "lucide-react";
 import { Link } from "wouter";
@@ -38,7 +39,14 @@ export default function LearningPage() {
   const patterns = learningData?.patterns || [];
   const insights = insightsData?.insights || [];
   const recommendations = insightsData?.recommendations || [];
-  const profitabilityAnalysis = insightsData?.profitabilityAnalysis || {};
+  const profitabilityAnalysis = insightsData?.profitabilityAnalysis || {
+    totalTrades: 0,
+    winRate: 0,
+    profitFactor: 0,
+    avgWin: 0,
+    avgLoss: 0,
+    issues: {}
+  };
 
   const profitablePatterns = patterns.filter((p: any) => p.avgPnL > 0);
   const lossyPatterns = patterns.filter((p: any) => p.avgPnL < 0);

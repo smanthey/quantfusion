@@ -9,6 +9,7 @@ import OrdersPage from "@/pages/orders";
 import StrategiesPage from "@/pages/strategies";
 import PortfolioPage from "@/pages/portfolio";
 import AnalyticsPage from "@/pages/analytics";
+import LearningPage from "@/pages/learning";
 import SettingsPage from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
@@ -22,6 +23,7 @@ function Router() {
         <Route path="/strategies" component={StrategiesPage} />
         <Route path="/portfolio" component={PortfolioPage} />
         <Route path="/analytics" component={AnalyticsPage} />
+        <Route path="/learning" component={LearningPage} />
         <Route path="/settings" component={SettingsPage} />
         <Route component={NotFound} />
       </Switch>
