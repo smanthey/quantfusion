@@ -224,14 +224,8 @@ export class TradingEngine {
 
     if (!price || price <= 0) {
       const marketPrice = await this.marketData.getCurrentPrice(signal.symbol);
-      // Handle case where getCurrentPrice returns an object with price property
-      if (typeof marketPrice === 'object' && marketPrice.price) {
-        price = marketPrice.price;
-      } else if (typeof marketPrice === 'number') {
-        price = marketPrice;
-      } else {
-        price = marketPrice;
-      }
+      // getCurrentPrice always returns a number
+      price = marketPrice;
     }
 
     // Convert price to number if it's a string
@@ -546,8 +540,8 @@ export class TradingEngine {
     for (const position of openPositions) {
       try {
         const currentPrice = await this.marketData.getCurrentPrice(position.symbol);
-        // Ensure currentPrice is a number before proceeding
-        let priceAsNumber = typeof currentPrice === 'object' && currentPrice.price ? parseFloat(currentPrice.price) : typeof currentPrice === 'number' ? currentPrice : parseFloat(currentPrice);
+        // getCurrentPrice returns a number
+        let priceAsNumber = currentPrice;
         
         if (isNaN(priceAsNumber)) {
             console.error(`Invalid current price received for ${position.symbol}: ${currentPrice}`);

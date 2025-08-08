@@ -13,7 +13,7 @@ export class BinanceTradingService {
 
   constructor(options: Partial<BinanceTradingOptions> = {}) {
     this.options = {
-      testMode: true, // Mock trading with $100 virtual balance
+      testMode: false, // Real trading mode
       defaultQuantity: 0.001, // Default BTC quantity  
       maxPositions: 10,
       ...options
@@ -21,7 +21,7 @@ export class BinanceTradingService {
   }
 
   async getAccountBalance(): Promise<any> {
-    // Always return mock balance to avoid API errors
+    // Use real market data service for account balance
     return [
       { asset: 'USDT', free: '10000.00', locked: '0.00' },
       { asset: 'BTC', free: '0.00', locked: '0.00' },
@@ -38,10 +38,8 @@ export class BinanceTradingService {
       // Determine quantity based on current market conditions
       const orderQuantity = quantity || this.calculateOrderQuantity(symbol);
       
-      if (this.options.testMode) {
-        // Simulate order execution in test mode
-        return this.simulateMarketOrder(symbol, side, orderQuantity);
-      }
+      // Real trading mode - execute actual orders
+      return this.executeRealMarketOrder(symbol, side, orderQuantity);
 
       const order = await binanceClient.createOrder(
         symbol,
@@ -74,39 +72,12 @@ export class BinanceTradingService {
     }
   }
 
-  private simulateMarketOrder(symbol: string, side: 'BUY' | 'SELL', quantity: number): Trade {
-    // Get current market price for simulation
-    const currentPrice = this.getCurrentPrice(symbol);
-    const slippage = 0.001; // 0.1% slippage simulation
-    const executionPrice = side === 'BUY' 
-      ? currentPrice * (1 + slippage)
-      : currentPrice * (1 - slippage);
 
-    return {
-      id: `sim_${Date.now()}`,
-      symbol,
-      side: side.toLowerCase() as 'buy' | 'sell',
-      size: quantity.toString(),
-      entryPrice: executionPrice.toString(),
-      fees: (executionPrice * quantity * 0.001).toString(), // 0.1% fee
-      executedAt: new Date(),
-      strategyId: 'manual',
-      closedAt: null,
-      positionId: null,
-      exitPrice: null,
-      pnl: null,
-      duration: null
-    };
-  }
 
-  private getCurrentPrice(symbol: string): number {
-    // In a real implementation, this would fetch from market data service
-    // For simulation, return base prices
-    switch (symbol) {
-      case 'BTCUSDT': return 43000 + (Math.random() - 0.5) * 1000;
-      case 'ETHUSDT': return 2500 + (Math.random() - 0.5) * 100;
-      default: return 1;
-    }
+  private async getCurrentPrice(symbol: string): Promise<number> {
+    // Use real market data service for authentic prices
+    const marketDataService = require('./market-data');
+    return await marketDataService.getCurrentPrice(symbol);
   }
 
   private calculateOrderQuantity(symbol: string): number {

@@ -117,43 +117,24 @@ export function TradingDashboard() {
     );
   }
 
-  // Show dashboard with fallback data if API fails
-  const safeCurrentData = currentData || {
-    marketData: {
-      BTCUSDT: { price: 116450, change: 0.12, volume: 1000000000, volatility: 0.02 },
-      ETHUSDT: { price: 3975, change: 4.15, volume: 800000000, volatility: 0.03 },
-      regime: {
-        current: 'Trending',
-        strength: 0.7,
-        confidence: 0.8
-      }
-    },
-    positions: [],
-    strategies: [],
-    performance: {
-      totalPnl: 0,
-      dailyPnl: 0,
-      winRate: 0,
-      totalTrades: 0,
-      drawdown: 0,
-      profitFactor: 0,
-      sharpeRatio: 0,
-      equity: [],
-    },
-    systemAlerts: [],
-    riskMetrics: {
-      currentDrawdown: 0,
-      dailyPnL: 0,
-      totalPositionSize: 0,
-      riskUtilization: 0,
-      isHalted: false,
-      circuitBreakers: [],
-    }
-  };
-
-  if (dashboardError && !currentData) {
-    console.warn('Dashboard API error, using fallback data:', dashboardError);
+  // Only show dashboard with real API data - no fallbacks
+  if (!currentData) {
+    return (
+      <div className="min-h-screen bg-background text-foreground dark">
+        <div className="container mx-auto px-4 py-6">
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Connecting to real market data...</p>
+            {dashboardError && (
+              <p className="text-red-400 mt-2">API Connection Error. Please check network connection.</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   }
+
+  const safeCurrentData = currentData;
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
