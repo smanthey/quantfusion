@@ -194,7 +194,7 @@ export class TradingEngine {
         if (!signal) continue;
 
         // Execute the trade with validated price
-        console.log(`🔄 Executing ${signal.action} trade for ${symbol} at $${marketData.price}`);
+        console.log(`🔄 Executing ${signal.action} trade for ${symbol} at $${signal.price}`);
         const position = await this.executeTrade(signal);
 
         if (position) {
@@ -220,24 +220,39 @@ export class TradingEngine {
       return null;
     }
 
-    try {
-      // Use the price from the signal if available, otherwise fetch fresh price
-      let price = typeof signal.price === 'string' ? parseFloat(signal.price) : signal.price;
+    let price = signal.price;
 
-      if (!price || price <= 0) {
-        const marketPrice = await this.marketData.getCurrentPrice(signal.symbol);
+    if (!price || price <= 0) {
+      const marketPrice = await this.marketData.getCurrentPrice(signal.symbol);
+      // Handle case where getCurrentPrice returns an object with price property
+      if (typeof marketPrice === 'object' && marketPrice.price) {
+        price = marketPrice.price;
+      } else if (typeof marketPrice === 'number') {
+        price = marketPrice;
+      } else {
         price = marketPrice;
       }
+    }
 
-      if (!price || price <= 0 || typeof price !== 'number' || isNaN(price)) {
-        console.error(`Invalid price received for ${signal.symbol}: ${price}`);
-        return null;
-      }
+    // Convert price to number if it's a string
+    if (typeof price === 'string') {
+      price = parseFloat(price);
+    }
 
+    // Ensure we have a valid number and round to avoid floating point precision issues
+    if (!price || price <= 0 || isNaN(price)) {
+      console.error(`Invalid price received for ${signal.symbol}: ${price}`);
+      return null;
+    }
+
+    // Round price to 8 decimal places to prevent floating point precision issues
+    price = Number(price.toFixed(8));
+
+    try {
       // Calculate position size based on signal strength and risk limits
       const positionSize = this.calculatePositionSize(signal, price);
 
-      if (!positionSize || positionSize <= 0 || typeof positionSize !== 'number' || isNaN(positionSize)) {
+      if (!positionSize || positionSize <= 0) {
         console.error(`Invalid position size calculated for ${signal.symbol}: ${positionSize}`);
         return null;
       }
@@ -279,8 +294,8 @@ export class TradingEngine {
     const price = parseFloat(entryPrice);
 
     // Use the signal's stop loss if available, otherwise default to 2%
-    if (signal.stopLoss) {
-      return signal.stopLoss;
+    if (signal.stopPrice) {
+      return Number(signal.stopPrice);
     }
 
     const stopDistance = price * 0.02; // 2% stop loss
@@ -292,27 +307,28 @@ export class TradingEngine {
     }
   }
 
-  private calculatePositionSize(signal: any, price: number): number {
-    // Calculate position size based on signal strength and available capital
-    const baseSize = signal.size || 100; // Default $100 position
-    const maxRiskPerTrade = 0.02; // 2% max risk per trade
-    const accountBalance = 10000; // Mock account balance
-    
-    // Adjust size based on confidence if available
-    let adjustedSize = baseSize;
-    if (signal.confidence) {
-      adjustedSize = baseSize * signal.confidence;
-    }
-    
-    // Cap at maximum risk per trade
-    const maxPositionSize = accountBalance * maxRiskPerTrade;
-    adjustedSize = Math.min(adjustedSize, maxPositionSize);
-    
-    // Ensure minimum position size
-    adjustedSize = Math.max(adjustedSize, 50);
-    
-    return adjustedSize;
-  }
+  // This method is duplicated. Keeping the first one.
+  // private calculatePositionSize(signal: any, price: number): number {
+  //   // Calculate position size based on signal strength and available capital
+  //   const baseSize = signal.size || 100; // Default $100 position
+  //   const maxRiskPerTrade = 0.02; // 2% max risk per trade
+  //   const accountBalance = 10000; // Mock account balance
+
+  //   // Adjust size based on confidence if available
+  //   let adjustedSize = baseSize;
+  //   if (signal.confidence) {
+  //     adjustedSize = baseSize * signal.confidence;
+  //   }
+
+  //   // Cap at maximum risk per trade
+  //   const maxPositionSize = accountBalance * maxRiskPerTrade;
+  //   adjustedSize = Math.min(adjustedSize, maxPositionSize);
+
+  //   // Ensure minimum position size
+  //   adjustedSize = Math.max(adjustedSize, 50);
+
+  //   return adjustedSize;
+  // }
 
   private async recordTradingDecision(signal: any, mlPrediction: any, position: any): Promise<void> {
     try {
@@ -327,7 +343,7 @@ export class TradingEngine {
         positionId: position.id,
         timestamp: new Date()
       };
-      
+
       console.log(`📝 Recorded trading decision: ${signal.action} ${signal.symbol} (ML: ${mlPrediction.priceDirection})`);
     } catch (error) {
       console.error('Error recording trading decision:', error);
@@ -340,12 +356,34 @@ export class TradingEngine {
     return notional * feeRate;
   }
 
+  private calculatePositionSize(signal: any, price: number): number {
+    // Base position size from signal, with risk management
+    const baseSize = signal.size || 100;
+    const riskLimit = 500; // Maximum position size
+    const confidenceMultiplier = signal.confidence || 0.7;
 
+    // Scale position size based on signal confidence
+    const adjustedSize = baseSize * confidenceMultiplier;
+
+    // Apply risk limits
+    return Math.min(adjustedSize, riskLimit);
+  }
 
   // Generate realistic trading signals based on current market conditions
   private async generateTradingSignal(strategy: Strategy, symbol: string, marketData: any, mlPrediction: any) {
     // Create different signal types based on strategy
-    const price = marketData.price;
+    let price = marketData.price;
+
+    // Ensure price is a number
+    if (typeof price === 'string') {
+      price = parseFloat(price);
+    }
+
+    if (!price || price <= 0 || isNaN(price)) {
+      console.error(`Invalid price in marketData for ${symbol}: ${price}`);
+      return null;
+    }
+
     const volatility = marketData.volatility || 0.02;
 
     let signal = null;
@@ -356,9 +394,9 @@ export class TradingEngine {
         signal = {
           symbol,
           action: mlPrediction.priceDirection === 'bearish' ? 'buy' : 'sell', // Contrarian
-          price: price || 0,
+          price: Number(price.toFixed(8)), // Ensure it's a properly formatted number
           size: 200 + Math.random() * 300, // $200-500 position
-          stopPrice: price && mlPrediction.priceDirection === 'bearish' ? (price * 0.98) : price ? (price * 1.02) : 0,
+          stopPrice: Number((mlPrediction.priceDirection === 'bearish' ? (price * 0.98) : (price * 1.02)).toFixed(8)),
           confidence: mlPrediction.confidence,
           type: 'mean_reversion'
         };
@@ -369,9 +407,9 @@ export class TradingEngine {
         signal = {
           symbol,
           action: mlPrediction.priceDirection === 'bullish' ? 'buy' : 'sell', // Follow trend
-          price: price || 0,
+          price: Number(price.toFixed(8)), // Ensure it's a properly formatted number
           size: 150 + Math.random() * 350, // $150-500 position
-          stopPrice: price && mlPrediction.priceDirection === 'bullish' ? (price * 0.97) : price ? (price * 1.03) : 0,
+          stopPrice: Number((mlPrediction.priceDirection === 'bullish' ? (price * 0.97) : (price * 1.03)).toFixed(8)),
           confidence: mlPrediction.confidence,
           type: 'trend_following'
         };
@@ -385,7 +423,8 @@ export class TradingEngine {
   private async simulateTradeOutcome(position: Position, trade: Trade, strategy: Strategy): Promise<void> {
     try {
       // Get current market price for exit
-      const currentPrice = await this.marketData.getCurrentPrice(position.symbol);
+      const marketData = await this.marketData.getCurrentPrice(position.symbol);
+      const currentPrice = marketData.price;
       const entryPrice = parseFloat(position.entryPrice);
       const size = parseFloat(position.size);
 
@@ -508,14 +547,22 @@ export class TradingEngine {
     for (const position of openPositions) {
       try {
         const currentPrice = await this.marketData.getCurrentPrice(position.symbol);
-        const unrealizedPnl = this.calculateUnrealizedPnl(position, currentPrice.toString());
+        // Ensure currentPrice is a number before proceeding
+        let priceAsNumber = typeof currentPrice === 'object' && currentPrice.price ? parseFloat(currentPrice.price) : typeof currentPrice === 'number' ? currentPrice : parseFloat(currentPrice);
+        
+        if (isNaN(priceAsNumber)) {
+            console.error(`Invalid current price received for ${position.symbol}: ${currentPrice}`);
+            continue;
+        }
+
+        const unrealizedPnl = this.calculateUnrealizedPnl(position, priceAsNumber.toString());
 
         // Update position with current price and PnL
-        await storage.updatePositionPnL(position.id, currentPrice.toString(), unrealizedPnl.toString());
+        await storage.updatePositionPnL(position.id, priceAsNumber.toString(), unrealizedPnl.toString());
 
         // Check for stop loss or take profit
-        if (this.shouldClosePosition(position, currentPrice.toString())) {
-          await this.closePosition(position, currentPrice.toString());
+        if (this.shouldClosePosition(position, priceAsNumber.toString())) {
+          await this.closePosition(position, priceAsNumber.toString());
         }
       } catch (error) {
         console.error(`Error updating position ${position.id}:`, error);
@@ -528,6 +575,11 @@ export class TradingEngine {
     const entry = parseFloat(position.entryPrice);
     const size = parseFloat(position.size);
 
+    if (isNaN(current) || isNaN(entry) || isNaN(size)) {
+      console.error(`Invalid values for PnL calculation for position ${position.id}`);
+      return 0;
+    }
+
     if (position.side === 'long') {
       return (current - entry) * size;
     } else {
@@ -538,6 +590,11 @@ export class TradingEngine {
   private shouldClosePosition(position: Position, currentPrice: string): boolean {
     const current = parseFloat(currentPrice);
     const stop = parseFloat(position.stopPrice || '0');
+
+    if (isNaN(current) || isNaN(stop)) {
+        console.error(`Invalid values for closing check for position ${position.id}`);
+        return false;
+    }
 
     if (position.side === 'long') {
       return current <= stop;
