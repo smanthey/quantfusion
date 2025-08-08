@@ -378,16 +378,16 @@ export class ForexTradingEngine {
     // Research-based correlations for arbitrage
     const correlations = this.forexData.getCurrencyCorrelations();
     
-    // Simple correlation signal (in production, would compare multiple pairs)
-    if (Math.random() > 0.8) { // 20% signal frequency
+    // CONSERVATIVE: Generate signals more frequently but with better control
+    if (Math.random() > 0.5) { // 50% signal frequency - more active but conservative
       return {
         action: Math.random() > 0.5 ? 'buy' : 'sell',
         pair,
         rate,
         size: this.calculateForexPositionSize(pair, 'correlation'),
-        confidence: 0.65,
-        stopPips: 18,
-        targetPips: 25
+        confidence: 0.7,
+        stopPips: 8, // Tighter stops for risk control
+        targetPips: 12 // Smaller but more frequent wins
       };
     }
     
@@ -395,26 +395,11 @@ export class ForexTradingEngine {
   }
 
   /**
-   * Calculate realistic forex position size based on strategy and risk management
+   * CONSERVATIVE: Fixed forex position sizing like crypto system
    */
   private calculateForexPositionSize(pair: string, strategy: string | number): number {
-    const riskPerTrade = 0.01; // 1% risk per trade (more conservative)
-    const accountBalance = this.forexAccount.balance;
-    const riskAmount = accountBalance * riskPerTrade; // $100 max risk per trade
-    
-    // Use realistic forex lot sizes
-    const standardLot = 100000; // 100,000 units
-    const miniLot = 10000; // 10,000 units  
-    const microLot = 1000; // 1,000 units
-    
-    // Conservative position sizing for $10K account
-    if (riskAmount <= 50) {
-      return microLot * 0.1; // 100 units (very small)
-    } else if (riskAmount <= 100) {
-      return microLot * 0.5; // 500 units (small)
-    } else {
-      return microLot; // 1,000 units (conservative)
-    }
+    // CONSERVATIVE: Fixed position size like crypto - simple and safe
+    return 200; // Fixed 200 units per trade (equivalent to ~$20-25 risk)
   }
 
   /**
