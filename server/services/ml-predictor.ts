@@ -816,5 +816,6 @@ class EnsemblePredictionModel extends MLModel {
     
     return 0.55 + (agreementRatio * 0.25);
   }
+}
 
 export const mlPredictor = new MLPredictor();
