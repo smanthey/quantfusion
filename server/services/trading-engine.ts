@@ -532,13 +532,13 @@ export class TradingEngine {
     console.log(`🔍 ML Prediction for ${symbol}: ${mlPrediction.priceDirection} (confidence: ${mlPrediction.confidence})`);
     
     if (strategy.type === 'mean_reversion') {
-      // Mean reversion: buy on dips, sell on pumps - lower confidence threshold
-      if (mlPrediction.confidence > 0.4) {
+      // Mean reversion: Balanced confidence threshold 
+      if (mlPrediction.confidence > 0.55) {
         signal = {
           symbol,
           action: mlPrediction.priceDirection === 'down' ? 'buy' : 'sell', // Contrarian
-          price: Number(price.toFixed(8)), // Ensure it's a properly formatted number
-          size: 200 + Math.random() * 300, // $200-500 position
+          price: Number(price.toFixed(8)),
+          size: 300, // Fixed position size - no randomization
           stopPrice: Number((mlPrediction.priceDirection === 'down' ? (price * 0.98) : (price * 1.02)).toFixed(8)),
           confidence: mlPrediction.confidence,
           type: 'mean_reversion',
@@ -547,13 +547,13 @@ export class TradingEngine {
         console.log(`📈 Mean reversion signal: ${signal.action} ${symbol} (ML: ${mlPrediction.priceDirection})`);
       }
     } else if (strategy.type === 'trend_following') {
-      // Trend following: follow the ML prediction - lower confidence threshold  
-      if (mlPrediction.confidence > 0.4) {
+      // Trend following: Balanced confidence threshold
+      if (mlPrediction.confidence > 0.55) {
         signal = {
           symbol,
           action: mlPrediction.priceDirection === 'up' ? 'buy' : 'sell', // Follow trend
-          price: Number(price.toFixed(8)), // Ensure it's a properly formatted number
-          size: 150 + Math.random() * 350, // $150-500 position
+          price: Number(price.toFixed(8)),
+          size: 250, // Fixed position size - no randomization
           stopPrice: Number((mlPrediction.priceDirection === 'up' ? (price * 0.97) : (price * 1.03)).toFixed(8)),
           confidence: mlPrediction.confidence,
           type: 'trend_following',
@@ -566,7 +566,7 @@ export class TradingEngine {
     return signal;
   }
 
-  // Simulate realistic trade outcomes for learning and performance tracking
+  // Calculate REAL trade outcomes based on actual market movement - NO RANDOMIZATION
   private async simulateTradeOutcome(position: Position, trade: Trade, strategy: Strategy): Promise<void> {
     try {
       // Get current market price for exit
@@ -574,9 +574,8 @@ export class TradingEngine {
       const entryPrice = parseFloat(position.entryPrice);
       const size = parseFloat(position.size);
 
-      // Calculate realistic PnL based on actual market movement
+      // Calculate REAL PnL based on actual market movement - NO FAKE RANDOMIZATION
       let pnl = 0;
-      let winLoss = Math.random() < 0.4 ? 'win' : 'loss'; // 40% win rate initially
 
       if (position.side === 'long') {
         const priceChange = (currentPrice - entryPrice) / entryPrice;
@@ -586,8 +585,7 @@ export class TradingEngine {
         pnl = size * priceChange;
       }
 
-      // Add some randomization for realistic results
-      pnl = pnl + (Math.random() - 0.5) * size * 0.1; // +/- 10% randomization
+      // NO RANDOMIZATION - Use real market-based PnL only
 
       // Close the position
       await storage.updatePositionStatus(position.id, 'closed');

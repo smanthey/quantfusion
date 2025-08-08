@@ -169,6 +169,17 @@ export class AdaptiveLearningEngine {
   }
 
   async getAdaptedPrediction(symbol: string, basePrediction: any): Promise<any> {
+    // TEMPORARY BYPASS: Allow trades with improved logic to collect new data
+    if (basePrediction.confidence >= 0.55) {
+      console.log(`🔄 BYPASS MODE: Allowing trade to test improved logic (confidence: ${basePrediction.confidence})`);
+      return {
+        ...basePrediction,
+        adaptationApplied: true,
+        adaptationReason: 'Bypass mode - testing improved trading logic',
+        rejected: false
+      };
+    }
+    
     const currentHour = new Date().getHours();
     const marketConditions = this.getCurrentMarketConditions(symbol);
     
@@ -200,17 +211,19 @@ export class AdaptiveLearningEngine {
         }
       }
 
-      // AGGRESSIVE Loss streak learning: Change direction or block trades
+      // BALANCED Loss streak learning: Reduce confidence but don't block all trades
       if (ruleId.includes('loss_streak')) {
         const recentLosses = this.feedbackHistory.slice(-20).filter(f => f.actualOutcome === 'loss' && f.symbol === symbol).length;
-        if (recentLosses >= 15) { // 15+ losses in last 20 trades
-          // Flip the prediction direction - maybe we're consistently wrong
+        if (recentLosses >= 18) { // Only flip direction with very high loss rate
           adaptedDirection = adaptedDirection === 'up' ? 'down' : 'up';
-          adaptedConfidence *= 0.3;
+          adaptedConfidence *= 0.4;
           adaptationReasons.push(`FLIPPED: ${recentLosses}/20 recent losses - reversing prediction direction`);
-        } else if (recentLosses >= 10) {
-          adaptedConfidence *= 0.2; // Extremely low confidence
-          adaptationReasons.push(`CAUTION: ${recentLosses}/20 recent losses - very low confidence`);
+        } else if (recentLosses >= 15) {
+          adaptedConfidence *= 0.5; // Moderate reduction, not extreme
+          adaptationReasons.push(`CAUTION: ${recentLosses}/20 recent losses - reduced confidence`);
+        } else if (recentLosses >= 12) {
+          adaptedConfidence *= 0.7; // Small reduction to allow trades
+          adaptationReasons.push(`WATCHFUL: ${recentLosses}/20 recent losses - slightly reduced confidence`);
         }
       }
 
@@ -221,8 +234,8 @@ export class AdaptiveLearningEngine {
       }
     }
 
-    // Hard rejection threshold
-    if (adaptedConfidence < 0.15 || shouldRejectTrade) {
+    // More reasonable rejection threshold - only block truly bad trades
+    if (adaptedConfidence < 0.1 || shouldRejectTrade) {
       return {
         ...basePrediction,
         confidence: 0.0, // This will prevent trade execution
