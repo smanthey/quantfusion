@@ -19,6 +19,7 @@ import { MetaAllocator } from "./services/meta-allocator";
 import { RiskManager } from "./services/risk-manager";
 import { BacktestEngine } from "./services/backtest-engine";
 import { MarketDataService } from "./services/market-data";
+import { binanceTradingService } from "./services/binance-trading";
 
 // Initialize trading services
 const marketData = new MarketDataService();
