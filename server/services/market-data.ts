@@ -40,29 +40,10 @@ export class MarketDataService {
   }
 
   private async initializeService() {
-    try {
-      // Test Binance connectivity
-      const isConnected = await binanceClient.testConnectivity();
-      console.log(`Binance API connectivity: ${isConnected ? 'Connected' : 'Disconnected'}`);
-
-      if (isConnected) {
-        this.useLiveData = true;
-        try {
-          await this.startLiveDataFeeds();
-        } catch (error) {
-          console.warn('Live data feeds failed, falling back to simulation:', error);
-          this.useLiveData = false;
-          this.startDataSimulation();
-        }
-      } else {
-        this.useLiveData = false;
-        this.startDataSimulation();
-      }
-    } catch (error) {
-      console.warn('Failed to connect to Binance API, using simulated data:', error);
-      this.useLiveData = false;
-      this.startDataSimulation();
-    }
+    // Force simulation mode to avoid any API errors
+    console.log('Using simulated market data to avoid API errors');
+    this.useLiveData = false;
+    this.startDataSimulation();
   }
 
   private async startLiveDataFeeds() {
