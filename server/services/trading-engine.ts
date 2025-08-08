@@ -165,7 +165,7 @@ export class TradingEngine {
       try {
         // Generate ML-enhanced signal
         const marketData = await this.marketData.getCurrentPrice(symbol);
-        const mlPrediction = await mlPredictor.predictPrice(symbol, '1h');
+        const mlPrediction = await mlPredictor.predict(symbol, '1h');
         
         const signal = await this.strategyEngine.generateSignal(strategy, symbol);
         if (!signal) continue;
@@ -407,7 +407,7 @@ export class TradingEngine {
       for (const symbol of symbols) {
         try {
           const currentPrice = await this.marketData.getCurrentPrice(symbol);
-          const prediction = await mlPredictor.predictPrice(symbol, '1h');
+          const prediction = await mlPredictor.predict(symbol, '1h');
           console.log(`🔮 ML Prediction: ${symbol} - ${prediction.priceDirection} (${(prediction.confidence * 100).toFixed(1)}% confidence)`);
         } catch (error) {
           console.error(`Learning error for ${symbol}:`, error);

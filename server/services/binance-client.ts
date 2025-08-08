@@ -93,9 +93,9 @@ export class BinanceClient {
       throw new Error('Binance API credentials not found in environment variables');
     }
 
-    // Use testnet for development, live API is geo-restricted
+    // Use testnet API which was working before geo-restrictions
     this.baseUrl = 'https://testnet.binance.vision/api';
-    // Note: Using production WebSocket for market data as testnet streams have limited availability
+    // WebSocket disabled due to geo-blocking, using REST polling only
     this.wsUrl = 'wss://stream.binance.com:9443/ws';
   }
 
@@ -322,17 +322,21 @@ export class BinanceClient {
 
     ws.on('error', (error) => {
       console.error(`WebSocket error for ${stream}:`, error);
+      // If geo-blocked (451), start REST fallback immediately
+      if (error.message.includes('451')) {
+        console.log(`🔄 WebSocket geo-blocked. Switching to REST polling for ${stream}`);
+        this.startRestPolling(stream);
+      }
     });
 
     ws.on('close', () => {
       console.log(`Disconnected from Binance stream: ${stream}`);
       this.connections.delete(stream);
 
-      // Attempt to reconnect after 5 seconds if there are still subscribers
+      // Start REST polling as fallback instead of reconnecting WebSocket
       if (this.subscribers.has(stream) && this.subscribers.get(stream)!.size > 0) {
-        setTimeout(() => {
-          this.connectToStream(stream);
-        }, 5000);
+        console.log(`🔄 Starting REST polling fallback for ${stream}`);
+        this.startRestPolling(stream);
       }
     });
 
@@ -369,8 +373,80 @@ export class BinanceClient {
     return data.serverTime;
   }
 
+  private startRestPolling(stream: string) {
+    // Avoid multiple polling intervals for the same stream
+    const pollKey = `${stream}_poll`;
+    if (this.connections.has(pollKey)) {
+      return;
+    }
+
+    const [symbol, type] = stream.split('@');
+    console.log(`📊 Starting REST API polling for ${symbol.toUpperCase()} (${type})`);
+    
+    const pollInterval = setInterval(async () => {
+      try {
+        if (type === 'ticker') {
+          const ticker = await this.get24hrTicker(symbol.toUpperCase());
+          if (ticker) {
+            // Convert to WebSocket ticker format for compatibility
+            const wsFormat = {
+              s: ticker.symbol,
+              c: ticker.lastPrice,
+              P: ticker.priceChangePercent,
+              a: ticker.askPrice || ticker.lastPrice,
+              b: ticker.bidPrice || ticker.lastPrice,
+              v: ticker.volume,
+              o: ticker.openPrice,
+              h: ticker.highPrice,
+              l: ticker.lowPrice
+            };
+            
+            const subscribers = this.subscribers.get(stream);
+            if (subscribers) {
+              subscribers.forEach(cb => cb(wsFormat));
+            }
+          }
+        } else if (type.includes('kline')) {
+          // For kline data, use recent klines
+          const klines = await this.getKlines(symbol.toUpperCase(), '1m', 1);
+          if (klines && klines.length > 0) {
+            const kline = klines[0];
+            const wsFormat = {
+              k: {
+                t: kline.openTime,
+                T: kline.closeTime,
+                s: symbol.toUpperCase(),
+                o: kline.open,
+                h: kline.high,
+                l: kline.low,
+                c: kline.close,
+                v: kline.volume,
+                x: true // Kline is closed
+              }
+            };
+            
+            const subscribers = this.subscribers.get(stream);
+            if (subscribers) {
+              subscribers.forEach(cb => cb(wsFormat));
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`REST polling error for ${stream}:`, error);
+      }
+    }, 5000); // Poll every 5 seconds
+
+    this.connections.set(pollKey, pollInterval as any);
+  }
+
   close() {
-    this.connections.forEach(ws => ws.close());
+    this.connections.forEach((connection, key) => {
+      if (key.includes('_poll')) {
+        clearInterval(connection as any);
+      } else {
+        (connection as WebSocket).close();
+      }
+    });
     this.connections.clear();
     this.subscribers.clear();
   }
