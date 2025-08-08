@@ -74,14 +74,14 @@ export class TradingEngine {
       }
     }, 5000); // Run every 5 seconds for active trading
 
-    // Start continuous ML learning loop
+    // Start INTENSIVE continuous ML learning loop
     this.learningIntervalId = setInterval(async () => {
       try {
-        await this.continuousLearningLoop();
+        await this.intensiveLearningLoop();
       } catch (error) {
         console.error("Learning loop error:", error);
       }
-    }, 30000); // Update ML models every 30 seconds
+    }, 15000); // Update ML models every 15 seconds (DOUBLED FREQUENCY)
 
     // Start data collection and history building
     this.dataCollectionId = setInterval(async () => {
