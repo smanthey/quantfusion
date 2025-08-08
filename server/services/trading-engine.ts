@@ -71,16 +71,13 @@ export class TradingEngine {
   private async tradingLoop(): Promise<void> {
     try {
       // 1. Check risk constraints
-      if (typeof this.riskManager.checkConstraints === 'function') {
-        try {
-          const riskCheck = await this.riskManager.checkConstraints();
-          if (!riskCheck.canTrade) {
-            return;
-          }
-        } catch (error) {
-          // Silent error handling - risk manager method may not be available
+      try {
+        const riskCheck = await this.riskManager.checkConstraints();
+        if (!riskCheck.canTrade) {
           return;
         }
+      } catch (error) {
+        // Risk manager check failed, continue with limited trading
       }
 
       // 2. Get active strategies
