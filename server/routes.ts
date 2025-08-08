@@ -144,6 +144,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Account management
+  app.get('/api/account', async (req, res) => {
+    try {
+      const balance = await binanceTradingService.getAccountBalance();
+      const accountInfo = {
+        balances: balance,
+        totalValue: balance.reduce((total, asset) => {
+          const freeValue = parseFloat(asset.free);
+          const lockedValue = parseFloat(asset.locked);
+          return total + freeValue + lockedValue;
+        }, 0),
+        tradingEnabled: true,
+        accountType: 'testnet',
+        feeDiscountRate: 0.1
+      };
+      res.json(accountInfo);
+    } catch (error) {
+      console.error('Account data error:', error);
+      res.status(500).json({ error: 'Failed to fetch account data' });
+    }
+  });
+
   // Strategy management
   app.get('/api/strategies', async (req, res) => {
     try {
