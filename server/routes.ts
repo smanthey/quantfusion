@@ -155,7 +155,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const performance = await calculateRealPerformance([]);
+      const allTrades = await storage.getRecentTrades(100);
+      const performance = await calculateRealPerformance(allTrades);
       
       res.json({
         metrics: [
@@ -239,12 +240,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         riskMetrics: riskData
       };
       
-      // Calculate real performance asynchronously and update
+      // Calculate real performance using actual trades data
       try {
-        const realPerformance = await calculateRealPerformance(recentTrades);
-        dashboardData.performance = realPerformance;
+        const allTrades = await storage.getRecentTrades(100); // Get more trades for better performance calculation
+        const realPerformance = await calculateRealPerformance(allTrades);
+        dashboardData.performance = {
+          ...realPerformance,
+          totalTrades: allTrades.length // Ensure we show the correct count
+        };
       } catch (perfError: any) {
         console.log('Using default performance metrics, real calculation failed:', perfError.message);
+        // Show actual trade count even if performance calc fails
+        const allTrades = await storage.getRecentTrades(100);
+        dashboardData.performance.totalTrades = allTrades.length;
       }
       
       res.json(dashboardData);
