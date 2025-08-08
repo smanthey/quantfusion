@@ -1,46 +1,27 @@
-import { StrictMode } from "react";
+import React from "react";
 import { createRoot } from "react-dom/client";
-import { Switch, Route } from "wouter";
+import App from "./App";
 import "./index.css";
 
-import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
-
-import Dashboard from "./pages/dashboard";
-import NotFound from "./pages/not-found";
-
-function Router() {
-  return (
-    <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route component={NotFound} />
-    </Switch>
-  );
-}
-
-function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <Router />
-      <Toaster />
-    </QueryClientProvider>
-  );
-}
-
-// Add error handling for mounting
-const rootElement = document.getElementById("root");
-if (!rootElement) {
+const container = document.getElementById("root");
+if (!container) {
   throw new Error("Root element not found");
 }
 
+const root = createRoot(container);
+
 try {
-  const root = createRoot(rootElement);
   root.render(
-    <StrictMode>
+    <React.StrictMode>
       <App />
-    </StrictMode>
+    </React.StrictMode>
   );
 } catch (error) {
-  console.error("Failed to render React app:", error);
+  console.error("Failed to render app:", error);
+  root.render(
+    <div style={{ padding: "20px", color: "red" }}>
+      <h1>Loading Error</h1>
+      <p>Failed to load the application. Check console for details.</p>
+    </div>
+  );
 }
