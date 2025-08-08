@@ -82,7 +82,7 @@ export class MLPredictor {
   async generatePrediction(symbol: string, timeHorizon: string = '1h'): Promise<MLPrediction> {
     try {
       // Get historical data - use available data or create minimal dataset
-      let data = this.historicalData.getHistoricalData(symbol);
+      let data = this.historicalData.getHistoricalData(symbol, '1d', 100);
       if (data.length < 10) {
         // Create minimal historical data for ML training
         data = this.createMinimalHistoricalData(symbol);
