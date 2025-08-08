@@ -636,6 +636,11 @@ export class MLPredictor {
   clearCache(): void {
     this.featureCache.clear();
   }
+
+  // Main prediction method called by trading engine
+  async predict(symbol: string, timeHorizon: string = '1h'): Promise<MLPrediction> {
+    return this.generatePrediction(symbol, timeHorizon);
+  }
 }
 
 // Supporting interfaces and classes
