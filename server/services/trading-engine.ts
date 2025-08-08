@@ -80,10 +80,35 @@ export class TradingEngine {
         // Risk manager check failed, continue with limited trading
       }
 
-      // 2. Get active strategies
-      const strategies = await storage.getActiveStrategies();
+      // 2. Get active strategies - create default ones if none exist
+      let strategies = await storage.getActiveStrategies();
       if (strategies.length === 0) {
-        return;
+        // Create default trading strategies
+        const meanReversionStrategy = await storage.createStrategy({
+          name: "Mean Reversion BTC",
+          type: "mean_reversion",
+          parameters: {
+            symbol: "BTCUSDT",
+            lookback: 20,
+            threshold: 2.0,
+            allocation: 0.3
+          },
+          isActive: true
+        });
+
+        const trendFollowingStrategy = await storage.createStrategy({
+          name: "Trend Following ETH",
+          type: "trend_following", 
+          parameters: {
+            symbol: "ETHUSDT",
+            fastMA: 10,
+            slowMA: 30,
+            allocation: 0.4
+          },
+          isActive: true
+        });
+
+        strategies = [meanReversionStrategy, trendFollowingStrategy];
       }
 
       // 3. Process each strategy
@@ -108,8 +133,22 @@ export class TradingEngine {
     
     for (const symbol of symbols) {
       try {
+        // Generate ML-enhanced signal
+        const marketData = await this.marketData.getCurrentPrice(symbol);
+        const mlPrediction = await mlPredictor.predictPrice(symbol, '1h');
+        
         const signal = await this.strategyEngine.generateSignal(strategy, symbol);
         if (!signal) continue;
+        
+        // Enhance signal with ML prediction
+        if (mlPrediction.confidence > 0.6) {
+          if (mlPrediction.priceDirection === 'bullish' && signal.action === 'sell') {
+            continue; // Skip conflicting signals
+          }
+          if (mlPrediction.priceDirection === 'bearish' && signal.action === 'buy') {
+            continue; // Skip conflicting signals
+          }
+        }
         
         // Check if we can execute this signal
         try {
@@ -122,8 +161,21 @@ export class TradingEngine {
           continue;
         }
 
-        // Execute the trade
-        const position = await this.executeTrade(strategy, signal);
+        // Calculate position size with proper risk management
+        const portfolioValue = 10000; // Current portfolio value
+        const riskPerTrade = 0.02; // 2% risk per trade
+        const positionSize = (portfolioValue * riskPerTrade) / Math.abs(parseFloat(signal.stopPrice || signal.price) - parseFloat(signal.price));
+        
+        if (positionSize > 0 && positionSize < portfolioValue * 0.2) { // Max 20% per position
+          signal.size = Math.min(positionSize, 1000); // Cap at $1000 for demo
+          const position = await this.executeTrade(strategy, signal);
+          if (position) {
+            await this.createAlert("info", "Auto Trade Executed", `${position.action} ${position.size} ${position.symbol} at ${position.entryPrice} (ML Enhanced)`);
+            
+            // Record learning data for ML improvement
+            await this.recordTradingDecision(signal, mlPrediction, position);
+          }
+        }
       } catch (error) {
         // Silent error handling to prevent console spam
       }
