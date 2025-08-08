@@ -145,8 +145,22 @@ export function TradingDashboard() {
     return `${((value || 0) * 100).toFixed(2)}%`;
   };
 
-  // Use current data directly
+  // Use current data with safe performance fallback
   const finalData = currentData;
+  
+  // Ensure performance object exists with safe defaults
+  if (!finalData.performance || finalData.performance === null) {
+    finalData.performance = {
+      totalPnl: 0,
+      dailyPnl: 0,
+      drawdown: 0,
+      winRate: 0,
+      profitFactor: 0,
+      sharpeRatio: 0,
+      totalTrades: 0,
+      equity: []
+    };
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
