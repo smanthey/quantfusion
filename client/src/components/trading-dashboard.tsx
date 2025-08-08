@@ -255,6 +255,9 @@ export function TradingDashboard() {
               </Link>
             </Button>
             <Button asChild variant="outline" size="sm" className="text-xs">
+              <Link href="/comparison">💱 Comparison</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="text-xs">
               <Link href="/settings">Settings</Link>
             </Button>
           </div>

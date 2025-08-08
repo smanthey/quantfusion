@@ -9,6 +9,9 @@ import { CustomIndicatorEngine } from "./custom-indicators";
 import { mlPredictor } from "./ml-predictor";
 import { historicalDataCollector } from "./historical-data-collector";
 import { abTesting } from "./ab-testing";
+import { ProfitableStrategies } from "./profitable-strategies";
+import { MultiAssetEngine } from "./multi-asset-engine";
+import { ForexTradingEngine } from "./forex-trading-engine";
 
 export class TradingEngine {
   private strategyEngine: StrategyEngine;
@@ -24,6 +27,9 @@ export class TradingEngine {
   private dataCollectionId?: NodeJS.Timeout;
   private portfolio: Map<string, { symbol: string; quantity: number; avgPrice: number; unrealizedPnL: number; realizedPnL: number }> = new Map();
   private adaptiveLearning?: any;
+  private profitableStrategies: ProfitableStrategies;
+  private multiAssetEngine: MultiAssetEngine;
+  private forexEngine: ForexTradingEngine;
 
 
   constructor() {
@@ -33,6 +39,9 @@ export class TradingEngine {
     this.orderManager = new AdvancedOrderManager();
     this.portfolioOptimizer = new PortfolioOptimizer();
     this.indicatorEngine = new CustomIndicatorEngine();
+    this.profitableStrategies = new ProfitableStrategies();
+    this.multiAssetEngine = new MultiAssetEngine();
+    this.forexEngine = new ForexTradingEngine();
     
     // Initialize adaptive learning engine
     this.initializeAdaptiveLearning();
@@ -64,6 +73,26 @@ export class TradingEngine {
 
     // Initialize default strategies if none exist
     await this.initializeDefaultStrategies();
+
+    // Start separate forex trading engine (THE CLONE!)
+    setTimeout(async () => {
+      try {
+        await this.forexEngine.start();
+        console.log('🌍 DEDICATED FOREX CLONE STARTED - Running parallel to crypto for comparison');
+      } catch (error) {
+        console.error('❌ Failed to start forex clone:', error);
+      }
+    }, 2000);
+
+    // Start multi-asset integrated engine
+    setTimeout(async () => {
+      try {
+        await this.multiAssetEngine.start();
+        console.log('🌍 Multi-asset integrated engine activated');
+      } catch (error) {
+        console.error('❌ Failed to start multi-asset engine:', error);
+      }
+    }, 4000);
 
     // Main aggressive trading loop
     this.intervalId = setInterval(async () => {
@@ -231,8 +260,8 @@ export class TradingEngine {
           mlPrediction = {
             priceDirection: adaptedPrediction.priceDirection || basePrediction.priceDirection,
             confidence: adaptedPrediction.confidence || basePrediction.confidence,
-            trendStrength: adaptedPrediction.trendStrength || basePrediction.trendStrength,
-            volatilityForecast: adaptedPrediction.volatilityForecast || basePrediction.volatilityForecast
+            accuracy: adaptedPrediction.accuracy || basePrediction.accuracy || 0.6,
+            signal: adaptedPrediction.signal || basePrediction.signal || 'neutral'
           };
           
           // Show learning impact clearly
@@ -247,8 +276,18 @@ export class TradingEngine {
           }
         }
 
-        // Create realistic trading signals based on market data and adapted ML
-        const signal = await this.generateTradingSignal(strategy, symbol, marketData, mlPrediction);
+        // RESEARCH UPGRADE: Use profitable strategies instead of basic signals
+        let signal = await this.profitableStrategies.getOptimalStrategy(symbol, 10000);
+        
+        // Fallback to original if no research-based signal
+        if (!signal) {
+          signal = await this.generateTradingSignal(strategy, symbol, marketData, mlPrediction);
+        }
+        
+        // CRITICAL FIX: Ensure strategyId is always present for A/B testing
+        if (signal && !signal.strategyId) {
+          signal.strategyId = strategy.id;
+        }
         
         if (!signal) {
           console.log(`🚫 No signal generated for ${symbol} - conditions not met or learning system rejected`);
@@ -257,9 +296,19 @@ export class TradingEngine {
         
         console.log(`🎯 Signal generated for ${symbol}: ${signal.action} at $${signal.price} (confidence: ${signal.confidence})`);
         
-        // Additional learning-based signal filtering
-        if (this.adaptiveLearning && signal.confidence < 0.3) {
-          console.log(`🛑 LEARNING FILTER: ${symbol} signal confidence too low (${signal.confidence}) - trade skipped`);
+        // RESEARCH IMPROVEMENT: Circuit breaker check
+        if (!this.profitableStrategies.checkCircuitBreaker()) {
+          console.log(`🚨 CIRCUIT BREAKER: Daily loss limit reached - halting all trading`);
+          break; // Stop all trading for today
+        }
+
+        // RESEARCH IMPROVEMENT: Better confidence filtering based on strategy type
+        let minConfidence = 0.3;
+        if (signal.strategy === 'ai_enhanced_dca') minConfidence = 0.15; // DCA can be more aggressive
+        if (signal.strategy === 'grid_trading') minConfidence = 0.25; // Grid needs medium confidence
+        
+        if (this.adaptiveLearning && signal.confidence < minConfidence) {
+          console.log(`🛑 LEARNING FILTER: ${symbol} signal confidence ${signal.confidence} below ${minConfidence} threshold - trade skipped`);
           continue;
         }
 
@@ -499,26 +548,36 @@ export class TradingEngine {
   }
 
   private calculatePositionSize(signal: any, price: number): number {
-    // Get A/B test variant for position sizing
-    const variant = abTesting.getVariantForStrategy(signal.strategyId, 'position-sizing-v1');
-    
-    let baseSize = signal.size || 300;
-    let confidenceMultiplier = signal.confidence || 0.6;
-    let maxRisk = 0.015; // 1.5% default
-    
-    if (variant) {
-      baseSize = variant.config.baseSize;
-      confidenceMultiplier = variant.config.confidenceMultiplier;
-      maxRisk = variant.config.maxRiskPerTrade;
+    try {
+      // RESEARCH FIX: Use research-based position sizing
+      if (signal.size && typeof signal.size === 'number') {
+        return signal.size; // Use the research-calculated size directly
+      }
       
-      console.log(`🧪 A/B TEST: Using ${variant.name} for position sizing`);
+      // Get A/B test variant for position sizing  
+      const variant = abTesting.getVariantForStrategy(signal.strategyId || 'default', 'position-sizing-v1');
+      
+      let baseSize = signal.size || 300;
+      let confidenceMultiplier = signal.confidence || 0.6;
+      let maxRisk = 0.015; // 1.5% default
+      
+      if (variant && variant.config) {
+        baseSize = variant.config.baseSize || baseSize;
+        confidenceMultiplier = variant.config.confidenceMultiplier || confidenceMultiplier;
+        maxRisk = variant.config.maxRiskPerTrade || maxRisk;
+        
+        console.log(`🧪 A/B TEST: Using ${variant.name} for position sizing`);
+      }
+      
+      const adjustedSize = baseSize * confidenceMultiplier;
+      
+      console.log(`📐 Position size calculation: base=${baseSize}, confidence=${confidenceMultiplier}, adjusted=${adjustedSize}, final=${adjustedSize}`);
+      
+      return Math.max(adjustedSize, 0.001); // Ensure minimum size
+    } catch (error) {
+      console.error('Position size calculation error:', error);
+      return 100; // Safe fallback
     }
-    
-    const adjustedSize = baseSize * confidenceMultiplier;
-    
-    console.log(`📐 Position size calculation: base=${baseSize}, confidence=${confidenceMultiplier}, adjusted=${adjustedSize}, final=${adjustedSize}`);
-    
-    return adjustedSize;
   }
 
   // Generate realistic trading signals based on current market conditions
@@ -717,7 +776,7 @@ export class TradingEngine {
 
         // Check for stop loss or take profit
         if (this.shouldClosePosition(position, priceAsNumber.toString())) {
-          await this.closePosition(position, priceAsNumber.toString());
+          await this.closePosition(position, priceAsNumber);
         }
       } catch (error) {
         console.error(`Error updating position ${position.id}:`, error);
@@ -874,7 +933,7 @@ export class TradingEngine {
   private async recordPositionResult(position: Position, variant: any, currentPrice: number): Promise<void> {
     try {
       const entry = parseFloat(position.entryPrice);
-      const pnl = this.calculatePnL(position, currentPrice.toString());
+      const pnl = this.calculateUnrealizedPnl(position, currentPrice.toString());
       const isWin = pnl > 0;
       
       const metrics = {
@@ -932,7 +991,7 @@ export class TradingEngine {
   private async closePosition(position: Position, currentPrice: number): Promise<void> {
     try {
       const size = parseFloat(position.size);
-      const pnl = this.calculatePnL(position, currentPrice.toString());
+      const pnl = this.calculateUnrealizedPnl(position, currentPrice.toString());
       const fees = this.calculateFees(size, currentPrice);
       const finalPnl = pnl - fees;
       
@@ -962,29 +1021,7 @@ export class TradingEngine {
     }
   }
 
-  private async closePosition(position: Position, exitPrice: string): Promise<void> {
-    const pnl = this.calculateUnrealizedPnl(position, exitPrice);
-    const duration = Math.floor((Date.now() - new Date(position.openedAt || '').getTime()) / 1000);
 
-    // Update position status
-    await storage.updatePositionStatus(position.id, 'closed');
-
-    // Create closing trade record
-    await storage.createTrade({
-      strategyId: position.strategyId,
-      positionId: position.id,
-      symbol: position.symbol,
-      side: position.side === 'long' ? 'short' : 'long', // Opposite side for closing
-      size: position.size,
-      entryPrice: position.entryPrice,
-      exitPrice,
-      pnl: pnl.toString(),
-      fees: this.calculateFees(parseFloat(position.size), parseFloat(exitPrice)).toString(),
-      duration
-    });
-
-    console.log(`Closed position ${position.id} with PnL: ${pnl}`);
-  }
 
   private async createAlert(type: string, title: string, message: string): Promise<void> {
     await storage.createSystemAlert({

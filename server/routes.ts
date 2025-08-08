@@ -25,6 +25,7 @@ import { mlPredictor } from "./services/ml-predictor";
 import { AdvancedOrderManager } from "./services/advanced-order-types";
 import { PortfolioOptimizer } from "./services/portfolio-optimizer";
 import { CustomIndicatorEngine } from "./services/custom-indicators";
+import { abTestingRouter } from "./routes/ab-testing";
 
 // Initialize trading services
 const marketData = new MarketDataService();
@@ -996,6 +997,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to analyze order routing' });
     }
   });
+
+  // A/B Testing endpoints
+  app.use('/api/ab-testing', abTestingRouter);
+
+  // Multi-Asset and Forex Comparison endpoints
+  const { multiAssetRoutes } = await import('./routes/multi-asset');
+  app.use('/api/multi-asset', multiAssetRoutes);
 
   // Portfolio Optimization endpoints
   app.get('/api/portfolio/optimization', async (req, res) => {
