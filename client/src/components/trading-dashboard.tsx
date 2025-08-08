@@ -167,32 +167,38 @@ export function TradingDashboard() {
     <div className="min-h-screen bg-background text-foreground">
       <div className="container mx-auto px-4 py-6 space-y-6">
         {/* Header */}
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col gap-4 md:gap-0 md:flex-row md:justify-between md:items-center">
           <div>
-            <h1 className="text-3xl font-bold">AutoQuant Dashboard</h1>
-            <div className="flex items-center gap-2 text-muted-foreground">
+            <h1 className="text-2xl md:text-3xl font-bold">AutoQuant Dashboard</h1>
+            <div className="flex items-center gap-2 text-sm md:text-base text-muted-foreground">
               <span>Algorithmic Trading Platform •</span>
               {isConnected ? (
-                <Badge variant="secondary" className="bg-green-100 text-green-800">
+                <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">
                   Live
                 </Badge>
               ) : (
-                <Badge variant="destructive">Disconnected</Badge>
+                <Badge variant="destructive" className="text-xs">Disconnected</Badge>
               )}
             </div>
           </div>
           {/* Navigation Buttons */}
-          <div className="flex gap-2">
-            <Button asChild variant="outline">
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline" size="sm" className="text-xs">
               <Link href="/">Dashboard</Link>
             </Button>
-            <Button asChild variant="outline">
-              <Link href="/manage-orders">Manage Orders</Link>
+            <Button asChild variant="outline" size="sm" className="text-xs">
+              <Link href="/orders">Orders</Link>
             </Button>
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" size="sm" className="text-xs">
               <Link href="/portfolio">Portfolio</Link>
             </Button>
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" size="sm" className="text-xs">
+              <Link href="/strategies">Strategies</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="text-xs">
+              <Link href="/analytics">Analytics</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="text-xs">
               <Link href="/settings">Settings</Link>
             </Button>
           </div>
@@ -205,10 +211,10 @@ export function TradingDashboard() {
               <CardTitle>Account Overview</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Total Balance</p>
-                  <p className="text-2xl font-bold">{formatCurrency(accountData.totalValue)}</p>
+                  <p className="text-xl md:text-2xl font-bold">{formatCurrency(accountData.totalValue)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Account Type</p>
@@ -222,7 +228,7 @@ export function TradingDashboard() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Active Assets</p>
-                  <p className="text-xl font-semibold">{accountData.balances.length}</p>
+                  <p className="text-lg md:text-xl font-semibold">{accountData.balances.length}</p>
                 </div>
               </div>
             </CardContent>
@@ -230,7 +236,7 @@ export function TradingDashboard() {
         )}
 
         {/* Market Data */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex justify-between items-center">
@@ -241,7 +247,7 @@ export function TradingDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{formatCurrency(finalData.marketData.BTCUSDT.price)}</p>
+              <p className="text-xl md:text-2xl font-bold">{formatCurrency(finalData.marketData.BTCUSDT.price)}</p>
               <p className="text-sm text-muted-foreground">
                 Volume: {finalData.marketData.BTCUSDT.volume.toLocaleString()}
               </p>
@@ -261,7 +267,7 @@ export function TradingDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{formatCurrency(finalData.marketData.ETHUSDT.price)}</p>
+              <p className="text-xl md:text-2xl font-bold">{formatCurrency(finalData.marketData.ETHUSDT.price)}</p>
               <p className="text-sm text-muted-foreground">
                 Volume: {finalData.marketData.ETHUSDT.volume.toLocaleString()}
               </p>
@@ -295,13 +301,13 @@ export function TradingDashboard() {
         </div>
 
         {/* Performance Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
           <Card>
             <CardHeader>
               <CardTitle>Total P&L</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold text-green-600">
+              <p className="text-xl md:text-2xl font-bold text-green-600">
                 {formatCurrency(finalData.performance.totalPnl)}
               </p>
               <p className="text-sm text-muted-foreground">
@@ -315,7 +321,7 @@ export function TradingDashboard() {
               <CardTitle>Win Rate</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{formatPercentage(finalData.performance.winRate)}</p>
+              <p className="text-xl md:text-2xl font-bold">{formatPercentage(finalData.performance.winRate)}</p>
               <p className="text-sm text-muted-foreground">
                 {finalData.performance.totalTrades} total trades
               </p>
@@ -327,7 +333,7 @@ export function TradingDashboard() {
               <CardTitle>Profit Factor</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{(finalData.performance.profitFactor || 0).toFixed(2)}</p>
+              <p className="text-xl md:text-2xl font-bold">{(finalData.performance.profitFactor || 0).toFixed(2)}</p>
               <p className="text-sm text-muted-foreground">
                 Sharpe: {(finalData.performance.sharpeRatio || 0).toFixed(2)}
               </p>
@@ -339,7 +345,7 @@ export function TradingDashboard() {
               <CardTitle>Drawdown</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold text-red-600">
+              <p className="text-xl md:text-2xl font-bold text-red-600">
                 {formatPercentage(finalData.performance.drawdown)}
               </p>
               <p className="text-sm text-muted-foreground">
