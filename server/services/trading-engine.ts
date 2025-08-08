@@ -1,7 +1,7 @@
 import { Strategy, Position, Trade } from "@shared/schema";
 import { storage } from "../storage";
 import { StrategyEngine } from "./strategy-engine";
-import { RiskManager } from "./risk-manager";
+import { RiskManager, riskManager } from "./risk-manager";
 import { MarketDataService } from "./market-data";
 import { AdvancedOrderManager } from "./advanced-order-types";
 import { PortfolioOptimizer } from "./portfolio-optimizer";
@@ -19,7 +19,7 @@ export class TradingEngine {
 
   constructor() {
     this.strategyEngine = new StrategyEngine();
-    this.riskManager = new RiskManager();
+    this.riskManager = riskManager; // Use the exported singleton
     this.marketData = new MarketDataService();
     this.orderManager = new AdvancedOrderManager();
     this.portfolioOptimizer = new PortfolioOptimizer();
