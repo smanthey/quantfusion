@@ -33,11 +33,14 @@ export class StrategyEngine {
 
   async generateSignal(strategy: Strategy, symbol: string): Promise<TradingSignal | null> {
     try {
-      const data = this.historicalData.getHistoricalData(symbol);
-      if (data.length < 50) return null;
+      const data = this.historicalData.getHistoricalData(symbol, Date.now() - 24 * 60 * 60 * 1000, Date.now());
+      if (!data || data.length < 50) return null;
 
       const latestData = data.slice(-50);
-      const currentPrice = latestData[latestData.length - 1].close;
+      if (!latestData || latestData.length === 0) return null;
+      
+      const currentPrice = latestData[latestData.length - 1]?.close;
+      if (!currentPrice || isNaN(currentPrice)) return null;
 
       switch (strategy.type) {
         case 'mean_reversion':
