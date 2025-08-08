@@ -20,6 +20,8 @@ export class TradingEngine {
   private intervalId?: NodeJS.Timeout;
   private learningIntervalId?: NodeJS.Timeout;
   private dataCollectionId?: NodeJS.Timeout;
+  private portfolio: Map<string, { symbol: string; quantity: number; avgPrice: number; unrealizedPnL: number; realizedPnL: number }> = new Map();
+
 
   constructor() {
     this.strategyEngine = new StrategyEngine();
@@ -167,7 +169,7 @@ export class TradingEngine {
   private async processStrategy(strategy: Strategy): Promise<void> {
     // Generate signals for each symbol the strategy trades
     const symbols = ['BTCUSDT', 'ETHUSDT']; // Default symbols
-    
+
     for (const symbol of symbols) {
       try {
         // Get current market price
@@ -176,23 +178,23 @@ export class TradingEngine {
 
         // Generate ML prediction
         const mlPrediction = await mlPredictor.predict(symbol, '1h');
-        
+
         // Create realistic trading signals based on market data and ML
         const signal = await this.generateTradingSignal(strategy, symbol, marketData, mlPrediction);
         if (!signal) continue;
 
         // Execute the trade directly - bypass risk manager for now to ensure trades happen
         console.log(`🔄 Executing ${signal.action} trade for ${symbol} at $${marketData.price}`);
-        const position = await this.executeTrade(strategy, signal);
-        
+        const position = await this.executeTrade(signal);
+
         if (position) {
           console.log(`✅ Trade executed: ${position.side} ${position.size} ${position.symbol} at $${position.entryPrice}`);
           await this.createAlert("success", "Real Trade Executed", 
             `${position.side.toUpperCase()} ${position.size} ${position.symbol} at $${position.entryPrice} (Strategy: ${strategy.name})`);
-          
+
           // Record for ML learning
           await this.recordTradingDecision(signal, mlPrediction, position);
-          
+
           // Create historical record for learning
           await this.storeMarketDataPoint(symbol, marketData, signal.action, position.id);
         }
@@ -202,70 +204,69 @@ export class TradingEngine {
     }
   }
 
-  private async executeTrade(strategy: Strategy, signal: any): Promise<Position | null> {
+  private async executeTrade(signal: any): Promise<any> {
+    if (!signal || !signal.symbol) {
+      console.error('Invalid signal provided to executeTrade');
+      return null;
+    }
+
     try {
-      // Use signal size directly, with reasonable limits
-      const basePositionSize = Math.min(signal.size || 100, 500); // $100-500 per trade
-      
-      // Get current market price
-      const marketPrice = await this.marketData.getCurrentPrice(signal.symbol);
-      const entryPrice = marketPrice.price;
-      const stopPrice = this.calculateStopPrice(signal, entryPrice.toString());
+      const price = await this.marketData.getCurrentPrice(signal.symbol);
 
-      // Create position record
-      const position = await storage.createPosition({
-        strategyId: strategy.id,
+      if (!price || price <= 0) {
+        console.error(`Invalid price received for ${signal.symbol}: ${price}`);
+        return null;
+      }
+
+      // Calculate position size based on signal strength and risk limits
+      const positionSize = this.calculatePositionSize(signal, price);
+
+      if (!positionSize || positionSize <= 0) {
+        console.error(`Invalid position size calculated for ${signal.symbol}: ${positionSize}`);
+        return null;
+      }
+
+      // Mock trade execution for now
+      const trade = {
+        id: `trade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         symbol: signal.symbol,
-        side: signal.action === 'buy' ? 'long' : 'short',
-        size: basePositionSize.toString(),
-        entryPrice: entryPrice.toString(),
-        stopPrice: stopPrice.toString(),
-        currentPrice: entryPrice.toString(),
-        unrealizedPnl: "0",
-        status: 'open'
+        side: signal.action,
+        quantity: Number(positionSize.toFixed(8)),
+        price: Number(price.toFixed(2)),
+        timestamp: Date.now(),
+        status: 'filled'
+      };
+
+      // Update portfolio (simplified)
+      const currentPosition = this.portfolio.get(signal.symbol);
+      const currentQuantity = currentPosition?.quantity || 0;
+      const newQuantity = currentQuantity + (signal.action === 'buy' ? positionSize : -positionSize);
+
+      this.portfolio.set(signal.symbol, {
+        symbol: signal.symbol,
+        quantity: Number(newQuantity.toFixed(8)),
+        avgPrice: Number(price.toFixed(2)),
+        unrealizedPnL: 0,
+        realizedPnL: 0
       });
 
-      // Create trade record for historical analysis
-      const trade = await storage.createTrade({
-        strategyId: strategy.id,
-        positionId: position.id,
-        symbol: signal.symbol,
-        side: signal.action === 'buy' ? 'long' : 'short',
-        size: basePositionSize.toString(),
-        entryPrice: entryPrice.toString(),
-        exitPrice: null,
-        pnl: null,
-        fees: this.calculateFees(basePositionSize, entryPrice).toString(),
-        duration: null
-      });
-
-      // Immediately simulate position closure for demonstration and learning
-      // This creates complete trade history for performance calculations
-      setTimeout(async () => {
-        try {
-          await this.simulateTradeOutcome(position, trade, strategy);
-        } catch (error) {
-          console.error('Error simulating trade outcome:', error);
-        }
-      }, Math.random() * 30000 + 5000); // Close trade in 5-35 seconds
-
-      return position;
+      return trade;
     } catch (error) {
-      console.error(`Failed to execute trade for ${strategy.name}:`, error);
+      console.error(`Trade execution failed for ${signal.symbol}:`, error instanceof Error ? error.message : 'Unknown error');
       return null;
     }
   }
 
   private calculateStopPrice(signal: any, entryPrice: string): number {
     const price = parseFloat(entryPrice);
-    
+
     // Use the signal's stop loss if available, otherwise default to 2%
     if (signal.stopLoss) {
       return signal.stopLoss;
     }
-    
+
     const stopDistance = price * 0.02; // 2% stop loss
-    
+
     if (signal.action === 'buy') {
       return price - stopDistance;
     } else {
@@ -284,9 +285,9 @@ export class TradingEngine {
     // Create different signal types based on strategy
     const price = marketData.price;
     const volatility = marketData.volatility || 0.02;
-    
+
     let signal = null;
-    
+
     if (strategy.type === 'mean_reversion') {
       // Mean reversion: buy on dips, sell on pumps
       if (mlPrediction.confidence > 0.65) {
@@ -314,7 +315,7 @@ export class TradingEngine {
         };
       }
     }
-    
+
     return signal;
   }
 
@@ -326,11 +327,11 @@ export class TradingEngine {
       const currentPrice = marketData.price;
       const entryPrice = parseFloat(position.entryPrice);
       const size = parseFloat(position.size);
-      
+
       // Calculate realistic PnL based on actual market movement
       let pnl = 0;
       let winLoss = Math.random() < 0.4 ? 'win' : 'loss'; // 40% win rate initially
-      
+
       if (position.side === 'long') {
         const priceChange = (currentPrice - entryPrice) / entryPrice;
         pnl = size * priceChange;
@@ -338,25 +339,25 @@ export class TradingEngine {
         const priceChange = (entryPrice - currentPrice) / entryPrice;
         pnl = size * priceChange;
       }
-      
+
       // Add some randomization for realistic results
       pnl = pnl + (Math.random() - 0.5) * size * 0.1; // +/- 10% randomization
-      
+
       // Close the position
       await storage.updatePositionStatus(position.id, 'closed');
-      
+
       // Update trade with exit data
       const exitPrice = currentPrice.toString();
       const fees = this.calculateFees(size, currentPrice);
       const finalPnl = pnl - fees;
       const duration = Math.floor(Date.now() / 1000) - Math.floor(new Date(position.openedAt!).getTime() / 1000);
-      
+
       // Create trade closure record (for historical analysis)
       await storage.createTrade({
         strategyId: strategy.id,
         positionId: position.id,
         symbol: position.symbol,
-        side: position.side,
+        side: position.side === 'long' ? 'short' : 'long', // Opposite side for closing
         size: position.size,
         entryPrice: position.entryPrice,
         exitPrice,
@@ -364,12 +365,12 @@ export class TradingEngine {
         fees: fees.toString(),
         duration
       });
-      
+
       console.log(`📊 Trade closed: ${position.side} ${position.symbol} - PnL: $${finalPnl.toFixed(2)} (${finalPnl > 0 ? '+' : ''}${((finalPnl/size)*100).toFixed(2)}%)`);
-      
+
       // Update strategy performance metrics
       await this.updateStrategyPerformance(strategy.id);
-      
+
     } catch (error) {
       console.error('Error simulating trade outcome:', error);
     }
@@ -380,20 +381,20 @@ export class TradingEngine {
     try {
       const trades = await storage.getTradesByStrategy(strategyId);
       const completedTrades = trades.filter(t => t.pnl !== null);
-      
+
       if (completedTrades.length === 0) return;
-      
+
       const totalTrades = completedTrades.length;
       const winningTrades = completedTrades.filter(t => parseFloat(t.pnl!) > 0);
       const winRate = winningTrades.length / totalTrades;
-      
+
       const totalPnl = completedTrades.reduce((sum, t) => sum + parseFloat(t.pnl!), 0);
       const profitFactor = this.calculateProfitFactor(completedTrades);
       const maxDrawdown = this.calculateMaxDrawdown(completedTrades);
-      
+
       // Store performance data (this would update the strategy record)
       console.log(`📈 Strategy Performance Update: ${totalTrades} trades, ${(winRate*100).toFixed(1)}% win rate, $${totalPnl.toFixed(2)} total PnL`);
-      
+
     } catch (error) {
       console.error('Error updating strategy performance:', error);
     }
@@ -409,14 +410,14 @@ export class TradingEngine {
     let runningPnL = 0;
     let peak = 0;
     let maxDrawdown = 0;
-    
+
     for (const trade of trades) {
       runningPnL += parseFloat(trade.pnl!);
       if (runningPnL > peak) peak = runningPnL;
       const drawdown = (peak - runningPnL) / peak;
       if (drawdown > maxDrawdown) maxDrawdown = drawdown;
     }
-    
+
     return maxDrawdown;
   }
 
@@ -433,7 +434,7 @@ export class TradingEngine {
         positionId,
         timestamp: new Date()
       };
-      
+
       console.log(`💾 Stored market data: ${symbol} @ $${marketData.price} (${action})`);
     } catch (error) {
       console.error('Error storing market data:', error);
@@ -442,15 +443,15 @@ export class TradingEngine {
 
   private async updatePositions(): Promise<void> {
     const openPositions = await storage.getOpenPositions();
-    
+
     for (const position of openPositions) {
       try {
         const currentPrice = await this.marketData.getCurrentPrice(position.symbol);
         const unrealizedPnl = this.calculateUnrealizedPnl(position, currentPrice.toString());
-        
+
         // Update position with current price and PnL
         await storage.updatePositionPnL(position.id, currentPrice.toString(), unrealizedPnl.toString());
-        
+
         // Check for stop loss or take profit
         if (this.shouldClosePosition(position, currentPrice.toString())) {
           await this.closePosition(position, currentPrice.toString());
@@ -465,7 +466,7 @@ export class TradingEngine {
     const current = parseFloat(currentPrice);
     const entry = parseFloat(position.entryPrice);
     const size = parseFloat(position.size);
-    
+
     if (position.side === 'long') {
       return (current - entry) * size;
     } else {
@@ -476,7 +477,7 @@ export class TradingEngine {
   private shouldClosePosition(position: Position, currentPrice: string): boolean {
     const current = parseFloat(currentPrice);
     const stop = parseFloat(position.stopPrice || '0');
-    
+
     if (position.side === 'long') {
       return current <= stop;
     } else {
@@ -487,10 +488,10 @@ export class TradingEngine {
   private async closePosition(position: Position, exitPrice: string): Promise<void> {
     const pnl = this.calculateUnrealizedPnl(position, exitPrice);
     const duration = Math.floor((Date.now() - new Date(position.openedAt || '').getTime()) / 1000);
-    
+
     // Update position status
     await storage.updatePositionStatus(position.id, 'closed');
-    
+
     // Create closing trade record
     await storage.createTrade({
       strategyId: position.strategyId,
@@ -587,12 +588,12 @@ export class TradingEngine {
   private async collectAndStoreMarketData(): Promise<void> {
     try {
       const symbols = ["BTCUSDT", "ETHUSDT"];
-      
+
       for (const symbol of symbols) {
         try {
           const currentPrice = await this.marketData.getCurrentPrice(symbol);
           const marketData = this.marketData.getMarketData(symbol);
-          
+
           if (marketData && marketData.volume !== undefined && Math.random() < 0.2) { // Log 20% of data points
             console.log(`📊 Data: ${symbol} @ ${currentPrice} (Vol: ${marketData.volume.toFixed(0)}, Volatility: ${(marketData.volatility * 100).toFixed(2)}%)`);
           }
