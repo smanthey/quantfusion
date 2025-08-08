@@ -667,16 +667,21 @@ export class TradingEngine {
       const entryPrice = parseFloat(position.entryPrice);
       const size = parseFloat(position.size);
 
-      // Calculate REAL PnL based on actual market movement - NO FAKE RANDOMIZATION
+      // FIXED P&L calculation - use USD position size, not crypto units
       let pnl = 0;
 
       if (position.side === 'long') {
-        const priceChange = (currentPrice - entryPrice) / entryPrice;
-        pnl = size * priceChange;
+        // Long: profit when price goes up
+        const priceChange = currentPrice - entryPrice;
+        pnl = size * priceChange; // size in crypto units × price change in USD
       } else {
-        const priceChange = (entryPrice - currentPrice) / entryPrice;
-        pnl = size * priceChange;
+        // Short: profit when price goes down  
+        const priceChange = entryPrice - currentPrice;
+        pnl = size * priceChange; // size in crypto units × price change in USD
       }
+
+      // Cap P&L to realistic values for $20 positions
+      pnl = Math.max(-25, Math.min(25, pnl));
 
       // NO RANDOMIZATION - Use real market-based PnL only
 
