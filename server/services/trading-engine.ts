@@ -365,14 +365,45 @@ export class TradingEngine {
       }
 
       // Execute authentic trade and save to database
+      // Calculate fees and P&L for this trade
+      const feeAmount = positionSize * price * 0.001; // 0.1% trading fee
+      
+      // For new trades, calculate unrealized P&L vs current market price
+      const currentMarketPrice = this.marketData.getMarketData(signal.symbol)?.price || price;
+      let unrealizedPnL = 0;
+      let profit = 0;
+      let loss = 0;
+      
+      if (signal.action === 'buy') {
+        // Long position: profit when price goes up
+        unrealizedPnL = positionSize * (currentMarketPrice - price);
+      } else {
+        // Short position: profit when price goes down  
+        unrealizedPnL = positionSize * (price - currentMarketPrice);
+      }
+      
+      // Account for fees in P&L calculation
+      const netPnL = unrealizedPnL - feeAmount;
+      
+      // Separate profit and loss for transparent display
+      if (netPnL > 0) {
+        profit = netPnL;
+        loss = 0;
+      } else {
+        profit = 0;
+        loss = Math.abs(netPnL);
+      }
+
       const tradeData = {
         symbol: signal.symbol,
         side: signal.action,
         size: positionSize.toString(),
         entryPrice: price.toString(),
         exitPrice: null,
-        pnl: null,
-        fees: null,
+        pnl: netPnL.toString(),
+        profit: profit.toString(),
+        loss: loss.toString(),
+        fees: feeAmount.toString(),
         duration: null,
         strategyId: signal.strategyId || '',
         positionId: null
