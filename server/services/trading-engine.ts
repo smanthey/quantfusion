@@ -283,7 +283,7 @@ export class TradingEngine {
         
         // Simple strategy assignment
         if (signal) {
-          signal.strategyId = strategy.id;
+          (signal as any).strategyId = strategy.id;
         }
         
         if (!signal) {
@@ -311,7 +311,7 @@ export class TradingEngine {
             await this.adaptiveLearning.processTradeFeedback({
               ...position,
               id: position.id || 'unknown',
-              strategyId: position.strategyId || signal.strategyId
+              strategyId: position.strategyId || (signal as any).strategyId
             });
             console.log(`🧠 Trade feedback processed for learning system`);
           }

@@ -74,14 +74,20 @@ export class ForexTradingEngine {
     this.isRunning = true;
     console.log('🌍 FOREX CLONE ACTIVATED - Running separate forex trading system');
     
-    // Run forex trading every 2 seconds (EXTREMELY aggressive for comparison)
+    // EMERGENCY LOSS PROTECTION: Dramatically slow down forex trading 
+    // Changed from 2 seconds to 30 seconds to reduce losses
     this.intervalId = setInterval(async () => {
       try {
+        // Check for excessive losses before trading
+        if (this.forexAccount.totalPnL < -50) {
+          console.log(`🛑 FOREX HALTED: Total loss $${Math.abs(this.forexAccount.totalPnL).toFixed(2)} exceeds $50 limit`);
+          return;
+        }
         await this.runForexTradingCycle();
       } catch (error) {
         console.error('❌ Forex trading cycle error:', error);
       }
-    }, 2000);
+    }, 30000); // Reduced frequency from 2s to 30s
     
     // AGGRESSIVE START - Force multiple immediate executions
     console.log('💱 FOREX STARTING: Forcing immediate forex trades...');
