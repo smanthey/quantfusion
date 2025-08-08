@@ -88,14 +88,15 @@ export class BinanceClient {
   constructor() {
     this.apiKey = process.env.BINANCE_API_KEY!;
     this.apiSecret = process.env.BINANCE_SECRET_KEY!;
-    
+
     if (!this.apiKey || !this.apiSecret) {
       throw new Error('Binance API credentials not found in environment variables');
     }
 
     // Use testnet for development, live API is geo-restricted
     this.baseUrl = 'https://testnet.binance.vision/api';
-    this.wsUrl = 'wss://testnet.binance.vision/ws';
+    // Note: Using production WebSocket for market data as testnet streams have limited availability
+    this.wsUrl = 'wss://stream.binance.com:9443/ws';
   }
 
   private createSignature(queryString: string): string {
@@ -111,18 +112,18 @@ export class BinanceClient {
     Object.entries(params).forEach(([key, value]) => {
       stringParams[key] = String(value);
     });
-    
+
     const queryString = new URLSearchParams(stringParams).toString();
     const url = `${this.baseUrl}${endpoint}${queryString ? '?' + queryString : ''}`;
 
     try {
       const response = await fetch(url);
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Binance API error: ${response.status} ${errorText}`);
       }
-      
+
       return await response.json();
     } catch (error) {
       console.error('Binance API request failed:', error);
@@ -133,18 +134,18 @@ export class BinanceClient {
   private async makePrivateRequest(endpoint: string, params: Record<string, any> = {}, method: 'GET' | 'POST' | 'DELETE' = 'GET'): Promise<any> {
     const timestamp = Date.now().toString();
     const queryParams = { ...params, timestamp };
-    
+
     // Convert all values to strings for URLSearchParams
     const stringParams: Record<string, string> = {};
     Object.entries(queryParams).forEach(([key, value]) => {
       stringParams[key] = String(value);
     });
-    
+
     const queryString = new URLSearchParams(stringParams).toString();
     const signature = this.createSignature(queryString);
-    
+
     const url = `${this.baseUrl}${endpoint}?${queryString}&signature=${signature}`;
-    
+
     const headers = {
       'X-MBX-APIKEY': this.apiKey,
       'Content-Type': 'application/json',
@@ -152,12 +153,12 @@ export class BinanceClient {
 
     try {
       const response = await fetch(url, { method, headers });
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Binance API error: ${response.status} ${errorText}`);
       }
-      
+
       return await response.json();
     } catch (error) {
       console.error('Binance API request failed:', error);
@@ -187,7 +188,7 @@ export class BinanceClient {
       interval,
       limit
     });
-    
+
     return response.map((kline: any[]) => ({
       openTime: kline[0],
       open: kline[1],
@@ -253,11 +254,11 @@ export class BinanceClient {
   // WebSocket Methods
   subscribeToTicker(symbol: string, callback: (data: any) => void): () => void {
     const stream = `${symbol.toLowerCase()}@ticker`;
-    
+
     if (!this.subscribers.has(stream)) {
       this.subscribers.set(stream, new Set());
     }
-    
+
     this.subscribers.get(stream)!.add(callback);
 
     if (!this.connections.has(stream)) {
@@ -278,11 +279,11 @@ export class BinanceClient {
 
   subscribeToKline(symbol: string, interval: string, callback: (data: any) => void): () => void {
     const stream = `${symbol.toLowerCase()}@kline_${interval}`;
-    
+
     if (!this.subscribers.has(stream)) {
       this.subscribers.set(stream, new Set());
     }
-    
+
     this.subscribers.get(stream)!.add(callback);
 
     if (!this.connections.has(stream)) {
@@ -302,7 +303,7 @@ export class BinanceClient {
 
   private connectToStream(stream: string) {
     const ws = new WebSocket(`${this.wsUrl}/${stream}`);
-    
+
     ws.on('open', () => {
       console.log(`Connected to Binance stream: ${stream}`);
     });
@@ -326,7 +327,7 @@ export class BinanceClient {
     ws.on('close', () => {
       console.log(`Disconnected from Binance stream: ${stream}`);
       this.connections.delete(stream);
-      
+
       // Attempt to reconnect after 5 seconds if there are still subscribers
       if (this.subscribers.has(stream) && this.subscribers.get(stream)!.size > 0) {
         setTimeout(() => {
