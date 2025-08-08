@@ -157,6 +157,11 @@ export const insertSystemAlertSchema = createInsertSchema(systemAlerts).omit({
   createdAt: true,
 });
 
+export const insertRiskMetricSchema = createInsertSchema(riskMetrics).omit({
+  id: true,
+  timestamp: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -176,5 +181,7 @@ export type BacktestResult = typeof backtestResults.$inferSelect;
 export type InsertSystemAlert = z.infer<typeof insertSystemAlertSchema>;
 export type SystemAlert = typeof systemAlerts.$inferSelect;
 
-export type MarketRegime = typeof marketRegimes.$inferSelect;
+export type InsertRiskMetric = z.infer<typeof insertRiskMetricSchema>;
 export type RiskMetric = typeof riskMetrics.$inferSelect;
+
+export type MarketRegime = typeof marketRegimes.$inferSelect;

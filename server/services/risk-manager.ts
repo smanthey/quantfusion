@@ -228,12 +228,10 @@ export class RiskManager {
     const metrics = this.getCurrentMetrics();
     
     return {
-      currentDrawdown: metrics.currentDrawdown,
-      dailyPnL: metrics.dailyPnL,
-      totalPositionSize: metrics.totalPositionSize,
-      riskUtilization: metrics.riskUtilization,
-      isHalted: metrics.isHalted,
-      circuitBreakers: metrics.circuitBreakers
+      dailyPnl: metrics.dailyPnL.toString(),
+      dailyRisk: metrics.riskUtilization.toString(),
+      maxDrawdown: (metrics.currentDrawdown / this.currentEquity).toString(),
+      totalExposure: metrics.totalPositionSize.toString()
     };
   }
 }

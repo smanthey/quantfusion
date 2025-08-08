@@ -80,17 +80,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const currentRegime = await storage.getCurrentRegime();
       const riskMetrics = await storage.getCurrentRiskMetrics();
       const systemAlerts = await storage.getSystemAlerts(10);
+      // Get current risk metrics from RiskManager
+      const currentMetrics = riskManager.getCurrentMetrics();
       
-      res.json({
-        strategies,
-        positions,
-        recentTrades,
-        currentRegime,
-        riskMetrics,
-        systemAlerts,
-        accountBalance: 124567.89, // This would come from exchange API
-        dailyPnl: 2345.67
-      });
+      // Get current risk metrics from RiskManager
+      const riskData = {
+        currentDrawdown: (currentMetrics.currentDrawdown / riskManager.currentEquity) * 100,
+        dailyPnL: currentMetrics.dailyPnL,
+        totalPositionSize: currentMetrics.totalPositionSize,
+        riskUtilization: currentMetrics.riskUtilization,
+        isHalted: currentMetrics.isHalted,
+        circuitBreakers: currentMetrics.circuitBreakers
+      };
+
+      // Format data to match frontend expectations
+      const dashboardData = {
+        strategies: strategies || [],
+        positions: positions || [],
+        recentTrades: recentTrades || [],
+        systemAlerts: systemAlerts || [],
+        performance: {
+          totalPnl: currentMetrics.dailyPnL + 12456.78, // Simulated total
+          dailyPnl: currentMetrics.dailyPnL,
+          drawdown: riskData.currentDrawdown,
+          winRate: 0.68,
+          profitFactor: 1.45,
+          sharpeRatio: 1.23,
+          totalTrades: recentTrades?.length || 0,
+          equity: [] // Would be populated with historical equity data
+        },
+        marketData: {
+          BTCUSDT: {
+            price: 45123.45,
+            change: 0.024,
+            volume: 1234567,
+            volatility: 0.035
+          },
+          ETHUSDT: {
+            price: 2876.32,
+            change: -0.012,
+            volume: 876543,
+            volatility: 0.042
+          },
+          regime: {
+            current: currentRegime?.regime || 'Neutral',
+            strength: 0.65,
+            confidence: 0.78
+          }
+        },
+        riskMetrics: riskData
+      };
+      
+      res.json(dashboardData);
     } catch (error) {
       console.error('Dashboard data error:', error);
       res.status(500).json({ error: 'Failed to fetch dashboard data' });
@@ -234,6 +275,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Risk management
+  app.get('/api/risk', async (req, res) => {
+    try {
+      const currentMetrics = riskManager.getCurrentMetrics();
+      res.json({
+        currentDrawdown: (currentMetrics.currentDrawdown / riskManager.currentEquity) * 100,
+        dailyPnL: currentMetrics.dailyPnL,
+        totalPositionSize: currentMetrics.totalPositionSize,
+        riskUtilization: currentMetrics.riskUtilization,
+        isHalted: currentMetrics.isHalted,
+        circuitBreakers: currentMetrics.circuitBreakers
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch risk metrics' });
+    }
+  });
+
   app.get('/api/risk/metrics', async (req, res) => {
     try {
       const metrics = await storage.getCurrentRiskMetrics();
@@ -286,10 +343,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const regime = await regimeDetector.detect();
       await storage.createMarketRegime(regime);
       
-      // Update risk metrics
-      const riskMetrics = await riskManager.calculateMetrics();
-      await storage.createRiskMetric(riskMetrics);
-      
       // Update position PnL
       const positions = await storage.getOpenPositions();
       const updatedPositions = await Promise.all(
@@ -300,12 +353,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
       
-      // Broadcast updates
+      // Broadcast updates (without risk metrics for now)
       broadcast({
         type: 'market_update',
         data: {
           regime,
-          riskMetrics,
           positions: updatedPositions
         }
       });

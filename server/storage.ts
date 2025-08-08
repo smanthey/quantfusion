@@ -20,7 +20,8 @@ import {
   type InsertBacktestResult,
   type SystemAlert,
   type InsertSystemAlert,
-  type RiskMetric
+  type RiskMetric,
+  type InsertRiskMetric
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, gte, and } from "drizzle-orm";
@@ -282,7 +283,7 @@ export class DatabaseStorage implements IStorage {
     return metrics || undefined;
   }
 
-  async createRiskMetric(metrics: Omit<RiskMetric, 'id' | 'timestamp'>): Promise<RiskMetric> {
+  async createRiskMetric(metrics: InsertRiskMetric): Promise<RiskMetric> {
     const [newMetrics] = await db
       .insert(riskMetrics)
       .values(metrics)
