@@ -100,6 +100,73 @@ export const riskMetrics = pgTable("risk_metrics", {
   timestamp: timestamp("timestamp").defaultNow(),
 });
 
+// Meta-Learning Tables: Learn from our learning process
+export const learningRules = pgTable("learning_rules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ruleId: text("rule_id").notNull().unique(),
+  condition: text("condition").notNull(),
+  action: text("action").notNull(),
+  confidence: decimal("confidence", { precision: 5, scale: 4 }).notNull(),
+  successRate: decimal("success_rate", { precision: 5, scale: 4 }).notNull(),
+  timesApplied: integer("times_applied").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastApplied: timestamp("last_applied"),
+  isActive: boolean("is_active").default(true).notNull(),
+  metadata: jsonb("metadata"),
+});
+
+export const learningRuleApplications = pgTable("learning_rule_applications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ruleId: text("rule_id").notNull(),
+  tradeId: varchar("trade_id").notNull().references(() => trades.id),
+  appliedAction: text("applied_action").notNull(), // what we did
+  originalPrediction: jsonb("original_prediction").notNull(), // what we would have done
+  modifiedPrediction: jsonb("modified_prediction").notNull(), // what we actually did
+  actualOutcome: text("actual_outcome"), // win/loss - filled later
+  ruleEffectiveness: decimal("rule_effectiveness", { precision: 5, scale: 4 }), // did this rule help?
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+});
+
+export const learningInsights = pgTable("learning_insights", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  insightType: text("insight_type").notNull(), // 'pattern_discovered', 'rule_effectiveness', 'meta_learning'
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  confidence: decimal("confidence", { precision: 5, scale: 4 }).notNull(),
+  expectedImpact: decimal("expected_impact", { precision: 10, scale: 4 }), // predicted $ impact
+  actualImpact: decimal("actual_impact", { precision: 10, scale: 4 }), // actual $ impact after time
+  accuracy: decimal("accuracy", { precision: 5, scale: 4 }), // how accurate was our insight?
+  basedOnTrades: integer("based_on_trades").notNull(), // number of trades this insight is based on
+  validationTrades: integer("validation_trades").default(0), // trades used to validate insight
+  status: text("status").default('active'), // 'active', 'validated', 'invalidated', 'under_review'
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastValidated: timestamp("last_validated"),
+  metadata: jsonb("metadata"),
+});
+
+export const metaLearningFeedback = pgTable("meta_learning_feedback", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  feedbackType: text("feedback_type").notNull(), // 'rule_performance', 'insight_accuracy', 'learning_effectiveness'
+  subjectId: text("subject_id").notNull(), // ID of rule, insight, or learning session being evaluated
+  subjectType: text("subject_type").notNull(), // 'rule', 'insight', 'learning_session'
+  expectedOutcome: jsonb("expected_outcome").notNull(), // what we thought would happen
+  actualOutcome: jsonb("actual_outcome").notNull(), // what actually happened
+  performance: decimal("performance", { precision: 5, scale: 4 }).notNull(), // 0-1 score of how well it worked
+  context: jsonb("context"), // market conditions, etc. when this happened
+  learningAdjustment: jsonb("learning_adjustment"), // how we adjusted our learning based on this
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+});
+
+export const marketData = pgTable("market_data", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  symbol: text("symbol").notNull(),
+  price: decimal("price", { precision: 18, scale: 8 }).notNull(),
+  volume: decimal("volume", { precision: 18, scale: 8 }),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  source: text("source").notNull(),
+  metadata: jsonb("metadata"),
+});
+
 // Relations
 export const strategiesRelations = relations(strategies, ({ many }) => ({
   positions: many(positions),
@@ -119,6 +186,15 @@ export const tradesRelations = relations(trades, ({ one }) => ({
 
 export const backtestResultsRelations = relations(backtestResults, ({ one }) => ({
   strategy: one(strategies, { fields: [backtestResults.strategyId], references: [strategies.id] }),
+}));
+
+// Meta-Learning Relations
+export const learningRulesRelations = relations(learningRules, ({ many }) => ({
+  applications: many(learningRuleApplications),
+}));
+
+export const learningRuleApplicationsRelations = relations(learningRuleApplications, ({ one }) => ({
+  trade: one(trades, { fields: [learningRuleApplications.tradeId], references: [trades.id] }),
 }));
 
 // Insert schemas

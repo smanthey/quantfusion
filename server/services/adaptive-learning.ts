@@ -1,4 +1,5 @@
 import { IStorage } from '../storage';
+import { metaLearning } from './meta-learning';
 
 export interface LearningFeedback {
   tradeId: string;
@@ -140,9 +141,19 @@ export class AdaptiveLearningEngine {
       existing.successRate = (existing.successRate * (existing.timesApplied - 1) + update.performance) / existing.timesApplied;
       existing.lastUpdated = Date.now();
       existing.confidence = Math.max(0.1, Math.min(0.9, existing.successRate));
+      
+      // META-LEARNING: Track rule effectiveness in database
+      metaLearning.recordLearningFeedback(
+        'rule_performance',
+        ruleId,
+        'rule',
+        { expectedOutcome: existing.successRate > 0.5 ? 'improve' : 'maintain' },
+        { actualOutcome: update.performance > 0 ? 'success' : 'failure' },
+        existing.successRate
+      ).catch(err => console.error('Meta-learning feedback error:', err));
     } else {
       // Create new rule
-      this.adaptationRules.set(ruleId, {
+      const newRule = {
         id: ruleId,
         condition: update.condition,
         action: update.action,
@@ -150,7 +161,10 @@ export class AdaptiveLearningEngine {
         successRate: update.performance,
         timesApplied: 1,
         lastUpdated: Date.now()
-      });
+      };
+      this.adaptationRules.set(ruleId, newRule);
+      
+      console.log(`🧠 META-LEARNING: Created new learning rule - ${update.condition}`);
     }
   }
 
