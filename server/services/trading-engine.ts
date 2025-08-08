@@ -211,7 +211,8 @@ export class TradingEngine {
     }
 
     try {
-      const price = await this.marketData.getCurrentPrice(signal.symbol);
+      const marketData = await this.marketData.getCurrentPrice(signal.symbol);
+      const price = marketData?.price;
 
       if (!price || price <= 0) {
         console.error(`Invalid price received for ${signal.symbol}: ${price}`);
@@ -294,9 +295,9 @@ export class TradingEngine {
         signal = {
           symbol,
           action: mlPrediction.priceDirection === 'bearish' ? 'buy' : 'sell', // Contrarian
-          price: price.toString(),
+          price: price ? price.toString() : "0",
           size: 200 + Math.random() * 300, // $200-500 position
-          stopPrice: mlPrediction.priceDirection === 'bearish' ? (price * 0.98).toString() : (price * 1.02).toString(),
+          stopPrice: price && mlPrediction.priceDirection === 'bearish' ? (price * 0.98).toString() : price ? (price * 1.02).toString() : "0",
           confidence: mlPrediction.confidence,
           type: 'mean_reversion'
         };
@@ -307,9 +308,9 @@ export class TradingEngine {
         signal = {
           symbol,
           action: mlPrediction.priceDirection === 'bullish' ? 'buy' : 'sell', // Follow trend
-          price: price.toString(),
+          price: price ? price.toString() : "0",
           size: 150 + Math.random() * 350, // $150-500 position
-          stopPrice: mlPrediction.priceDirection === 'bullish' ? (price * 0.97).toString() : (price * 1.03).toString(),
+          stopPrice: price && mlPrediction.priceDirection === 'bullish' ? (price * 0.97).toString() : price ? (price * 1.03).toString() : "0",
           confidence: mlPrediction.confidence,
           type: 'trend_following'
         };

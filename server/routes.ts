@@ -78,6 +78,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   };
   
+  // Helper function to calculate real performance metrics
+  async function calculateRealPerformance(recentTrades: any[]) {
+    // Get all completed trades from database
+    const allTrades = await storage.getTradesSince(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)); // Last 30 days
+    const completedTrades = allTrades.filter(t => t.pnl !== null && t.pnl !== undefined);
+    
+    if (completedTrades.length === 0) {
+      return {
+        totalPnl: 0,
+        dailyPnL: 0,
+        drawdown: 0,
+        winRate: null,
+        profitFactor: null,
+        sharpeRatio: null,
+        totalTrades: 0,
+        equity: []
+      };
+    }
+    
+    // Calculate REAL performance from actual trades
+    const winningTrades = completedTrades.filter(t => parseFloat(t.pnl!) > 0);
+    const winRate = winningTrades.length / completedTrades.length;
+    
+    const totalPnl = completedTrades.reduce((sum, t) => sum + parseFloat(t.pnl!), 0);
+    const profits = winningTrades.reduce((sum, t) => sum + parseFloat(t.pnl!), 0);
+    const losses = Math.abs(completedTrades.filter(t => parseFloat(t.pnl!) < 0).reduce((sum, t) => sum + parseFloat(t.pnl!), 0));
+    const profitFactor = losses === 0 ? profits : profits / losses;
+    
+    // Calculate daily PnL from today's trades
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todaysTrades = completedTrades.filter(t => new Date(t.executedAt!) >= today);
+    const dailyPnL = todaysTrades.reduce((sum, t) => sum + parseFloat(t.pnl!), 0);
+    
+    // Calculate max drawdown
+    let runningPnL = 0;
+    let peak = 0;
+    let maxDrawdown = 0;
+    
+    for (const trade of completedTrades) {
+      runningPnL += parseFloat(trade.pnl!);
+      if (runningPnL > peak) peak = runningPnL;
+      const drawdown = peak > 0 ? (peak - runningPnL) / peak : 0;
+      if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+    }
+    
+    return {
+      totalPnl,
+      dailyPnL,
+      drawdown: maxDrawdown * 100,
+      winRate,
+      profitFactor,
+      sharpeRatio: profitFactor > 0 ? Math.sqrt(252) * (totalPnl / completedTrades.length) / (Math.sqrt(completedTrades.reduce((sum, t) => sum + Math.pow(parseFloat(t.pnl!), 2), 0) / completedTrades.length)) : null,
+      totalTrades: completedTrades.length,
+      equity: [] // Would be populated with historical equity curve
+    };
+  }
+
   // API Routes
   
   // Get dashboard data
@@ -112,7 +170,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         positions: positions || [],
         recentTrades: recentTrades || [],
         systemAlerts: systemAlerts || [],
-        performance: await this.calculateRealPerformance(recentTrades),
+        performance: {
+          totalPnl: 0,
+          dailyPnL: 0,
+          drawdown: 0,
+          winRate: null,
+          profitFactor: null,
+          sharpeRatio: null,
+          totalTrades: 0,
+          equity: []
+        },
         marketData: {
           BTCUSDT: {
             price: btcData?.price || 43000,
@@ -134,6 +201,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         riskMetrics: riskData
       };
+      
+      // Calculate real performance asynchronously and update
+      try {
+        const realPerformance = await calculateRealPerformance(recentTrades);
+        dashboardData.performance = realPerformance;
+      } catch (perfError) {
+        console.log('Using default performance metrics, real calculation failed:', perfError.message);
+      }
       
       res.json(dashboardData);
     } catch (error) {
