@@ -130,8 +130,8 @@ export function ComparisonPage() {
             </p>
             <div className="text-xs text-muted-foreground mt-1">
               <div className="flex justify-between">
-                <span className="text-green-600">Profits: {forexData_comp.totalProfits || '$0.00'}</span>
-                <span className="text-red-600">Losses: {forexData_comp.totalLosses || '$2.04'}</span>
+                <span className="text-green-600">Profits: {forexData_comp.totalProfits || 'Loading...'}</span>
+                <span className="text-red-600">Losses: {forexData_comp.totalLosses || 'Loading...'}</span>
               </div>
             </div>
           </CardContent>
