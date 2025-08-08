@@ -42,7 +42,10 @@ export default function PortfolioPage() {
     BTCUSDT: { price: 116600 },
     ETHUSDT: { price: 3875 }
   };
-  const balance = accountData?.balances?.[0] || { free: '10000' };
+  const balance = accountData?.balances?.[0] || { free: '10000', locked: '0' };
+  const totalAccountValue = accountData?.totalValue || 10000;
+  const totalPnL = accountData?.totalPnL || 0;
+  const totalFees = accountData?.totalFees || 0;
 
   // Calculate portfolio metrics from real positions and account data
   const positionValues = positions.reduce((sum: number, pos: any) => {
@@ -62,7 +65,8 @@ export default function PortfolioPage() {
     return sum + (marketPrice * size * 0.001); // Scale position size appropriately
   }, 0);
   
-  const totalValue = parseFloat(balance.free) + positionValues;
+  // Use the account's total value which includes P&L calculations
+  const totalValue = totalAccountValue || (parseFloat(balance.free) + positionValues);
 
   const portfolioData = {
     totalValue,
