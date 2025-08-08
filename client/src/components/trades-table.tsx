@@ -1,133 +1,162 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-
-interface Trade {
-  id: string;
-  strategyId: string;
-  symbol: string;
-  side: string;
-  size: string;
-  entryPrice: string;
-  exitPrice: string | null;
-  pnl: string | null;
-  duration: number | null;
-  executedAt: string;
-  closedAt: string | null;
-}
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { ArrowUpDown, TrendingUp, TrendingDown, Download } from "lucide-react";
+import { TradeData } from "@/lib/trading-api";
 
 interface TradesTableProps {
-  trades: Trade[];
+  trades: TradeData[];
+  onExportTrades?: () => void;
 }
 
-export default function TradesTable({ trades }: TradesTableProps) {
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', { 
-      hour12: false,
+export function TradesTable({ trades, onExportTrades }: TradesTableProps) {
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+    }).format(value);
+  };
+
+  const formatTime = (timestamp: number) => {
+    return new Date(timestamp).toLocaleString('en-US', {
+      month: 'short',
+      day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
-      second: '2-digit'
     });
   };
 
-  const formatDuration = (seconds: number | null) => {
-    if (!seconds) return 'N/A';
-    
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    } else {
-      return `${minutes}m`;
-    }
+  const getPnLColor = (pnl: number | undefined) => {
+    if (pnl === undefined || pnl === null) return "text-muted-foreground";
+    return pnl >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400";
   };
 
-  const getStrategyName = (strategyId: string) => {
-    // In a real implementation, this would map strategy IDs to names
-    // For now, we'll extract a readable name from the ID or use a default
-    if (strategyId.includes('mean')) return 'Mean Reversion';
-    if (strategyId.includes('trend')) return 'Trend MA';
-    if (strategyId.includes('break')) return 'Breakout';
-    return 'Strategy';
+  const getSideBadge = (side: string) => {
+    return side === 'buy' ? (
+      <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+        <TrendingUp className="w-3 h-3 mr-1" />
+        BUY
+      </Badge>
+    ) : (
+      <Badge className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+        <TrendingDown className="w-3 h-3 mr-1" />
+        SELL
+      </Badge>
+    );
   };
+
+  const totalPnL = trades.reduce((sum, trade) => sum + (trade.pnl || 0), 0);
+  const totalFees = trades.reduce((sum, trade) => sum + trade.fees, 0);
+  const winningTrades = trades.filter(trade => (trade.pnl || 0) > 0).length;
+  const winRate = trades.length > 0 ? (winningTrades / trades.length) * 100 : 0;
 
   return (
-    <Card className="bg-dark-secondary border-dark-tertiary">
-      <CardHeader className="pb-4">
-        <CardTitle className="font-semibold flex items-center">
-          <i className="fas fa-list text-info mr-2"></i>
-          Recent Trades
-        </CardTitle>
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <ArrowUpDown className="h-5 w-5" />
+            Recent Trades ({trades.length})
+          </CardTitle>
+          {onExportTrades && (
+            <Button size="sm" variant="outline" onClick={onExportTrades}>
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         {trades.length === 0 ? (
-          <div className="text-text-secondary text-center py-8">
+          <p className="text-muted-foreground text-center py-8">
             No trades executed yet
-          </div>
+          </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-text-secondary border-b border-dark-tertiary">
-                <tr>
-                  <th className="text-left py-2 font-medium">Time</th>
-                  <th className="text-left py-2 font-medium">Strategy</th>
-                  <th className="text-left py-2 font-medium">Symbol</th>
-                  <th className="text-left py-2 font-medium">Side</th>
-                  <th className="text-left py-2 font-medium">Size</th>
-                  <th className="text-left py-2 font-medium">Entry</th>
-                  <th className="text-left py-2 font-medium">Exit</th>
-                  <th className="text-left py-2 font-medium">PnL</th>
-                  <th className="text-left py-2 font-medium">Duration</th>
-                </tr>
-              </thead>
-              <tbody className="font-mono">
-                {trades.map((trade) => (
-                  <tr key={trade.id} className="border-b border-dark-tertiary hover:bg-dark-bg transition-colors">
-                    <td className="py-2 text-text-secondary">
-                      {formatTime(trade.closedAt || trade.executedAt)}
-                    </td>
-                    <td className="py-2 text-text-primary">
-                      {getStrategyName(trade.strategyId)}
-                    </td>
-                    <td className="py-2 text-text-primary">
-                      {trade.symbol}
-                    </td>
-                    <td className="py-2">
-                      <Badge className={trade.side === 'long' ? 'bg-success text-dark-bg' : 'bg-danger text-white'}>
-                        {trade.side.toUpperCase()}
-                      </Badge>
-                    </td>
-                    <td className="py-2 text-text-primary">
-                      {parseFloat(trade.size).toFixed(4)}
-                    </td>
-                    <td className="py-2 text-text-primary">
-                      ${parseFloat(trade.entryPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="py-2 text-text-primary">
-                      {trade.exitPrice 
-                        ? `$${parseFloat(trade.exitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
-                        : 'Open'
-                      }
-                    </td>
-                    <td className="py-2">
-                      {trade.pnl ? (
-                        <span className={parseFloat(trade.pnl) >= 0 ? 'text-success' : 'text-danger'}>
-                          {parseFloat(trade.pnl) >= 0 ? '+' : ''}
-                          ${parseFloat(trade.pnl).toFixed(2)}
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6 p-4 bg-muted/50 rounded-lg">
+              <div className="text-center">
+                <div className={`text-lg font-semibold ${getPnLColor(totalPnL)}`}>
+                  {formatCurrency(totalPnL)}
+                </div>
+                <div className="text-xs text-muted-foreground">Total P&L</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold">
+                  {formatCurrency(totalFees)}
+                </div>
+                <div className="text-xs text-muted-foreground">Total Fees</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold">
+                  {winRate.toFixed(1)}%
+                </div>
+                <div className="text-xs text-muted-foreground">Win Rate</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold">
+                  {formatCurrency(totalPnL / Math.max(trades.length, 1))}
+                </div>
+                <div className="text-xs text-muted-foreground">Avg P&L</div>
+              </div>
+            </div>
+
+            <ScrollArea className="h-[400px]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Symbol</TableHead>
+                    <TableHead>Side</TableHead>
+                    <TableHead>Size</TableHead>
+                    <TableHead>Price</TableHead>
+                    <TableHead>P&L</TableHead>
+                    <TableHead>Fees</TableHead>
+                    <TableHead>Strategy</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {trades.map((trade) => (
+                    <TableRow key={trade.id}>
+                      <TableCell className="font-medium">
+                        {formatTime(trade.timestamp)}
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-medium">{trade.symbol}</span>
+                      </TableCell>
+                      <TableCell>
+                        {getSideBadge(trade.side)}
+                      </TableCell>
+                      <TableCell>
+                        {trade.size.toFixed(4)}
+                      </TableCell>
+                      <TableCell>
+                        {formatCurrency(trade.price)}
+                      </TableCell>
+                      <TableCell>
+                        <span className={getPnLColor(trade.pnl)}>
+                          {trade.pnl !== undefined && trade.pnl !== null 
+                            ? formatCurrency(trade.pnl)
+                            : '-'
+                          }
                         </span>
-                      ) : (
-                        <span className="text-text-secondary">-</span>
-                      )}
-                    </td>
-                    <td className="py-2 text-text-secondary">
-                      {formatDuration(trade.duration)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {formatCurrency(trade.fees)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {trade.strategy}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </>
         )}
       </CardContent>
     </Card>

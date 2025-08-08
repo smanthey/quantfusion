@@ -1,232 +1,156 @@
-import { apiRequest } from "./queryClient";
+import { apiRequest } from '@/lib/queryClient';
 
-export { apiRequest };
-
-// Trading-specific API functions
-export const tradingApi = {
-  // Dashboard data
-  getDashboardData: () => apiRequest('GET', '/api/dashboard'),
-  
-  // Strategy management
-  getStrategies: () => apiRequest('GET', '/api/strategies'),
-  createStrategy: (data: any) => apiRequest('POST', '/api/strategies', data),
-  updateStrategyStatus: (id: string, status: string) => 
-    apiRequest('PUT', `/api/strategies/${id}/status`, { status }),
-  
-  // Position management
-  getPositions: () => apiRequest('GET', '/api/positions'),
-  
-  // Trading operations
-  startTrading: () => apiRequest('POST', '/api/trading/start'),
-  stopTrading: () => apiRequest('POST', '/api/trading/stop'),
-  emergencyStop: () => apiRequest('POST', '/api/trading/emergency-stop'),
-  
-  // Backtesting
-  runBacktest: (config: {
-    strategyId: string;
-    startDate: string;
-    endDate: string;
-    parameters: any;
-  }) => apiRequest('POST', '/api/backtest', config),
-  getBacktestResults: (strategyId: string) => 
-    apiRequest('GET', `/api/backtest/results/${strategyId}`),
-  
-  // Risk management
-  getRiskMetrics: () => apiRequest('GET', '/api/risk/metrics'),
-  
-  // System alerts
-  getAlerts: () => apiRequest('GET', '/api/alerts'),
-  acknowledgeAlert: (id: string) => 
-    apiRequest('POST', `/api/alerts/${id}/acknowledge`),
-  
-  // Market data
-  getMarketRegime: () => apiRequest('GET', '/api/market/regime'),
-};
-
-// WebSocket message types
-export interface WebSocketMessage {
-  type: string;
-  data?: any;
-  timestamp?: string;
+export interface DashboardData {
+  strategies: StrategyStatus[];
+  positions: PositionData[];
+  recentTrades: TradeData[];
+  systemAlerts: Alert[];
+  performance: PerformanceMetrics;
+  marketData: MarketData;
+  riskMetrics: RiskMetrics;
 }
 
-// Trading signal interface
-export interface TradingSignal {
+export interface StrategyStatus {
+  id: string;
+  name: string;
+  type: string;
+  status: 'running' | 'stopped' | 'paused';
+  allocation: number;
+  pnl: number;
+  trades: number;
+  winRate: number;
+  profitFactor: number;
+  isExploring: boolean;
+}
+
+export interface PositionData {
+  id: string;
   symbol: string;
   side: 'long' | 'short';
-  price: string;
-  confidence: number;
+  size: number;
+  entryPrice: number;
+  currentPrice: number;
+  unrealizedPnl: number;
+  stopPrice?: number;
+  duration: number;
+}
+
+export interface TradeData {
+  id: string;
+  symbol: string;
+  side: 'buy' | 'sell';
+  size: number;
+  price: number;
+  pnl?: number;
+  fees: number;
+  timestamp: number;
   strategy: string;
 }
 
-// Risk metrics interface
-export interface RiskMetrics {
-  dailyPnl: string;
-  dailyRisk: string;
-  maxDrawdown: string;
-  totalExposure: string;
-}
-
-// Backtest configuration interface
-export interface BacktestConfig {
-  strategyId: string;
-  startDate: Date;
-  endDate: Date;
-  parameters: Record<string, any>;
-}
-
-// Strategy performance interface
-export interface StrategyPerformance {
-  profitFactor: number;
-  sharpeRatio: number;
-  maxDrawdown: number;
-  winRate: number;
-  totalTrades: number;
-  totalReturn: number;
-}
-
-// Market regime interface
-export interface MarketRegime {
-  regime: 'trend' | 'chop' | 'off';
-  volatility: number;
-  avgSpread: number;
-  timestamp: string;
-}
-
-// Position interface
-export interface Position {
+export interface Alert {
   id: string;
-  strategyId: string;
-  symbol: string;
-  side: 'long' | 'short';
-  size: string;
-  entryPrice: string;
-  currentPrice?: string;
-  stopPrice?: string;
-  unrealizedPnl: string;
-  status: 'open' | 'closed';
-  openedAt: string;
-  closedAt?: string;
-}
-
-// Trade interface
-export interface Trade {
-  id: string;
-  strategyId: string;
-  positionId?: string;
-  symbol: string;
-  side: 'long' | 'short';
-  size: string;
-  entryPrice: string;
-  exitPrice?: string;
-  pnl?: string;
-  fees: string;
-  duration?: number;
-  executedAt: string;
-  closedAt?: string;
-}
-
-// System alert interface
-export interface SystemAlert {
-  id: string;
-  type: 'info' | 'warning' | 'error' | 'success';
+  type: 'info' | 'warning' | 'error';
   title: string;
   message: string;
+  timestamp: number;
   acknowledged: boolean;
-  createdAt: string;
 }
 
-// Strategy configuration interface
-export interface StrategyConfig {
-  name: string;
-  type: 'mean_reversion' | 'trend_following' | 'breakout';
-  parameters: Record<string, any>;
-  allocation: number;
-  enabled: boolean;
+export interface PerformanceMetrics {
+  totalPnl: number;
+  dailyPnl: number;
+  drawdown: number;
+  winRate: number;
+  profitFactor: number;
+  sharpeRatio: number;
+  totalTrades: number;
+  equity: number[];
 }
 
-// Helper functions for formatting
-export const formatters = {
-  currency: (value: number, precision = 2): string => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: precision,
-      maximumFractionDigits: precision,
-    }).format(value);
-  },
-  
-  percentage: (value: number, precision = 2): string => {
-    return `${(value * 100).toFixed(precision)}%`;
-  },
-  
-  number: (value: number, precision = 4): string => {
-    return value.toFixed(precision);
-  },
-  
-  timestamp: (dateString: string): string => {
-    return new Date(dateString).toLocaleString();
-  },
-  
-  duration: (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = seconds % 60;
-    
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${remainingSeconds}s`;
-    } else {
-      return `${remainingSeconds}s`;
-    }
-  },
-};
+export interface MarketData {
+  BTCUSDT: {
+    price: number;
+    change: number;
+    volume: number;
+    volatility: number;
+  };
+  ETHUSDT: {
+    price: number;
+    change: number;
+    volume: number;
+    volatility: number;
+  };
+  regime: {
+    current: string;
+    strength: number;
+    confidence: number;
+  };
+}
 
-// Constants for trading platform
-export const TRADING_CONSTANTS = {
-  // Risk management defaults
-  DEFAULT_RISK_PER_TRADE: 0.005, // 0.5%
-  MAX_DAILY_LOSS: 0.02, // 2%
-  MAX_DRAWDOWN: 0.1, // 10%
+export interface RiskMetrics {
+  currentDrawdown: number;
+  dailyPnL: number;
+  totalPositionSize: number;
+  riskUtilization: number;
+  isHalted: boolean;
+  circuitBreakers: string[];
+}
+
+export const tradingApi = {
+  getDashboard: (): Promise<DashboardData> => 
+    apiRequest('/api/dashboard'),
   
-  // Strategy types
-  STRATEGY_TYPES: {
-    MEAN_REVERSION: 'mean_reversion',
-    TREND_FOLLOWING: 'trend_following',
-    BREAKOUT: 'breakout',
-  },
+  startTrading: () => 
+    apiRequest('/api/trading/start', { method: 'POST' }),
   
-  // Position sides
-  SIDES: {
-    LONG: 'long',
-    SHORT: 'short',
-  },
+  stopTrading: () => 
+    apiRequest('/api/trading/stop', { method: 'POST' }),
   
-  // Strategy statuses
-  STRATEGY_STATUS: {
-    ACTIVE: 'active',
-    INACTIVE: 'inactive',
-    PAUSED: 'paused',
-  },
+  emergencyStop: () => 
+    apiRequest('/api/trading/emergency-stop', { method: 'POST' }),
   
-  // Market regimes
-  REGIMES: {
-    TREND: 'trend',
-    CHOP: 'chop',
-    OFF: 'off',
-  },
+  updateStrategy: (strategyId: string, data: Partial<StrategyStatus>) =>
+    apiRequest(`/api/strategies/${strategyId}`, { 
+      method: 'PATCH', 
+      body: JSON.stringify(data) 
+    }),
   
-  // WebSocket message types
-  WS_MESSAGE_TYPES: {
-    CONNECTION: 'connection',
-    MARKET_UPDATE: 'market_update',
-    POSITION_UPDATE: 'position_update',
-    TRADE_EXECUTED: 'trade_executed',
-    STRATEGY_STATUS: 'strategy_status_updated',
-    EMERGENCY_STOP: 'emergency_stop',
-    TRADING_STARTED: 'trading_started',
-    TRADING_STOPPED: 'trading_stopped',
-    ALERT: 'alert',
-  },
+  closePosition: (positionId: string) =>
+    apiRequest(`/api/positions/${positionId}/close`, { method: 'POST' }),
+  
+  acknowledgeAlert: (alertId: string) =>
+    apiRequest(`/api/alerts/${alertId}/acknowledge`, { method: 'POST' }),
+  
+  runBacktest: (strategyId: string, params: any) =>
+    apiRequest('/api/backtest', {
+      method: 'POST',
+      body: JSON.stringify({ strategyId, params })
+    }),
+  
+  updateRiskLimits: (limits: Partial<RiskMetrics>) =>
+    apiRequest('/api/risk/limits', {
+      method: 'PATCH',
+      body: JSON.stringify(limits)
+    }),
+  
+  getPerformanceHistory: (timeframe: '1d' | '7d' | '30d') =>
+    apiRequest(`/api/performance/history?timeframe=${timeframe}`),
+  
+  exportTrades: (startDate: string, endDate: string) =>
+    apiRequest(`/api/trades/export?startDate=${startDate}&endDate=${endDate}`),
+  
+  getMarketData: (symbol: string) =>
+    apiRequest(`/api/market-data/${symbol}`),
+  
+  getStrategyMetrics: (strategyId: string) =>
+    apiRequest(`/api/strategies/${strategyId}/metrics`),
+  
+  getAllocations: () =>
+    apiRequest('/api/allocations'),
+  
+  updateAllocations: (allocations: any[]) =>
+    apiRequest('/api/allocations', {
+      method: 'PUT',
+      body: JSON.stringify(allocations)
+    })
 };

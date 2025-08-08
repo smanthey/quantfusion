@@ -1,103 +1,104 @@
-import { useState, useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from '@tanstack/react-query';
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useWebSocket } from "@/hooks/use-websocket";
-import { apiRequest } from "@/lib/trading-api";
-import StrategyPanel from "./strategy-panel";
-import PerformanceMetrics from "./performance-metrics";
-import PositionsPanel from "./positions-panel";
-import EquityChart from "./equity-chart";
-import TradesTable from "./trades-table";
+import { 
+  Play, 
+  Square, 
+  AlertTriangle, 
+  Wifi, 
+  WifiOff, 
+  Activity,
+  DollarSign,
+  TrendingUp,
+  Shield,
+  Settings
+} from "lucide-react";
 
-interface DashboardData {
-  strategies: any[];
-  positions: any[];
-  recentTrades: any[];
-  currentRegime: any;
-  riskMetrics: any;
-  systemAlerts: any[];
-  accountBalance: number;
-  dailyPnl: number;
-}
+import { tradingApi, DashboardData } from "@/lib/trading-api";
+import { StrategyPanel } from "@/components/strategy-panel";
+import { PerformanceMetricsComponent } from "@/components/performance-metrics";
+import { PositionsPanel } from "@/components/positions-panel";
+import { EquityChart } from "@/components/equity-chart";
+import { TradesTable } from "@/components/trades-table";
 
-export default function TradingDashboard() {
-  const [activeTab, setActiveTab] = useState("Dashboard");
+export function TradingDashboard() {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
-  
-  const { data: dashboardData, isLoading, error } = useQuery<DashboardData>({
+  const { data: wsData, isConnected } = useWebSocket('/ws');
+
+  const {
+    data: dashboard,
+    isLoading,
+    error,
+    refetch
+  } = useQuery({
     queryKey: ['/api/dashboard'],
-    refetchInterval: 5000, // Refresh every 5 seconds
+    queryFn: () => tradingApi.getDashboard(),
+    refetchInterval: 5000, // Refetch every 5 seconds
   });
 
-  // WebSocket connection for real-time updates
-  const { isConnected, lastMessage } = useWebSocket('/ws');
-
-  useEffect(() => {
-    if (lastMessage) {
-      try {
-        const message = JSON.parse(lastMessage);
-        
-        switch (message.type) {
-          case 'market_update':
-            queryClient.invalidateQueries({ queryKey: ['/api/dashboard'] });
-            break;
-          case 'emergency_stop':
-            toast({
-              title: "Emergency Stop Activated",
-              description: "All positions have been flattened",
-              variant: "destructive",
-            });
-            break;
-          case 'trading_started':
-            toast({
-              title: "Trading Started",
-              description: "Trading engine is now active",
-            });
-            break;
-          case 'trading_stopped':
-            toast({
-              title: "Trading Stopped",
-              description: "Trading engine has been stopped",
-              variant: "destructive",
-            });
-            break;
-        }
-      } catch (error) {
-        console.error('Error parsing WebSocket message:', error);
+  // Default dashboard data structure for when no data is available
+  const defaultDashboard: DashboardData = {
+    strategies: [],
+    positions: [],
+    recentTrades: [],
+    systemAlerts: [],
+    performance: {
+      totalPnl: 0,
+      dailyPnl: 0,
+      drawdown: 0,
+      winRate: 0,
+      profitFactor: 1.0,
+      sharpeRatio: 0,
+      totalTrades: 0,
+      equity: []
+    },
+    marketData: {
+      BTCUSDT: {
+        price: 45000,
+        change: 0.02,
+        volume: 1250000,
+        volatility: 0.035
+      },
+      ETHUSDT: {
+        price: 2800,
+        change: -0.015,
+        volume: 850000,
+        volatility: 0.042
+      },
+      regime: {
+        current: 'Neutral',
+        strength: 0.6,
+        confidence: 0.75
       }
-    }
-  }, [lastMessage, queryClient, toast]);
-
-  const handleEmergencyStop = async () => {
-    try {
-      await apiRequest('POST', '/api/trading/emergency-stop');
-      toast({
-        title: "Emergency Stop Executed",
-        description: "All positions have been closed immediately",
-        variant: "destructive",
-      });
-    } catch (error) {
-      toast({
-        title: "Emergency Stop Failed",
-        description: "Failed to execute emergency stop",
-        variant: "destructive",
-      });
+    },
+    riskMetrics: {
+      currentDrawdown: 0,
+      dailyPnL: 0,
+      totalPositionSize: 0,
+      riskUtilization: 0.3,
+      isHalted: false,
+      circuitBreakers: []
     }
   };
 
+  const data = dashboard || defaultDashboard;
+
   const handleStartTrading = async () => {
     try {
-      await apiRequest('POST', '/api/trading/start');
+      await tradingApi.startTrading();
       toast({
         title: "Trading Started",
-        description: "Trading engine has been activated",
+        description: "Algorithmic trading engine is now active",
       });
+      refetch();
     } catch (error) {
       toast({
-        title: "Failed to Start Trading",
-        description: "Could not start the trading engine",
+        title: "Error",
+        description: "Failed to start trading engine",
         variant: "destructive",
       });
     }
@@ -105,158 +106,284 @@ export default function TradingDashboard() {
 
   const handleStopTrading = async () => {
     try {
-      await apiRequest('POST', '/api/trading/stop');
+      await tradingApi.stopTrading();
       toast({
-        title: "Trading Stopped",
-        description: "Trading engine has been stopped",
+        title: "Trading Stopped", 
+        description: "Algorithmic trading engine has been stopped",
       });
+      refetch();
     } catch (error) {
       toast({
-        title: "Failed to Stop Trading",
-        description: "Could not stop the trading engine",
+        title: "Error",
+        description: "Failed to stop trading engine",
         variant: "destructive",
       });
     }
   };
 
+  const handleEmergencyStop = async () => {
+    try {
+      await tradingApi.emergencyStop();
+      toast({
+        title: "Emergency Stop Activated",
+        description: "All positions closed and trading halted",
+        variant: "destructive",
+      });
+      refetch();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to execute emergency stop",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleToggleStrategy = async (id: string, running: boolean) => {
+    try {
+      await tradingApi.updateStrategy(id, { 
+        status: running ? 'running' : 'stopped' 
+      });
+      toast({
+        title: running ? "Strategy Started" : "Strategy Stopped",
+        description: `Strategy has been ${running ? 'activated' : 'deactivated'}`,
+      });
+      refetch();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update strategy status",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleConfigureStrategy = (id: string) => {
+    toast({
+      title: "Strategy Configuration",
+      description: "Strategy configuration panel coming soon",
+    });
+  };
+
+  const handleClosePosition = async (id: string) => {
+    try {
+      await tradingApi.closePosition(id);
+      toast({
+        title: "Position Closed",
+        description: "Position has been successfully closed",
+      });
+      refetch();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to close position",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleExportTrades = () => {
+    toast({
+      title: "Export Trades",
+      description: "Trade export functionality coming soon",
+    });
+  };
+
+  const getRegimeBadge = (regime: string, confidence: number) => {
+    const color = regime === 'Bullish' ? 'green' : 
+                 regime === 'Bearish' ? 'red' : 'yellow';
+    return (
+      <Badge className={`bg-${color}-100 text-${color}-800 dark:bg-${color}-900 dark:text-${color}-200`}>
+        {regime} ({(confidence * 100).toFixed(0)}%)
+      </Badge>
+    );
+  };
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-dark-bg flex items-center justify-center">
-        <div className="text-text-primary">Loading dashboard...</div>
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <Activity className="h-8 w-8 animate-spin mx-auto mb-2" />
+          <p className="text-muted-foreground">Loading trading dashboard...</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-dark-bg flex items-center justify-center">
-        <div className="text-danger">Error loading dashboard data</div>
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertTriangle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+          <p className="text-muted-foreground">Failed to load dashboard data</p>
+          <Button onClick={() => refetch()} className="mt-2">Try Again</Button>
+        </div>
       </div>
     );
   }
 
-  const tabs = ["Dashboard", "Strategies", "Backtesting", "Risk Management", "Live Trading", "Analytics"];
-
   return (
-    <div className="min-h-screen bg-dark-bg text-text-primary">
-      {/* Header */}
-      <header className="bg-dark-secondary border-b border-dark-tertiary px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <i className="fas fa-chart-line text-success text-xl"></i>
-              <h1 className="text-xl font-bold">AutoQuant</h1>
-            </div>
-            <div className="text-sm text-text-secondary">
-              <span className={`px-2 py-1 rounded text-xs font-medium ${
-                isConnected ? 'bg-success text-dark-bg' : 'bg-danger text-white'
-              }`}>
-                {isConnected ? 'LIVE' : 'OFFLINE'}
-              </span>
-              <span className="ml-2">
-                {isConnected ? 'Connected to Exchange' : 'Connection Lost'}
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center space-x-4">
-            <div className="text-sm">
-              <span className="text-text-secondary">Account:</span>
-              <span className="font-mono">
-                ${dashboardData?.accountBalance?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '0.00'}
-              </span>
-            </div>
-            <div className="text-sm">
-              <span className="text-text-secondary">Daily PnL:</span>
-              <span className={`font-mono ${
-                (dashboardData?.dailyPnl || 0) >= 0 ? 'text-success' : 'text-danger'
-              }`}>
-                {(dashboardData?.dailyPnl || 0) >= 0 ? '+' : ''}
-                ${dashboardData?.dailyPnl?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '0.00'}
-              </span>
-            </div>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleEmergencyStop}
-              className="bg-danger hover:bg-red-700 text-white"
-            >
-              <i className="fas fa-stop mr-2"></i>
-              Emergency Stop
-            </Button>
-          </div>
+    <div className="space-y-6">
+      {/* Header Controls */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold">Trading Dashboard</h1>
+          <p className="text-muted-foreground">
+            Real-time algorithmic trading system with multi-strategy execution
+          </p>
         </div>
-      </header>
-
-      {/* Navigation Tabs */}
-      <nav className="bg-dark-secondary border-b border-dark-tertiary">
-        <div className="px-6">
-          <div className="flex space-x-0">
-            {tabs.map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab
-                    ? 'border-success text-success'
-                    : 'border-transparent text-text-secondary hover:text-text-primary'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
+        
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-sm">
+            {isConnected ? (
+              <>
+                <Wifi className="h-4 w-4 text-green-500" />
+                <span className="text-green-500">Connected</span>
+              </>
+            ) : (
+              <>
+                <WifiOff className="h-4 w-4 text-red-500" />
+                <span className="text-red-500">Disconnected</span>
+              </>
+            )}
           </div>
-        </div>
-      </nav>
-
-      {/* Main Dashboard Content */}
-      <div className="flex h-[calc(100vh-120px)]">
-        {/* Left Panel - Strategy Overview */}
-        <div className="w-80 bg-dark-secondary border-r border-dark-tertiary overflow-y-auto">
-          <StrategyPanel 
-            strategies={dashboardData?.strategies || []}
-            currentRegime={dashboardData?.currentRegime}
-            riskMetrics={dashboardData?.riskMetrics}
-            onStartTrading={handleStartTrading}
-            onStopTrading={handleStopTrading}
-          />
-        </div>
-
-        {/* Center Panel - Main Content */}
-        <div className="flex-1 p-6 overflow-y-auto">
-          <PerformanceMetrics 
-            strategies={dashboardData?.strategies || []}
-            accountBalance={dashboardData?.accountBalance || 0}
-            dailyPnl={dashboardData?.dailyPnl || 0}
-          />
           
-          <EquityChart />
+          <Button onClick={handleStartTrading} className="bg-green-600 hover:bg-green-700">
+            <Play className="h-4 w-4 mr-2" />
+            Start Trading
+          </Button>
           
-          <TradesTable trades={dashboardData?.recentTrades || []} />
-        </div>
-
-        {/* Right Panel - Live Positions & Alerts */}
-        <div className="w-80 bg-dark-secondary border-l border-dark-tertiary overflow-y-auto">
-          <PositionsPanel 
-            positions={dashboardData?.positions || []}
-            alerts={dashboardData?.systemAlerts || []}
-          />
+          <Button onClick={handleStopTrading} variant="secondary">
+            <Square className="h-4 w-4 mr-2" />
+            Stop Trading
+          </Button>
+          
+          <Button onClick={handleEmergencyStop} variant="destructive">
+            <AlertTriangle className="h-4 w-4 mr-2" />
+            Emergency Stop
+          </Button>
         </div>
       </div>
 
-      {/* Footer Status Bar */}
-      <footer className="bg-dark-secondary border-t border-dark-tertiary px-6 py-2">
-        <div className="flex justify-between items-center text-xs text-text-secondary">
-          <div className="flex space-x-4">
-            <span>Latency: <span className="font-mono text-success">12ms</span></span>
-            <span>Fill Ratio: <span className="font-mono text-success">98.7%</span></span>
-            <span>Maker/Taker: <span className="font-mono">73%/27%</span></span>
-          </div>
-          <div className="flex space-x-4">
-            <span>Last Update: <span className="font-mono">{new Date().toLocaleTimeString()} UTC</span></span>
-            <span>Version: <span className="font-mono">v2.1.4</span></span>
-          </div>
-        </div>
-      </footer>
+      {/* System Alerts */}
+      {data.systemAlerts.length > 0 && (
+        <Card className="border-orange-200 dark:border-orange-800">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-orange-800 dark:text-orange-200">
+              <AlertTriangle className="h-5 w-5" />
+              System Alerts ({data.systemAlerts.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {data.systemAlerts.slice(0, 3).map((alert) => (
+                <div key={alert.id} className="flex items-center justify-between p-3 bg-orange-50 dark:bg-orange-950 rounded-lg">
+                  <div>
+                    <p className="font-medium">{alert.title}</p>
+                    <p className="text-sm text-muted-foreground">{alert.message}</p>
+                  </div>
+                  <Badge variant={alert.type === 'error' ? 'destructive' : 'secondary'}>
+                    {alert.type}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Market Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">BTC/USDT</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              ${data.marketData.BTCUSDT.price.toLocaleString()}
+            </div>
+            <p className={`text-xs ${data.marketData.BTCUSDT.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {data.marketData.BTCUSDT.change >= 0 ? '+' : ''}{(data.marketData.BTCUSDT.change * 100).toFixed(2)}% 24h
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">ETH/USDT</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              ${data.marketData.ETHUSDT.price.toLocaleString()}
+            </div>
+            <p className={`text-xs ${data.marketData.ETHUSDT.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {data.marketData.ETHUSDT.change >= 0 ? '+' : ''}{(data.marketData.ETHUSDT.change * 100).toFixed(2)}% 24h
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Market Regime</CardTitle>
+            <Shield className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold mb-2">
+              {getRegimeBadge(data.marketData.regime.current, data.marketData.regime.confidence)}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Strength: {(data.marketData.regime.strength * 100).toFixed(0)}%
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Performance Metrics */}
+      <PerformanceMetricsComponent 
+        performance={data.performance}
+        riskMetrics={data.riskMetrics}
+      />
+
+      {/* Main Content Tabs */}
+      <Tabs defaultValue="strategies" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="strategies">Strategies</TabsTrigger>
+          <TabsTrigger value="positions">Positions</TabsTrigger>
+          <TabsTrigger value="performance">Performance</TabsTrigger>
+          <TabsTrigger value="trades">Trades</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="strategies" className="space-y-4">
+          <StrategyPanel
+            strategies={data.strategies}
+            onToggleStrategy={handleToggleStrategy}
+            onConfigureStrategy={handleConfigureStrategy}
+          />
+        </TabsContent>
+        
+        <TabsContent value="positions" className="space-y-4">
+          <PositionsPanel
+            positions={data.positions}
+            onClosePosition={handleClosePosition}
+          />
+        </TabsContent>
+        
+        <TabsContent value="performance" className="space-y-4">
+          <EquityChart
+            equity={data.performance.equity}
+            timeframe="1d"
+          />
+        </TabsContent>
+        
+        <TabsContent value="trades" className="space-y-4">
+          <TradesTable
+            trades={data.recentTrades}
+            onExportTrades={handleExportTrades}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

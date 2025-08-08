@@ -31,7 +31,7 @@ export class TradingEngine {
         await this.tradingLoop();
       } catch (error) {
         console.error("Trading loop error:", error);
-        await this.createAlert("error", "Trading Loop Error", error.message);
+        await this.createAlert("error", "Trading Loop Error", error instanceof Error ? error.message : String(error));
       }
     }, 1000); // Run every second
   }
@@ -70,7 +70,7 @@ export class TradingEngine {
         await this.processStrategy(strategy);
       } catch (error) {
         console.error(`Error processing strategy ${strategy.name}:`, error);
-        await this.createAlert("warning", "Strategy Error", `Error in ${strategy.name}: ${error.message}`);
+        await this.createAlert("warning", "Strategy Error", `Error in ${strategy.name}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
 
@@ -98,7 +98,7 @@ export class TradingEngine {
       } catch (error) {
         console.error(`Failed to execute trade for ${strategy.name}:`, error);
         await this.createAlert("error", "Trade Execution Failed", 
-          `Failed to execute ${signal.side} ${signal.symbol}: ${error.message}`);
+          `Failed to execute ${signal.side} ${signal.symbol}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
   }

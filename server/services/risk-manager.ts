@@ -1,203 +1,241 @@
-import { Position, Strategy } from "@shared/schema";
-import { storage } from "../storage";
+import { marketDataService } from './market-data';
 
-interface RiskConstraints {
-  canTrade: boolean;
-  reason?: string;
+export interface RiskLimits {
+  maxPositionSize: number;
+  maxDailyLoss: number;
+  maxDrawdown: number;
+  perTradeRisk: number;
+  exploreBudget: number;
+}
+
+export interface RiskMetrics {
+  currentDrawdown: number;
+  dailyPnL: number;
+  totalPositionSize: number;
+  riskUtilization: number;
+  isHalted: boolean;
+  circuitBreakers: string[];
+}
+
+export interface Trade {
+  symbol: string;
+  side: 'buy' | 'sell';
+  size: number;
+  price: number;
+  timestamp: number;
+  pnl?: number;
 }
 
 export class RiskManager {
-  private perTradeRiskPct = 0.5; // 0.5% per trade
-  private maxDailyLossPct = 2.0; // 2% max daily loss
-  private maxDrawdownPct = 10.0; // 10% max drawdown
-  private kellyCap = 0.5; // Cap Kelly fraction at 50%
+  private limits: RiskLimits = {
+    maxPositionSize: 10000,
+    maxDailyLoss: 500,
+    maxDrawdown: 2000,
+    perTradeRisk: 100,
+    exploreBudget: 200
+  };
 
-  async checkConstraints(): Promise<RiskConstraints> {
-    try {
-      // Check daily loss limit
-      const dailyPnl = await this.getDailyPnl();
-      const accountBalance = await this.getAccountBalance();
-      
-      if (dailyPnl <= -(accountBalance * this.maxDailyLossPct / 100)) {
-        return {
-          canTrade: false,
-          reason: 'Daily loss limit exceeded'
-        };
-      }
+  private isTradeHalted = false;
+  private dailyStartEquity = 10000;
+  private currentEquity = 10000;
+  private peakEquity = 10000;
+  private todaysStart = new Date().toDateString();
+  private trades: Trade[] = [];
 
-      // Check maximum drawdown
-      const currentDrawdown = await this.getCurrentDrawdown();
-      if (currentDrawdown >= this.maxDrawdownPct) {
-        return {
-          canTrade: false,
-          reason: 'Maximum drawdown exceeded'
-        };
-      }
-
-      // Check market conditions (regime)
-      const regime = await storage.getCurrentRegime();
-      if (regime && regime.regime === 'off') {
-        return {
-          canTrade: false,
-          reason: 'Market regime not suitable for trading'
-        };
-      }
-
-      return { canTrade: true };
-    } catch (error) {
-      console.error('Risk constraint check error:', error);
-      return {
-        canTrade: false,
-        reason: 'Risk check failed due to system error'
-      };
+  constructor(limits?: Partial<RiskLimits>) {
+    if (limits) {
+      this.limits = { ...this.limits, ...limits };
     }
   }
 
-  async canExecuteTrade(signal: any): Promise<boolean> {
-    // Check overall risk constraints first
-    const constraints = await this.checkConstraints();
-    if (!constraints.canTrade) {
-      return false;
+  validateTrade(trade: Partial<Trade>): { valid: boolean; reason?: string } {
+    if (this.isTradeHalted) {
+      return { valid: false, reason: 'Trading is currently halted due to risk limits' };
     }
 
-    // Check if we already have a position in this symbol
-    const existingPosition = await storage.getPositionBySymbol(signal.symbol);
-    if (existingPosition && existingPosition.status === 'open') {
-      return false; // Don't open multiple positions in same symbol
+    const metrics = this.getCurrentMetrics();
+
+    // Check daily loss limit
+    if (metrics.dailyPnL <= -this.limits.maxDailyLoss) {
+      this.haltTrading('Daily loss limit exceeded');
+      return { valid: false, reason: 'Daily loss limit exceeded' };
     }
 
-    // Check total exposure
-    const currentExposure = await this.getTotalExposure();
-    const accountBalance = await this.getAccountBalance();
-    const maxExposure = accountBalance * 0.8; // Max 80% exposure
+    // Check max drawdown
+    if (metrics.currentDrawdown >= this.limits.maxDrawdown) {
+      this.haltTrading('Maximum drawdown exceeded');
+      return { valid: false, reason: 'Maximum drawdown exceeded' };
+    }
+
+    // Check position size
+    if (trade.size && trade.size > this.limits.maxPositionSize) {
+      return { valid: false, reason: 'Position size exceeds maximum allowed' };
+    }
+
+    // Check per-trade risk
+    if (trade.size && trade.price) {
+      const tradeValue = trade.size * trade.price;
+      if (tradeValue > this.limits.perTradeRisk) {
+        return { valid: false, reason: 'Trade value exceeds per-trade risk limit' };
+      }
+    }
+
+    return { valid: true };
+  }
+
+  recordTrade(trade: Trade) {
+    this.trades.push(trade);
     
-    if (currentExposure >= maxExposure) {
-      return false;
+    // Update equity if PnL is provided
+    if (trade.pnl !== undefined) {
+      this.currentEquity += trade.pnl;
+      this.peakEquity = Math.max(this.peakEquity, this.currentEquity);
     }
 
-    return true;
-  }
-
-  async calculatePositionSize(signal: any): Promise<number> {
-    try {
-      const accountBalance = await this.getAccountBalance();
-      const riskAmount = accountBalance * (this.perTradeRiskPct / 100);
-      
-      // Calculate position size based on stop distance
-      const currentPrice = parseFloat(signal.price || '0');
-      const stopDistance = currentPrice * 0.02; // 2% stop loss
-      
-      if (stopDistance <= 0) {
-        return 0;
-      }
-      
-      const positionSize = riskAmount / stopDistance;
-      
-      // Apply Kelly criterion cap
-      const kellyCappedSize = Math.min(positionSize, accountBalance * this.kellyCap / currentPrice);
-      
-      return Math.max(0, kellyCappedSize);
-    } catch (error) {
-      console.error('Position size calculation error:', error);
-      return 0;
+    // Reset daily tracking if new day
+    const today = new Date().toDateString();
+    if (today !== this.todaysStart) {
+      this.todaysStart = today;
+      this.dailyStartEquity = this.currentEquity;
     }
   }
 
-  async flattenAllPositions(): Promise<void> {
-    try {
-      const openPositions = await storage.getOpenPositions();
-      
-      for (const position of openPositions) {
-        await this.closePositionImmediately(position);
-      }
-      
-      await storage.createSystemAlert({
-        type: 'warning',
-        title: 'All Positions Flattened',
-        message: `Emergency stop: ${openPositions.length} positions closed`,
-        acknowledged: false
-      });
-      
-    } catch (error) {
-      console.error('Error flattening positions:', error);
-      throw error;
+  getCurrentMetrics(): RiskMetrics {
+    const today = new Date().toDateString();
+    if (today !== this.todaysStart) {
+      this.todaysStart = today;
+      this.dailyStartEquity = this.currentEquity;
     }
-  }
 
-  async calculateMetrics(): Promise<any> {
-    try {
-      const accountBalance = await this.getAccountBalance();
-      const dailyPnl = await this.getDailyPnl();
-      const currentDrawdown = await this.getCurrentDrawdown();
-      const totalExposure = await this.getTotalExposure();
-      
-      return {
-        dailyPnl: dailyPnl.toString(),
-        dailyRisk: (Math.abs(dailyPnl / accountBalance) * 100).toFixed(2),
-        maxDrawdown: currentDrawdown.toFixed(2),
-        totalExposure: totalExposure.toString()
-      };
-    } catch (error) {
-      console.error('Risk metrics calculation error:', error);
-      return {
-        dailyPnl: '0',
-        dailyRisk: '0',
-        maxDrawdown: '0',
-        totalExposure: '0'
-      };
-    }
-  }
-
-  private async getDailyPnl(): Promise<number> {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const dailyPnL = this.currentEquity - this.dailyStartEquity;
+    const currentDrawdown = this.peakEquity - this.currentEquity;
     
-    const trades = await storage.getTradesSince(today);
-    return trades.reduce((total, trade) => {
-      return total + parseFloat(trade.pnl || '0');
-    }, 0);
+    const totalPositionSize = this.trades
+      .filter(t => Date.now() - t.timestamp < 24 * 60 * 60 * 1000) // Last 24 hours
+      .reduce((sum, t) => sum + (t.size * t.price), 0);
+
+    const riskUtilization = Math.max(
+      Math.abs(dailyPnL) / this.limits.maxDailyLoss,
+      currentDrawdown / this.limits.maxDrawdown,
+      totalPositionSize / (this.limits.maxPositionSize * 5) // Allow 5 max positions
+    );
+
+    const circuitBreakers = [];
+    if (dailyPnL <= -this.limits.maxDailyLoss * 0.8) {
+      circuitBreakers.push('Daily loss warning');
+    }
+    if (currentDrawdown >= this.limits.maxDrawdown * 0.8) {
+      circuitBreakers.push('Drawdown warning');
+    }
+
+    return {
+      currentDrawdown,
+      dailyPnL,
+      totalPositionSize,
+      riskUtilization,
+      isHalted: this.isTradeHalted,
+      circuitBreakers
+    };
   }
 
-  private async getAccountBalance(): Promise<number> {
-    // Mock account balance - in production this would come from exchange API
-    return 124567.89;
+  haltTrading(reason: string) {
+    this.isTradeHalted = true;
+    console.log(`Trading halted: ${reason}`);
   }
 
-  private async getCurrentDrawdown(): Promise<number> {
-    // Calculate drawdown from peak equity
-    // Mock implementation - in production this would track actual equity peaks
-    const accountBalance = await this.getAccountBalance();
-    const recentPeak = 130000; // Mock recent peak
+  resumeTrading() {
+    this.isTradeHalted = false;
+    console.log('Trading resumed');
+  }
+
+  calculatePositionSize(symbol: string, riskAmount: number): number {
+    const price = marketDataService.getCurrentPrice(symbol);
+    const volatility = marketDataService.getVolatility(symbol);
     
-    return ((recentPeak - accountBalance) / recentPeak) * 100;
+    if (!price || !volatility) return 0;
+
+    // Simple position sizing based on volatility
+    const atrStop = price * volatility * 0.02; // 2% of daily volatility
+    const positionSize = Math.min(
+      riskAmount / atrStop,
+      this.limits.maxPositionSize
+    );
+
+    return Math.max(0, positionSize);
   }
 
-  private async getTotalExposure(): Promise<number> {
-    const positions = await storage.getOpenPositions();
-    return positions.reduce((total, position) => {
-      const notional = parseFloat(position.size) * parseFloat(position.currentPrice || position.entryPrice);
-      return total + Math.abs(notional);
-    }, 0);
+  getStopLoss(symbol: string, side: 'buy' | 'sell', entryPrice: number): number {
+    const volatility = marketDataService.getVolatility(symbol);
+    const atr = entryPrice * volatility * 0.02;
+
+    if (side === 'buy') {
+      return entryPrice - atr * 2; // 2x ATR stop
+    } else {
+      return entryPrice + atr * 2;
+    }
   }
 
-  private async closePositionImmediately(position: Position): Promise<void> {
-    // In production, this would place market orders to close positions
-    // For now, we'll just update the database
-    await storage.updatePositionStatus(position.id, 'closed');
+  checkCircuitBreakers(): { triggered: boolean; reasons: string[] } {
+    const metrics = this.getCurrentMetrics();
+    const reasons = [];
+
+    // Check for sudden equity drops
+    const recentTrades = this.trades.filter(t => Date.now() - t.timestamp < 60000); // Last minute
+    const recentPnL = recentTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
     
-    // Create closing trade record
-    const pnl = parseFloat(position.unrealizedPnl || '0');
-    await storage.createTrade({
-      strategyId: position.strategyId,
-      positionId: position.id,
-      symbol: position.symbol,
-      side: position.side === 'long' ? 'short' : 'long',
-      size: position.size,
-      entryPrice: position.entryPrice,
-      exitPrice: position.currentPrice || position.entryPrice,
-      pnl: pnl.toString(),
-      fees: '0',
-      duration: Math.floor((Date.now() - new Date(position.openedAt || '').getTime()) / 1000)
-    });
+    if (recentPnL < -this.limits.perTradeRisk * 2) {
+      reasons.push('Rapid loss detected');
+    }
+
+    // Check for latency spikes (simplified)
+    const now = Date.now();
+    const latencyCheck = now % 1000 > 900; // Simulate occasional latency
+    if (latencyCheck) {
+      reasons.push('High latency detected');
+    }
+
+    if (reasons.length > 0) {
+      this.haltTrading(reasons.join(', '));
+      return { triggered: true, reasons };
+    }
+
+    return { triggered: false, reasons: [] };
+  }
+
+  getLimits(): RiskLimits {
+    return { ...this.limits };
+  }
+
+  updateLimits(newLimits: Partial<RiskLimits>) {
+    this.limits = { ...this.limits, ...newLimits };
+  }
+
+  getRecentTrades(hours = 24): Trade[] {
+    const cutoff = Date.now() - (hours * 60 * 60 * 1000);
+    return this.trades.filter(t => t.timestamp > cutoff);
+  }
+
+  reset() {
+    this.isTradeHalted = false;
+    this.currentEquity = 10000;
+    this.peakEquity = 10000;
+    this.dailyStartEquity = 10000;
+    this.trades = [];
+    this.todaysStart = new Date().toDateString();
+  }
+
+  async calculateMetrics(): Promise<Omit<import('@shared/schema').RiskMetric, 'id' | 'timestamp'>> {
+    const metrics = this.getCurrentMetrics();
+    
+    return {
+      currentDrawdown: metrics.currentDrawdown,
+      dailyPnL: metrics.dailyPnL,
+      totalPositionSize: metrics.totalPositionSize,
+      riskUtilization: metrics.riskUtilization,
+      isHalted: metrics.isHalted,
+      circuitBreakers: metrics.circuitBreakers
+    };
   }
 }
+
+export const riskManager = new RiskManager();

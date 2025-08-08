@@ -1,204 +1,117 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-
-interface Strategy {
-  id: string;
-  name: string;
-  type: string;
-  status: string;
-  allocation: string;
-  profitFactor: string | null;
-  maxDrawdown: string | null;
-  winRate: string | null;
-  totalTrades: number;
-}
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Play, Pause, Settings, TrendingUp, TrendingDown } from "lucide-react";
+import { StrategyStatus } from "@/lib/trading-api";
 
 interface StrategyPanelProps {
-  strategies: Strategy[];
-  currentRegime: any;
-  riskMetrics: any;
-  onStartTrading: () => void;
-  onStopTrading: () => void;
+  strategies: StrategyStatus[];
+  onToggleStrategy: (id: string, running: boolean) => void;
+  onConfigureStrategy: (id: string) => void;
 }
 
-export default function StrategyPanel({ 
-  strategies, 
-  currentRegime, 
-  riskMetrics,
-  onStartTrading,
-  onStopTrading 
-}: StrategyPanelProps) {
-  const getStatusColor = (status: string) => {
+export function StrategyPanel({ strategies, onToggleStrategy, onConfigureStrategy }: StrategyPanelProps) {
+  const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'active': return 'bg-success text-dark-bg';
-      case 'paused': return 'bg-warning text-dark-bg';
-      case 'inactive': return 'bg-text-secondary text-white';
-      default: return 'bg-text-secondary text-white';
+      case 'running':
+        return <Badge className="bg-green-500 text-white">Running</Badge>;
+      case 'paused':
+        return <Badge className="bg-yellow-500 text-white">Paused</Badge>;
+      case 'stopped':
+        return <Badge className="bg-gray-500 text-white">Stopped</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
-  const getRegimeColor = (regime: string) => {
-    switch (regime) {
-      case 'trend': return 'bg-success text-dark-bg';
-      case 'chop': return 'bg-warning text-dark-bg';
-      case 'off': return 'bg-danger text-white';
-      default: return 'bg-text-secondary text-white';
-    }
+  const formatPnL = (pnl: number) => {
+    const isPositive = pnl >= 0;
+    return (
+      <span className={isPositive ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
+        {isPositive ? "+" : ""}{pnl.toFixed(2)}
+      </span>
+    );
   };
 
   return (
-    <div className="p-4 space-y-4">
-      {/* Market Regime */}
-      <Card className="bg-dark-bg border-dark-tertiary">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center">
-            <i className="fas fa-brain text-info mr-2"></i>
-            Market Regime
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <div className="flex justify-between items-center">
-            <span className="text-text-secondary text-sm">Current Regime:</span>
-            <Badge className={getRegimeColor(currentRegime?.regime || 'off')}>
-              {(currentRegime?.regime || 'OFF').toUpperCase()}
-            </Badge>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-text-secondary text-sm">Volatility:</span>
-            <span className="font-mono text-sm">
-              {currentRegime?.volatility ? (parseFloat(currentRegime.volatility) * 100).toFixed(2) + '%' : '0.00%'}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-text-secondary text-sm">Spread (avg):</span>
-            <span className="font-mono text-sm">
-              {currentRegime?.avgSpread ? parseFloat(currentRegime.avgSpread).toFixed(1) + ' bps' : '0.0 bps'}
-            </span>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Active Strategies */}
-      <Card className="bg-dark-bg border-dark-tertiary">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center">
-            <i className="fas fa-cogs text-warning mr-2"></i>
-            Active Strategies
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Settings className="h-5 w-5" />
+          Active Strategies
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
           {strategies.length === 0 ? (
-            <div className="text-text-secondary text-sm text-center py-4">
-              No strategies configured
-            </div>
+            <p className="text-muted-foreground text-center py-4">
+              No active strategies configured
+            </p>
           ) : (
             strategies.map((strategy) => (
-              <div key={strategy.id} className="border border-dark-tertiary rounded p-3">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="font-medium text-sm">{strategy.name}</span>
-                  <div className="flex items-center space-x-2">
-                    <Badge className={getStatusColor(strategy.status)}>
-                      {strategy.status.toUpperCase()}
-                    </Badge>
-                    <span className="font-mono text-xs">
-                      {(parseFloat(strategy.allocation || '0') * 100).toFixed(0)}%
-                    </span>
+              <div
+                key={strategy.id}
+                className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors"
+              >
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-center gap-3">
+                    <h3 className="font-medium">{strategy.name}</h3>
+                    {getStatusBadge(strategy.status)}
+                    {strategy.isExploring && (
+                      <Badge variant="outline" className="text-xs">
+                        Exploring
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">PnL:</span>
+                      <div className="font-medium">{formatPnL(strategy.pnl)}</div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Allocation:</span>
+                      <div className="font-medium">{(strategy.allocation * 100).toFixed(1)}%</div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Win Rate:</span>
+                      <div className="font-medium">{(strategy.winRate * 100).toFixed(1)}%</div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">PF:</span>
+                      <div className="font-medium">{strategy.profitFactor.toFixed(2)}</div>
+                    </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs text-text-secondary">
-                  <div>
-                    PF: <span className="font-mono text-text-primary">
-                      {strategy.profitFactor ? parseFloat(strategy.profitFactor).toFixed(2) : 'N/A'}
-                    </span>
-                  </div>
-                  <div>
-                    DD: <span className={`font-mono ${
-                      strategy.maxDrawdown && parseFloat(strategy.maxDrawdown) > 0 ? 'text-danger' : 'text-text-primary'
-                    }`}>
-                      {strategy.maxDrawdown ? '-' + (parseFloat(strategy.maxDrawdown) * 100).toFixed(1) + '%' : 'N/A'}
-                    </span>
-                  </div>
-                  <div>
-                    Trades: <span className="font-mono text-text-primary">
-                      {strategy.totalTrades}
-                    </span>
-                  </div>
-                  <div>
-                    Win%: <span className="font-mono text-text-primary">
-                      {strategy.winRate ? (parseFloat(strategy.winRate) * 100).toFixed(1) + '%' : 'N/A'}
-                    </span>
-                  </div>
+
+                <div className="flex items-center gap-3 ml-4">
+                  <Switch
+                    checked={strategy.status === 'running'}
+                    onCheckedChange={(checked) => onToggleStrategy(strategy.id, checked)}
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onConfigureStrategy(strategy.id)}
+                  >
+                    <Settings className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             ))
           )}
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Risk Status */}
-      <Card className="bg-dark-bg border-dark-tertiary">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center">
-            <i className="fas fa-shield-alt text-danger mr-2"></i>
-            Risk Status
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div>
-            <div className="flex justify-between items-center mb-1">
-              <span className="text-text-secondary text-sm">Daily Risk:</span>
-              <span className="font-mono text-sm">
-                {riskMetrics?.dailyRisk || '0.0'}% / 2.0%
-              </span>
-            </div>
-            <Progress 
-              value={parseFloat(riskMetrics?.dailyRisk || '0') * 50} 
-              className="h-2"
-            />
+        <div className="mt-6 p-4 bg-muted/50 rounded-lg">
+          <h4 className="font-medium mb-2">Strategy Types:</h4>
+          <div className="text-sm text-muted-foreground space-y-1">
+            <div>• <strong>Mean Reversion:</strong> Trades against price extremes using Bollinger Bands</div>
+            <div>• <strong>Trend Following:</strong> Follows market momentum using moving averages</div>
+            <div>• <strong>Breakout:</strong> Captures breakouts from consolidation ranges using ATR</div>
           </div>
-          <div>
-            <div className="flex justify-between items-center mb-1">
-              <span className="text-text-secondary text-sm">Max Drawdown:</span>
-              <span className="font-mono text-sm">
-                {riskMetrics?.maxDrawdown || '0.0'}% / 10%
-              </span>
-            </div>
-            <Progress 
-              value={parseFloat(riskMetrics?.maxDrawdown || '0')} 
-              className="h-2"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Trading Controls */}
-      <Card className="bg-dark-bg border-dark-tertiary">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center">
-            <i className="fas fa-play text-success mr-2"></i>
-            Trading Controls
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <Button
-            onClick={onStartTrading}
-            className="w-full bg-success hover:bg-green-600 text-dark-bg font-medium"
-          >
-            <i className="fas fa-play mr-2"></i>
-            Start Trading
-          </Button>
-          <Button
-            onClick={onStopTrading}
-            variant="outline"
-            className="w-full border-text-secondary text-text-primary hover:bg-dark-tertiary"
-          >
-            <i className="fas fa-pause mr-2"></i>
-            Stop Trading
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

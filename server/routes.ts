@@ -21,12 +21,12 @@ import { BacktestEngine } from "./services/backtest-engine";
 import { MarketDataService } from "./services/market-data";
 
 // Initialize trading services
-const tradingEngine = new TradingEngine();
-const regimeDetector = new RegimeDetector();
-const metaAllocator = new MetaAllocator();
-const riskManager = new RiskManager();
-const backtestEngine = new BacktestEngine();
 const marketData = new MarketDataService();
+const tradingEngine = new TradingEngine(marketData);
+const regimeDetector = new RegimeDetector(marketData);
+const metaAllocator = new MetaAllocator();
+const riskManager = new RiskManager(marketData);
+const backtestEngine = new BacktestEngine();
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);

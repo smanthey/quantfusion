@@ -7,15 +7,16 @@ export class RegimeDetector {
   private spreadThreshold = 6; // basis points
   private rangeNorm = 0.012;
 
-  constructor() {
-    this.marketData = new MarketDataService();
+  constructor(marketDataService?: MarketDataService) {
+    this.marketData = marketDataService || new MarketDataService();
   }
 
   async detect(): Promise<Omit<MarketRegime, 'id' | 'timestamp'>> {
     try {
       // Get recent market data
-      const candles = await this.marketData.getRecentCandles('BTCUSDT', this.volLookback);
-      const currentSpread = await this.marketData.getCurrentSpread('BTCUSDT');
+      const candles = this.marketData.getCandles('BTCUSDT');
+      const marketData = this.marketData.getMarketData('BTCUSDT');
+      const currentSpread = marketData ? marketData.spread : 0;
       
       // Calculate volatility proxy using normalized high-low range
       const volatility = this.calculateVolatility(candles);
@@ -33,16 +34,16 @@ export class RegimeDetector {
 
       return {
         regime,
-        volatility,
-        avgSpread: currentSpread
+        volatility: volatility.toString(),
+        avgSpread: currentSpread.toString()
       };
     } catch (error) {
       console.error('Regime detection error:', error);
       // Default to safe regime
       return {
         regime: 'off',
-        volatility: 0,
-        avgSpread: 999
+        volatility: '0',
+        avgSpread: '999'
       };
     }
   }

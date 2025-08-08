@@ -1,97 +1,158 @@
+export interface Candle {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface MarketData {
+  symbol: string;
+  price: number;
+  timestamp: number;
+  volume: number;
+  spread: number;
+  volatility: number;
+}
+
+export interface OrderBook {
+  bids: [number, number][];
+  asks: [number, number][];
+  timestamp: number;
+}
+
 export class MarketDataService {
-  private mockPrices: Record<string, number> = {
-    'BTCUSDT': 42387.20,
-    'ETHUSDT': 2834.56,
-    'ADAUSDT': 0.4589
-  };
+  private data: Map<string, MarketData> = new Map();
+  private candles: Map<string, Candle[]> = new Map();
+  private subscribers: Set<(data: MarketData) => void> = new Set();
 
-  async getCurrentPrice(symbol: string): Promise<string> {
-    // In production, this would fetch from exchange API
-    const basePrice = this.mockPrices[symbol] || 50000;
-    
-    // Add some random variation to simulate real market movements
-    const variation = 1 + (Math.random() - 0.5) * 0.002; // ±0.1% variation
-    const currentPrice = basePrice * variation;
-    
-    // Update the mock price for next time
-    this.mockPrices[symbol] = currentPrice;
-    
-    return currentPrice.toFixed(2);
+  constructor() {
+    this.startDataSimulation();
   }
 
-  async getCurrentSpread(symbol: string): Promise<number> {
-    // Mock spread in basis points
-    const baseSpread = 4.2;
-    const volatilityFactor = Math.random() * 2; // 0-2x multiplier
-    return baseSpread * (1 + volatilityFactor);
-  }
-
-  async getRecentCandles(symbol: string, count: number): Promise<any[]> {
-    // Generate mock candle data
-    const candles = [];
-    const now = new Date();
-    const basePrice = this.mockPrices[symbol] || 50000;
+  private startDataSimulation() {
+    // Simulate real-time market data for BTCUSDT and ETHUSDT
+    const symbols = ['BTCUSDT', 'ETHUSDT'];
     
-    let currentPrice = basePrice;
-    
-    for (let i = count; i >= 0; i--) {
-      const timestamp = new Date(now.getTime() - i * 60000); // 1-minute intervals
-      
-      // Simulate price movement
-      const change = (Math.random() - 0.5) * 0.01; // ±0.5% max change per minute
-      currentPrice *= (1 + change);
-      
-      const high = currentPrice * (1 + Math.random() * 0.002);
-      const low = currentPrice * (1 - Math.random() * 0.002);
-      const volume = Math.random() * 100 + 50; // Random volume
-      
-      candles.push({
-        timestamp: timestamp.toISOString(),
-        open: currentPrice.toFixed(2),
-        high: high.toFixed(2),
-        low: low.toFixed(2),
-        close: currentPrice.toFixed(2),
-        volume: volume.toFixed(2)
+    setInterval(() => {
+      symbols.forEach(symbol => {
+        const basePrice = symbol === 'BTCUSDT' ? 43000 : 2500;
+        const volatility = 0.001; // 0.1% volatility
+        
+        const price = basePrice * (1 + (Math.random() - 0.5) * volatility * 2);
+        const volume = Math.random() * 100;
+        const spread = price * 0.0001; // 0.01% spread
+        const vol = this.calculateVolatility(symbol, price);
+        
+        const marketData: MarketData = {
+          symbol,
+          price,
+          timestamp: Date.now(),
+          volume,
+          spread,
+          volatility: vol
+        };
+        
+        this.data.set(symbol, marketData);
+        this.notifySubscribers(marketData);
+        this.updateCandles(symbol, price, volume);
       });
+    }, 1000);
+  }
+
+  private calculateVolatility(symbol: string, currentPrice: number): number {
+    const candles = this.getCandles(symbol, 20);
+    if (candles.length < 2) return 0.01;
+    
+    const returns = candles.slice(1).map((candle, i) => 
+      Math.log(candle.close / candles[i].close)
+    );
+    
+    const mean = returns.reduce((sum, ret) => sum + ret, 0) / returns.length;
+    const variance = returns.reduce((sum, ret) => sum + Math.pow(ret - mean, 2), 0) / returns.length;
+    
+    return Math.sqrt(variance * 252); // Annualized volatility
+  }
+
+  private updateCandles(symbol: string, price: number, volume: number) {
+    if (!this.candles.has(symbol)) {
+      this.candles.set(symbol, []);
     }
     
-    return candles;
-  }
-
-  async getHistoricalData(symbol: string, startDate: Date, endDate: Date): Promise<any[]> {
-    // Generate mock historical data for backtesting
-    const candles = [];
-    const totalMinutes = Math.floor((endDate.getTime() - startDate.getTime()) / 60000);
-    const basePrice = this.mockPrices[symbol] || 50000;
+    const candles = this.candles.get(symbol)!;
+    const now = Date.now();
+    const currentMinute = Math.floor(now / 60000) * 60000;
     
-    let currentPrice = basePrice * (0.8 + Math.random() * 0.4); // Start with ±20% variation
-    
-    for (let i = 0; i < totalMinutes; i += 5) { // 5-minute intervals for historical data
-      const timestamp = new Date(startDate.getTime() + i * 60000);
-      
-      // Simulate more realistic price movements with trends
-      const trendFactor = Math.sin(i / 1000) * 0.001; // Long-term trend
-      const randomFactor = (Math.random() - 0.5) * 0.005; // Random noise
-      const volatilityCluster = Math.sin(i / 100) * 0.002; // Volatility clustering
-      
-      const change = trendFactor + randomFactor + volatilityCluster;
-      currentPrice *= (1 + change);
-      
-      const volatility = 0.001 + Math.abs(volatilityCluster) * 2;
-      const high = currentPrice * (1 + Math.random() * volatility);
-      const low = currentPrice * (1 - Math.random() * volatility);
-      const volume = Math.random() * 200 + 100;
-      
+    if (candles.length === 0 || candles[candles.length - 1].timestamp !== currentMinute) {
       candles.push({
-        timestamp: timestamp.toISOString(),
-        open: currentPrice.toFixed(2),
-        high: high.toFixed(2),
-        low: low.toFixed(2),
-        close: currentPrice.toFixed(2),
-        volume: volume.toFixed(2)
+        timestamp: currentMinute,
+        open: price,
+        high: price,
+        low: price,
+        close: price,
+        volume: volume
       });
+    } else {
+      const lastCandle = candles[candles.length - 1];
+      lastCandle.high = Math.max(lastCandle.high, price);
+      lastCandle.low = Math.min(lastCandle.low, price);
+      lastCandle.close = price;
+      lastCandle.volume += volume;
     }
     
-    return candles;
+    // Keep only last 1000 candles
+    if (candles.length > 1000) {
+      candles.shift();
+    }
+  }
+
+  private notifySubscribers(data: MarketData) {
+    this.subscribers.forEach(callback => callback(data));
+  }
+
+  subscribe(callback: (data: MarketData) => void) {
+    this.subscribers.add(callback);
+    return () => this.subscribers.delete(callback);
+  }
+
+  getCurrentPrice(symbol: string): number {
+    return this.data.get(symbol)?.price ?? 0;
+  }
+
+  getMarketData(symbol: string): MarketData | undefined {
+    return this.data.get(symbol);
+  }
+
+  getCandles(symbol: string, limit = 100): Candle[] {
+    const candles = this.candles.get(symbol) || [];
+    return candles.slice(-limit);
+  }
+
+  getVolatility(symbol: string): number {
+    return this.data.get(symbol)?.volatility ?? 0.01;
+  }
+
+  getSpread(symbol: string): number {
+    return this.data.get(symbol)?.spread ?? 0;
+  }
+
+  async getOrderBook(symbol: string): Promise<OrderBook> {
+    const price = this.getCurrentPrice(symbol);
+    const spread = this.getSpread(symbol);
+    
+    return {
+      bids: Array.from({ length: 10 }, (_, i) => [
+        price - spread * (i + 1),
+        Math.random() * 10
+      ]),
+      asks: Array.from({ length: 10 }, (_, i) => [
+        price + spread * (i + 1),
+        Math.random() * 10
+      ]),
+      timestamp: Date.now()
+    };
   }
 }
+
+export const marketDataService = new MarketDataService();

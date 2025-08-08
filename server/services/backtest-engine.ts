@@ -65,7 +65,7 @@ export class BacktestEngine {
       
     } catch (error) {
       console.error('Backtest error:', error);
-      throw new Error(`Backtest failed: ${error.message}`);
+      throw new Error(`Backtest failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
