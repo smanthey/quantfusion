@@ -189,15 +189,28 @@ router.get('/comparison', async (req, res) => {
     const allTrades = await storage.getAllTrades();
     const cryptoTrades = allTrades.length;
     
-    // Calculate crypto metrics directly
-    const closedTrades = allTrades.filter(t => t.exitPrice !== null);
-    const winningTrades = closedTrades.filter(t => {
-      const pnl = parseFloat(t.pnl || '0');
-      return pnl > 0;
-    });
-    const cryptoWinRate = closedTrades.length > 0 ? (winningTrades.length / closedTrades.length) * 100 : 0;
-    // Use the same unified calculation as other endpoints for consistency
-    const cryptoPnL = -277.10; // From actual account calculation to match other endpoints
+    // Calculate crypto metrics using profit/loss fields - SAME AS ALL OTHER ENDPOINTS
+    let totalProfits = 0;
+    let totalLosses = 0;
+    let winCount = 0;
+    let lossCount = 0;
+    
+    for (const trade of allTrades) {
+      const profit = parseFloat(trade.profit || '0');
+      const loss = parseFloat(trade.loss || '0');
+      
+      if (profit > 0) {
+        totalProfits += profit;
+        winCount++;
+      }
+      if (loss > 0) {
+        totalLosses += loss;
+        lossCount++;
+      }
+    }
+    
+    const cryptoPnL = totalProfits - totalLosses; // Net P&L from database
+    const cryptoWinRate = allTrades.length > 0 ? (winCount / allTrades.length) * 100 : 0;
     
     // Get current balance from account endpoint (which uses the unified calculation)
     let cryptoBalance = 10000 + cryptoPnL; // Starting balance + P&L (fallback)

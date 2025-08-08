@@ -448,13 +448,67 @@ export class ForexTradingEngine {
       // Add to trades history  
       this.forexTrades.push(forexTrade);
       
-      // Conservative forex trade recording - no database complications
+      // Save forex trade to database with proper profit/loss calculation
       try {
-        // Just log forex trades for now - keep it simple
-        console.log(`💱 FOREX EXECUTED: ${signal.action.toUpperCase()} ${signal.size} ${signal.pair} at ${signal.rate}`);
+        // Calculate fees and initial P&L for forex trade
+        const feeAmount = signal.size * 0.00002; // Forex spread-based fee
+        
+        // For new forex trades, calculate unrealized P&L vs current market rate
+        const currentMarketRate = this.forexData.getForexRate(signal.pair)?.price || signal.rate;
+        let unrealizedPnL = 0;
+        let profit = 0;
+        let loss = 0;
+        
+        // Forex P&L calculation (pips-based)
+        const pipMultiplier = signal.pair.includes('JPY') ? 100 : 10000;
+        const pipValue = this.getPipValue(signal.pair);
+        
+        if (signal.action === 'buy') {
+          // Long position: profit when rate goes up
+          const pips = (currentMarketRate - signal.rate) * pipMultiplier;
+          unrealizedPnL = pips * pipValue * (signal.size / 10000);
+        } else {
+          // Short position: profit when rate goes down  
+          const pips = (signal.rate - currentMarketRate) * pipMultiplier;
+          unrealizedPnL = pips * pipValue * (signal.size / 10000);
+        }
+        
+        // Account for fees in P&L calculation
+        const netPnL = unrealizedPnL - feeAmount;
+        
+        // Separate profit and loss for transparent display
+        if (netPnL > 0) {
+          profit = netPnL;
+          loss = 0;
+        } else {
+          profit = 0;
+          loss = Math.abs(netPnL);
+        }
+
+        // Create database trade record matching crypto format
+        const tradeData = {
+          symbol: signal.pair, // Store forex pair as symbol
+          side: signal.action,
+          size: signal.size.toString(),
+          entryPrice: signal.rate.toString(),
+          exitPrice: null,
+          pnl: netPnL.toString(),
+          profit: profit.toString(),
+          loss: loss.toString(),
+          fees: feeAmount.toString(),
+          duration: null,
+          strategyId: 'forex_strategy', // Default forex strategy ID
+          positionId: null
+        };
+        
+        // Save to database using the same storage interface as crypto
+        const { storage } = await import('../storage');
+        await storage.createTrade(tradeData);
+        
+        console.log(`💱 FOREX EXECUTED: ${signal.action.toUpperCase()} ${signal.size} ${signal.pair} at ${signal.rate} - Saved to DB`);
         
       } catch (error) {
-        console.log('⚠️ Forex trade recording simplified (no database complexity)');
+        console.log('⚠️ Forex trade database save failed:', error);
       }
       
       // Update account with realistic margin
