@@ -95,7 +95,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalTrades: 0,
         equity: [],
         winningTrades: 0,
-        losingTrades: 0
+        losingTrades: 0,
+        accountBalance: 10000 // Starting balance when no trades
       };
     }
 
@@ -117,15 +118,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const equityPoints: any[] = [];
 
     // Sort trades chronologically for accurate calculations
-    const sortedTrades = [...allTrades].sort((a, b) => 
-      new Date(a.executedAt).getTime() - new Date(b.executedAt).getTime()
-    );
+    const sortedTrades = [...allTrades].sort((a, b) => {
+      const aTime = a.executedAt ? new Date(a.executedAt).getTime() : 0;
+      const bTime = b.executedAt ? new Date(b.executedAt).getTime() : 0;
+      return aTime - bTime;
+    });
 
     // STANDARDIZED P&L calculation used across ALL endpoints
     for (const trade of sortedTrades) {
       const entryPrice = parseFloat(trade.entryPrice || '0');
       const size = parseFloat(trade.size || '0');
-      const executedAt = new Date(trade.executedAt);
+      const executedAt = trade.executedAt ? new Date(trade.executedAt) : new Date();
       const currentPrice = trade.symbol === 'BTCUSDT' ? btcCurrentPrice : ethCurrentPrice;
 
       if (entryPrice > 0 && currentPrice > 0 && size > 0) {
@@ -210,7 +213,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       totalTrades,
       equity: equityPoints,
       winningTrades,
-      losingTrades
+      losingTrades,
+      accountBalance: 10000 + totalPnl // Starting balance + total P&L
     };
   }
 
@@ -316,7 +320,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           profitFactor: performance.profitFactor,
           sharpeRatio: performance.sharpeRatio,
           totalTrades: performance.totalTrades,
-          equity: performance.equity
+          equity: performance.equity,
+          accountBalance: performance.accountBalance
         },
         marketData: {
           BTCUSDT: {
@@ -1260,7 +1265,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { symbol } = req.params;
       const { period = '50' } = req.query;
 
-      const data = historicalDataService.getHistoricalData(symbol, 100, '1h');
+      const data = historicalDataService.getHistoricalData(symbol, parseInt(period) || 100, '1h');
       // Simulate volume profile calculation
       const profile = {
         symbol,
@@ -1282,7 +1287,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { symbol } = req.params;
       const { period = '20', multiplier = '2' } = req.query;
 
-      const data = historicalDataService.getHistoricalData(symbol, 100, '1h');
+      const data = historicalDataService.getHistoricalData(symbol, parseInt(period) || 100, '1h');
       // Simulate volatility bands calculation
       const bands = {
         symbol,

@@ -478,7 +478,14 @@ export class ForexTradingEngine {
       // Simulate trade closure after some time (in production, would use stops/targets)
       setTimeout(() => {
         this.closeForexTrade(forexTrade);
-      }, 30000 + Math.random() * 120000); // Close between 30s-2.5min for demo
+      }, 5000 + Math.random() * 10000); // Close between 5s-15s for demo
+      
+      // Also close immediately for testing - force some historical trades
+      if (Math.random() < 0.3) {
+        setTimeout(() => {
+          this.closeForexTrade(forexTrade);
+        }, 1000); // Close very quickly for demo data
+      }
       
     } catch (error) {
       console.error('❌ Forex trade execution error:', error);

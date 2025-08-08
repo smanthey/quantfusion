@@ -9,6 +9,7 @@ import { CustomIndicatorEngine } from "./custom-indicators";
 import { mlPredictor } from "./ml-predictor";
 import { historicalDataCollector } from "./historical-data-collector";
 import { abTesting } from "./ab-testing";
+import { abTestingEngine } from "./ab-testing-engine";
 import { ProfitableStrategies } from "./profitable-strategies";
 import { MultiAssetEngine } from "./multi-asset-engine";
 import { ForexTradingEngine } from "./forex-trading-engine";
@@ -30,6 +31,7 @@ export class TradingEngine {
   private profitableStrategies: ProfitableStrategies;
   private multiAssetEngine: MultiAssetEngine;
   private forexEngine: ForexTradingEngine;
+  private abTestingEngine = abTestingEngine;
 
 
   constructor() {
@@ -258,10 +260,9 @@ export class TradingEngine {
         if (this.adaptiveLearning) {
           const adaptedPrediction = await this.adaptiveLearning.getAdaptedPrediction(symbol, basePrediction);
           mlPrediction = {
+            ...basePrediction, // Keep all original properties
             priceDirection: adaptedPrediction.priceDirection || basePrediction.priceDirection,
-            confidence: adaptedPrediction.confidence || basePrediction.confidence,
-            accuracy: adaptedPrediction.accuracy || basePrediction.accuracy || 0.6,
-            signal: adaptedPrediction.signal || basePrediction.signal || 'neutral'
+            confidence: adaptedPrediction.confidence || basePrediction.confidence
           };
           
           // Show learning impact clearly
@@ -282,6 +283,18 @@ export class TradingEngine {
         // Fallback to original if no research-based signal
         if (!signal) {
           signal = await this.generateTradingSignal(strategy, symbol, marketData, mlPrediction);
+        }
+        
+        // A/B/C/D TESTING: Apply variant-specific parameters
+        const abVariant = this.abTestingEngine.getVariantForPair(symbol);
+        if (abVariant && signal) {
+          // Apply A/B/C/D test parameters
+          signal.stopLoss = abVariant.parameters.stopLoss;
+          signal.takeProfit = abVariant.parameters.takeProfit;
+          signal.size *= abVariant.parameters.positionSize; // Adjust position size
+          signal.abTestVariant = abVariant.id;
+          
+          console.log(`🧪 A/B/C/D TEST: Using ${abVariant.name} for ${symbol}`);
         }
         
         // CRITICAL FIX: Ensure strategyId is always present for A/B testing
@@ -1102,7 +1115,7 @@ export class TradingEngine {
         const topRules = learningMetrics.topPerformingRules.slice(0, 2);
         if (topRules.length > 0) {
           console.log(`🎯 TOP LEARNED PATTERNS:`);
-          topRules.forEach(rule => {
+          topRules.forEach((rule: any) => {
             console.log(`  - ${rule.condition}: ${rule.action} (${(rule.successRate * 100).toFixed(1)}% success over ${rule.timesApplied} applications)`);
           });
         }
