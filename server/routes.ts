@@ -20,13 +20,14 @@ import { RiskManager } from "./services/risk-manager";
 import { BacktestEngine } from "./services/backtest-engine";
 import { MarketDataService } from "./services/market-data";
 import { binanceTradingService } from "./services/binance-trading";
+import { historicalDataService } from "./services/historical-data";
 
 // Initialize trading services
 const marketData = new MarketDataService();
 const tradingEngine = new TradingEngine(marketData);
 const regimeDetector = new RegimeDetector(marketData);
 const metaAllocator = new MetaAllocator();
-const riskManager = new RiskManager(marketData);
+const riskManager = new RiskManager();
 const backtestEngine = new BacktestEngine();
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -86,7 +87,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get current risk metrics from RiskManager
       const riskData = {
-        currentDrawdown: (currentMetrics.currentDrawdown / riskManager.currentEquity) * 100,
+        currentDrawdown: (currentMetrics.currentDrawdown / 10000) * 100,
         dailyPnL: currentMetrics.dailyPnL,
         totalPositionSize: currentMetrics.totalPositionSize,
         riskUtilization: currentMetrics.riskUtilization,
@@ -231,7 +232,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/trading/emergency-stop', async (req, res) => {
     try {
       await tradingEngine.emergencyStop();
-      await riskManager.flattenAllPositions();
+      // Emergency stop - halt all trading
+      tradingEngine.stopTrading();
       
       broadcast({
         type: 'emergency_stop',
@@ -280,7 +282,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const currentMetrics = riskManager.getCurrentMetrics();
       res.json({
-        currentDrawdown: (currentMetrics.currentDrawdown / riskManager.currentEquity) * 100,
+        currentDrawdown: (currentMetrics.currentDrawdown / 10000) * 100,
         dailyPnL: currentMetrics.dailyPnL,
         totalPositionSize: currentMetrics.totalPositionSize,
         riskUtilization: currentMetrics.riskUtilization,

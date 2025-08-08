@@ -13,8 +13,8 @@ export class BinanceTradingService {
 
   constructor(options: Partial<BinanceTradingOptions> = {}) {
     this.options = {
-      testMode: process.env.NODE_ENV === 'development',
-      defaultQuantity: 0.001, // Default BTC quantity
+      testMode: true, // Mock trading with $100 virtual balance
+      defaultQuantity: 0.001, // Default BTC quantity  
       maxPositions: 10,
       ...options
     };

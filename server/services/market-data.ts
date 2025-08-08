@@ -23,6 +23,7 @@ export interface OrderBook {
 }
 
 import { binanceClient } from './binance-client';
+import { historicalDataService } from './historical-data';
 
 export class MarketDataService {
   private data: Map<string, MarketData> = new Map();
@@ -255,8 +256,24 @@ export class MarketDataService {
   }
 
   getCandles(symbol: string, limit = 100): Candle[] {
-    const candles = this.candles.get(symbol) || [];
-    return candles.slice(-limit);
+    // First try to get live candles, then fall back to historical
+    const liveCandles = this.candles.get(symbol) || [];
+    
+    if (liveCandles.length >= limit) {
+      return liveCandles.slice(-limit);
+    }
+    
+    // Supplement with historical data for backtesting and analysis
+    const historicalCandles = historicalDataService.getCandles(symbol, '1m', limit);
+    
+    // Combine historical and live data
+    const allCandles = [...historicalCandles];
+    if (liveCandles.length > 0) {
+      // Add recent live data
+      allCandles.push(...liveCandles.slice(-Math.min(50, liveCandles.length)));
+    }
+    
+    return allCandles.slice(-limit);
   }
 
   getVolatility(symbol: string): number {

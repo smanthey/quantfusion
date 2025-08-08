@@ -93,14 +93,9 @@ export class BinanceClient {
       throw new Error('Binance API credentials not found in environment variables');
     }
 
-    // Use testnet for development, production for live trading
-    const isTestnet = process.env.NODE_ENV === 'development';
-    this.baseUrl = isTestnet 
-      ? 'https://testnet.binance.vision/api'
-      : 'https://api.binance.com/api';
-    this.wsUrl = isTestnet
-      ? 'wss://testnet.binance.vision/ws'
-      : 'wss://stream.binance.com:9443/ws';
+    // Use testnet for development, live API is geo-restricted
+    this.baseUrl = 'https://testnet.binance.vision/api';
+    this.wsUrl = 'wss://testnet.binance.vision/ws';
   }
 
   private createSignature(queryString: string): string {
