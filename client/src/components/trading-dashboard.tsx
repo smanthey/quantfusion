@@ -69,12 +69,16 @@ export function TradingDashboard() {
   // All hooks must be called at the top level
   const { data: dashboardData, isLoading: dashboardLoading, error: dashboardError } = useQuery<DashboardData>({
     queryKey: ['/api/dashboard'],
-    refetchInterval: 5000, // Refresh every 5 seconds
+    refetchInterval: 3000, // Refresh every 3 seconds for more responsive updates
+    refetchOnWindowFocus: true,
+    staleTime: 1000, // Consider data stale after 1 second
   });
 
   const { data: accountData, isLoading: accountLoading } = useQuery<AccountData>({
     queryKey: ['/api/account'],
-    refetchInterval: 10000, // Refresh every 10 seconds
+    refetchInterval: 5000, // Refresh every 5 seconds
+    refetchOnWindowFocus: true,
+    staleTime: 2000, // Consider data stale after 2 seconds
   });
 
   // WebSocket connection for real-time updates - MUST be called unconditionally
@@ -83,11 +87,27 @@ export function TradingDashboard() {
   useEffect(() => {
     if (lastMessage) {
       try {
+        // Handle different types of real-time updates
         if (lastMessage.type === 'market_data') {
           setLiveData(prev => ({
             ...prev,
-            marketData: lastMessage.data.marketData,
-            positions: lastMessage.data.positions,
+            marketData: {
+              ...prev.marketData,
+              ...lastMessage.data.marketData,
+            },
+            positions: lastMessage.data.positions || prev.positions,
+          }));
+        } else if (lastMessage.type === 'trade') {
+          // Update recent trades when new trades come in
+          setLiveData(prev => ({
+            ...prev,
+            recentTrades: lastMessage.data.recentTrades || prev.recentTrades,
+          }));
+        } else if (lastMessage.type === 'position') {
+          // Update positions when they change
+          setLiveData(prev => ({
+            ...prev,
+            positions: lastMessage.data.positions || prev.positions,
           }));
         }
       } catch (error) {
@@ -96,14 +116,28 @@ export function TradingDashboard() {
     }
   }, [lastMessage]);
 
-  // Merge dashboard data with live updates
+  // Merge dashboard data with live updates more comprehensively
   const currentData = dashboardData ? {
     ...dashboardData,
     ...liveData,
     marketData: {
       ...dashboardData.marketData,
       ...(liveData.marketData || {}),
+      BTCUSDT: {
+        ...dashboardData.marketData?.BTCUSDT,
+        ...(liveData.marketData?.BTCUSDT || {}),
+      },
+      ETHUSDT: {
+        ...dashboardData.marketData?.ETHUSDT,
+        ...(liveData.marketData?.ETHUSDT || {}),
+      },
+      regime: {
+        ...dashboardData.marketData?.regime,
+        ...(liveData.marketData?.regime || {}),
+      },
     },
+    recentTrades: liveData.recentTrades || dashboardData.recentTrades,
+    positions: liveData.positions || dashboardData.positions,
   } : null;
 
   if (dashboardLoading || accountLoading) {
@@ -147,12 +181,10 @@ export function TradingDashboard() {
     return `${((value || 0) * 100).toFixed(2)}%`;
   };
 
-  // Use current data with safe performance fallback
-  const finalData = currentData;
-  
-  // Ensure performance object exists with safe defaults
-  if (!finalData.performance || finalData.performance === null) {
-    finalData.performance = {
+  // Use current data with comprehensive safety checks
+  const finalData = currentData ? {
+    ...currentData,
+    performance: currentData.performance || {
       totalPnl: 0,
       dailyPnl: 0,
       drawdown: 0,
@@ -161,8 +193,25 @@ export function TradingDashboard() {
       sharpeRatio: 0,
       totalTrades: 0,
       equity: []
-    };
-  }
+    },
+    marketData: currentData.marketData || {
+      BTCUSDT: { price: 0, change: 0, volume: 0, volatility: 0 },
+      ETHUSDT: { price: 0, change: 0, volume: 0, volatility: 0 },
+      regime: { current: 'Unknown', strength: 0, confidence: 0 }
+    },
+    riskMetrics: currentData.riskMetrics || {
+      currentDrawdown: 0,
+      dailyPnL: 0,
+      totalPositionSize: 0,
+      riskUtilization: 0,
+      isHalted: false,
+      circuitBreakers: []
+    },
+    recentTrades: currentData.recentTrades || [],
+    positions: currentData.positions || [],
+    strategies: currentData.strategies || [],
+    systemAlerts: currentData.systemAlerts || []
+  } : null;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
