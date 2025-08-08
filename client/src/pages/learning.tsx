@@ -1,0 +1,310 @@
+import { useQuery } from '@tanstack/react-query';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ArrowLeft, Brain, TrendingUp, TrendingDown, AlertTriangle, CheckCircle } from "lucide-react";
+import { Link } from "wouter";
+
+export default function LearningPage() {
+  const { data: learningData, isLoading } = useQuery({
+    queryKey: ['/api/learning/analysis'],
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
+  const { data: insightsData } = useQuery({
+    queryKey: ['/api/learning/insights'],
+    refetchInterval: 60000, // Refresh every minute
+  });
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <div className="container mx-auto px-4 py-6">
+          <div className="animate-pulse space-y-6">
+            <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
+            <div className="grid grid-cols-3 gap-6">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="h-40 bg-gray-200 dark:bg-gray-700 rounded"></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const patterns = learningData?.patterns || [];
+  const insights = insightsData?.insights || [];
+  const recommendations = insightsData?.recommendations || [];
+  const profitabilityAnalysis = insightsData?.profitabilityAnalysis || {};
+
+  const profitablePatterns = patterns.filter((p: any) => p.avgPnL > 0);
+  const lossyPatterns = patterns.filter((p: any) => p.avgPnL < 0);
+
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="container mx-auto px-4 py-6 space-y-6">
+        {/* Header */}
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <Link href="/">
+              <Button variant="outline" size="sm">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Dashboard
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-3xl font-bold flex items-center gap-3">
+                <Brain className="w-8 h-8 text-blue-500" />
+                Learning Analytics
+              </h1>
+              <p className="text-muted-foreground">Pattern analysis and profit optimization insights</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Profitability Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Total Trades</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{profitabilityAnalysis.totalTrades || 0}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Win Rate</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-600">
+                {((profitabilityAnalysis.winRate || 0) * 100).toFixed(1)}%
+              </div>
+              <Progress value={(profitabilityAnalysis.winRate || 0) * 100} className="mt-2" />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Profit Factor</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${(profitabilityAnalysis.profitFactor || 0) >= 1 ? 'text-green-600' : 'text-red-600'}`}>
+                {(profitabilityAnalysis.profitFactor || 0).toFixed(2)}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {(profitabilityAnalysis.profitFactor || 0) >= 1 ? 'Profitable' : 'Unprofitable'}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Risk/Reward</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {profitabilityAnalysis.avgLoss > 0 
+                  ? ((profitabilityAnalysis.avgWin || 0) / profitabilityAnalysis.avgLoss).toFixed(2)
+                  : '0.00'
+                }
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Avg Win / Avg Loss
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Tabs defaultValue="insights" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="insights">Insights & Recommendations</TabsTrigger>
+            <TabsTrigger value="patterns">Pattern Analysis</TabsTrigger>
+            <TabsTrigger value="issues">Profitability Issues</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="insights" className="space-y-4">
+            {/* Key Insights */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  Actionable Insights
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {insights.length === 0 ? (
+                  <p className="text-muted-foreground">No actionable insights available yet. More data needed for pattern analysis.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {insights.map((insight: any) => (
+                      <div key={insight.id} className="border rounded-lg p-4">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h3 className="font-semibold">{insight.title}</h3>
+                            <p className="text-sm text-muted-foreground mt-1">{insight.description}</p>
+                            <div className="flex items-center gap-4 mt-2">
+                              <Badge variant={insight.category === 'profit_opportunity' ? 'default' : 'destructive'}>
+                                {insight.category.replace('_', ' ').toUpperCase()}
+                              </Badge>
+                              <span className="text-sm">Impact: ${insight.impact.toFixed(2)}</span>
+                              <span className="text-sm">Confidence: {(insight.confidence * 100).toFixed(0)}%</span>
+                            </div>
+                          </div>
+                          {insight.category === 'profit_opportunity' ? (
+                            <TrendingUp className="w-6 h-6 text-green-500 flex-shrink-0" />
+                          ) : (
+                            <TrendingDown className="w-6 h-6 text-red-500 flex-shrink-0" />
+                          )}
+                        </div>
+                        <div className="mt-3 p-3 bg-muted rounded">
+                          <p className="text-sm font-medium">Recommendation:</p>
+                          <p className="text-sm">{insight.recommendation}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Recommendations */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Optimization Recommendations</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {recommendations.length === 0 ? (
+                  <p className="text-muted-foreground">No specific recommendations generated yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {recommendations.map((rec: string, index: number) => (
+                      <div key={index} className="flex items-start gap-3">
+                        <div className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
+                          {index + 1}
+                        </div>
+                        <p className="text-sm">{rec}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="patterns" className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Profitable Patterns */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-green-600">
+                    <TrendingUp className="w-5 h-5" />
+                    Profitable Patterns ({profitablePatterns.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {profitablePatterns.length === 0 ? (
+                    <p className="text-muted-foreground">No profitable patterns identified yet.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {profitablePatterns.slice(0, 5).map((pattern: any) => (
+                        <div key={pattern.id} className="border rounded-lg p-3">
+                          <h4 className="font-medium">{pattern.description}</h4>
+                          <div className="grid grid-cols-3 gap-2 mt-2 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Success:</span>
+                              <div className="font-bold text-green-600">{(pattern.successRate * 100).toFixed(1)}%</div>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Avg P&L:</span>
+                              <div className="font-bold text-green-600">${pattern.avgPnL.toFixed(3)}</div>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Frequency:</span>
+                              <div className="font-bold">{pattern.frequency}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Loss Patterns */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-red-600">
+                    <TrendingDown className="w-5 h-5" />
+                    Loss Patterns ({lossyPatterns.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {lossyPatterns.length === 0 ? (
+                    <p className="text-muted-foreground">No significant loss patterns identified.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {lossyPatterns.slice(0, 5).map((pattern: any) => (
+                        <div key={pattern.id} className="border rounded-lg p-3">
+                          <h4 className="font-medium">{pattern.description}</h4>
+                          <div className="grid grid-cols-3 gap-2 mt-2 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Success:</span>
+                              <div className="font-bold text-red-600">{(pattern.successRate * 100).toFixed(1)}%</div>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Avg P&L:</span>
+                              <div className="font-bold text-red-600">${pattern.avgPnL.toFixed(3)}</div>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Frequency:</span>
+                              <div className="font-bold">{pattern.frequency}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="issues" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-orange-500" />
+                  Profitability Issues Analysis
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {profitabilityAnalysis.issues && Object.entries(profitabilityAnalysis.issues).map(([issue, hasIssue]: [string, any]) => (
+                    <div key={issue} className={`flex items-center gap-3 p-3 rounded-lg ${hasIssue ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}`}>
+                      {hasIssue ? (
+                        <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                      ) : (
+                        <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                      )}
+                      <div>
+                        <p className="font-medium capitalize">{issue.replace(/([A-Z])/g, ' $1')}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {hasIssue ? 'Needs attention' : 'Performing well'}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  );
+}

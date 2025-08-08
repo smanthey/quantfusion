@@ -602,6 +602,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Learning Analytics
+  app.get('/api/learning/analysis', async (req, res) => {
+    try {
+      const { LearningAnalyticsEngine } = await import('./services/learning-analytics');
+      const analyticsEngine = new LearningAnalyticsEngine(storage);
+      
+      const analysisResult = await analyticsEngine.analyzeAllLearningData();
+      
+      res.json(analysisResult);
+    } catch (error) {
+      console.error('Learning analysis error:', error);
+      res.status(500).json({ error: 'Failed to analyze learning data' });
+    }
+  });
+
+  app.get('/api/learning/patterns', async (req, res) => {
+    try {
+      const { LearningAnalyticsEngine } = await import('./services/learning-analytics');
+      const analyticsEngine = new LearningAnalyticsEngine(storage);
+      
+      const result = await analyticsEngine.analyzeAllLearningData();
+      res.json({ patterns: result.patterns });
+    } catch (error) {
+      console.error('Pattern analysis error:', error);
+      res.status(500).json({ error: 'Failed to analyze patterns' });
+    }
+  });
+
+  app.get('/api/learning/insights', async (req, res) => {
+    try {
+      const { LearningAnalyticsEngine } = await import('./services/learning-analytics');
+      const analyticsEngine = new LearningAnalyticsEngine(storage);
+      
+      const result = await analyticsEngine.analyzeAllLearningData();
+      res.json({ 
+        insights: result.insights,
+        recommendations: result.recommendations,
+        profitabilityAnalysis: result.profitabilityAnalysis
+      });
+    } catch (error) {
+      console.error('Insights analysis error:', error);
+      res.status(500).json({ error: 'Failed to generate insights' });
+    }
+  });
+
   // System alerts
   app.get('/api/alerts', async (req, res) => {
     try {
