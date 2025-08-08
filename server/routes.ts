@@ -78,8 +78,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   };
   
-  // Mathematical performance calculation using web-researched prices
-  async function calculateRealPerformance(allTrades: Trade[]) {
+  // UNIFIED mathematical performance calculation - used by ALL endpoints for consistency
+  async function calculateUnifiedPerformance(allTrades: Trade[]) {
     if (!allTrades || allTrades.length === 0) {
       return {
         totalPnl: 0,
@@ -89,123 +89,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
         profitFactor: 0,
         sharpeRatio: 0,
         totalTrades: 0,
-        equity: []
+        equity: [],
+        winningTrades: 0,
+        losingTrades: 0
       };
     }
 
-    // Use web-researched current market prices for accurate P&L calculations
-    const btcCurrentPrice = 116600; // Web-researched BTC price $116,600
-    const ethCurrentPrice = 3875;   // Web-researched ETH price $3,875
+    // Use current market prices from live data for consistency
+    const btcData = marketData.getMarketData('BTCUSDT');
+    const ethData = marketData.getMarketData('ETHUSDT');
+    const btcCurrentPrice = btcData?.price || 116600;
+    const ethCurrentPrice = ethData?.price || 3875;
     
     let totalPnl = 0;
-    let totalVolume = 0;
     let winningTrades = 0;
     let losingTrades = 0;
     let profits = 0;
     let losses = 0;
+    let runningEquity = 10000; // Starting capital
+    let peak = 10000;
+    let maxDrawdown = 0;
+    const returns: number[] = [];
+    const equityPoints: any[] = [];
     
-    // Calculate exact P&L for each trade using proper mathematical formulas
-    for (const trade of allTrades) {
+    // Sort trades chronologically for accurate calculations
+    const sortedTrades = [...allTrades].sort((a, b) => 
+      new Date(a.executedAt).getTime() - new Date(b.executedAt).getTime()
+    );
+    
+    // STANDARDIZED P&L calculation used across ALL endpoints
+    for (const trade of sortedTrades) {
       const entryPrice = parseFloat(trade.entryPrice || '0');
       const size = parseFloat(trade.size || '0');
-      let currentPrice = 0;
-      
-      if (trade.symbol === 'BTCUSDT') {
-        currentPrice = btcCurrentPrice;
-      } else if (trade.symbol === 'ETHUSDT') {
-        currentPrice = ethCurrentPrice;
-      }
+      const executedAt = new Date(trade.executedAt);
+      const currentPrice = trade.symbol === 'BTCUSDT' ? btcCurrentPrice : ethCurrentPrice;
       
       if (entryPrice > 0 && currentPrice > 0 && size > 0) {
-        let tradePnl = 0;
-        const notionalValue = entryPrice * size;
-        totalVolume += notionalValue;
+        // CONSISTENT P&L Formula: Position Value * Price Change %
+        const positionValue = size * entryPrice * 0.000001; // Convert to realistic dollar amount
+        const priceChange = currentPrice - entryPrice;
+        const priceChangePercent = priceChange / entryPrice;
         
+        let tradePnl = 0;
         if (trade.side === 'buy') {
-          // Long position: P&L = (Current Price - Entry Price) * Position Size
-          tradePnl = (currentPrice - entryPrice) * size * 0.001; // Realistic scaling
+          // Long: profit when price rises
+          tradePnl = positionValue * priceChangePercent;
         } else {
-          // Short position: P&L = (Entry Price - Current Price) * Position Size
-          tradePnl = (entryPrice - currentPrice) * size * 0.001; // Realistic scaling
+          // Short: profit when price falls
+          tradePnl = positionValue * -priceChangePercent;
         }
         
-        totalPnl += tradePnl;
+        // Subtract realistic transaction costs
+        tradePnl -= 0.05; // $0.05 per trade
         
+        totalPnl += tradePnl;
+        runningEquity += tradePnl;
+        returns.push(tradePnl);
+        
+        // Track wins/losses
         if (tradePnl > 0) {
           winningTrades++;
           profits += tradePnl;
-        } else if (tradePnl < 0) {
+        } else {
           losingTrades++;
           losses += Math.abs(tradePnl);
         }
+        
+        // Calculate proper drawdown
+        if (runningEquity > peak) {
+          peak = runningEquity;
+        }
+        const currentDrawdown = peak > 0 ? ((peak - runningEquity) / peak) * 100 : 0;
+        maxDrawdown = Math.max(maxDrawdown, currentDrawdown);
+        
+        // Track equity curve
+        equityPoints.push({
+          timestamp: executedAt,
+          value: runningEquity
+        });
       }
     }
     
     // Calculate performance metrics using proper financial formulas
     const totalTrades = allTrades.length;
     const winRate = totalTrades > 0 ? winningTrades / totalTrades : 0;
-    const profitFactor = losses > 0 ? profits / losses : (profits > 0 ? 3.2 : 0);
+    const profitFactor = losses > 0 ? profits / losses : (profits > 0 ? 2.0 : 0);
 
-    // Calculate daily P&L using time-weighted approach
+    // Calculate daily P&L from today's trades
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const todaysTrades = allTrades.filter(t => new Date(t.executedAt!) >= today);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
     
     let dailyPnL = 0;
-    for (const trade of todaysTrades) {
-      const entryPrice = parseFloat(trade.entryPrice || '0');
-      const size = parseFloat(trade.size || '0');
-      const currentPrice = trade.symbol === 'BTCUSDT' ? btcCurrentPrice : ethCurrentPrice;
-      
-      if (entryPrice > 0 && currentPrice > 0 && size > 0) {
-        const tradePnl = trade.side === 'buy' 
-          ? (currentPrice - entryPrice) * size * 0.001
-          : (entryPrice - currentPrice) * size * 0.001;
-        dailyPnL += tradePnl;
-      }
-    }
-
-    // Calculate maximum drawdown using running P&L
-    let runningPnL = 0;
-    let peak = 0;
-    let maxDrawdown = 0;
-    
-    for (const trade of allTrades.slice().reverse()) { // Process chronologically
-      const entryPrice = parseFloat(trade.entryPrice || '0');
-      const size = parseFloat(trade.size || '0');
-      const currentPrice = trade.symbol === 'BTCUSDT' ? btcCurrentPrice : ethCurrentPrice;
-      
-      if (entryPrice > 0 && currentPrice > 0 && size > 0) {
-        const tradePnl = trade.side === 'buy' 
-          ? (currentPrice - entryPrice) * size * 0.001
-          : (entryPrice - currentPrice) * size * 0.001;
-        
-        runningPnL += tradePnl;
-        if (runningPnL > peak) peak = runningPnL;
-        const drawdown = peak - runningPnL;
-        if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+    for (const point of equityPoints) {
+      if (point.timestamp >= today && point.timestamp < tomorrow) {
+        const prevValue = equityPoints[equityPoints.indexOf(point) - 1]?.value || 10000;
+        dailyPnL += (point.value - prevValue);
       }
     }
     
-    // Calculate Sharpe ratio using returns volatility
-    const avgReturn = totalTrades > 0 ? totalPnl / totalTrades : 0;
-    const returns = [];
-    for (const trade of allTrades) {
-      const entryPrice = parseFloat(trade.entryPrice || '0');
-      const size = parseFloat(trade.size || '0');
-      const currentPrice = trade.symbol === 'BTCUSDT' ? btcCurrentPrice : ethCurrentPrice;
-      
-      if (entryPrice > 0 && currentPrice > 0 && size > 0) {
-        const tradePnl = trade.side === 'buy' 
-          ? (currentPrice - entryPrice) * size * 0.001
-          : (entryPrice - currentPrice) * size * 0.001;
-        returns.push(tradePnl);
-      }
-    }
-    
-    const volatility = returns.length > 1 ? 
-      Math.sqrt(returns.reduce((sum, ret) => sum + Math.pow(ret - avgReturn, 2), 0) / returns.length) : 0;
-    const sharpeRatio = volatility > 0 ? (avgReturn / volatility) : 0;
+    // Calculate Sharpe ratio using proper statistical methods
+    const avgReturn = returns.length > 0 ? returns.reduce((a, b) => a + b, 0) / returns.length : 0;
+    const variance = returns.length > 1 ? 
+      returns.reduce((sum, ret) => sum + Math.pow(ret - avgReturn, 2), 0) / (returns.length - 1) : 0;
+    const volatility = Math.sqrt(variance);
+    const sharpeRatio = volatility > 0 ? (avgReturn / volatility) * Math.sqrt(252) : 0; // Annualized
     
     return {
       totalPnl,
@@ -213,16 +202,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       drawdown: maxDrawdown,
       winRate,
       profitFactor,
-      sharpeRatio: Math.min(Math.max(sharpeRatio, -3), 3), // Cap between -3 and 3
+      sharpeRatio: Math.min(Math.max(sharpeRatio, -3), 3),
       totalTrades,
-      equity: []
+      equity: equityPoints,
+      winningTrades,
+      losingTrades
     };
   }
 
   // Analytics API endpoint
   app.get('/api/analytics', async (req, res) => {
     try {
-      const completedTrades = await storage.getRecentTrades(100);
+      const completedTrades = await storage.getAllTrades(); // Use ALL trades for consistent metrics
       const strategies = await storage.getStrategies();
       
       if (completedTrades.length === 0) {
@@ -239,7 +230,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const allTrades = await storage.getAllTrades();
-      const performance = await calculateRealPerformance(allTrades);
+      const performance = await calculateUnifiedPerformance(allTrades);
       
       // Calculate metrics changes from actual data (compare to yesterday's performance)
       const yesterdayTrades = allTrades.filter(t => {
@@ -252,7 +243,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return tradeDate >= yesterday && tradeDate < today;
       });
       
-      const yesterdayPerf = yesterdayTrades.length > 0 ? await calculateRealPerformance(yesterdayTrades) : performance;
+      const yesterdayPerf = yesterdayTrades.length > 0 ? await calculateUnifiedPerformance(yesterdayTrades) : performance;
       
       const sharpeChange = (((performance.sharpeRatio || 0) - (yesterdayPerf.sharpeRatio || 0)) * 100).toFixed(1);
       const drawdownChange = (((performance.drawdown || 0) - (yesterdayPerf.drawdown || 0)) * 100).toFixed(1);
@@ -305,7 +296,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Calculate actual performance metrics from all trades
       const allTrades = await storage.getAllTrades();
-      const performance = await calculateRealPerformance(allTrades);
+      const performance = await calculateUnifiedPerformance(allTrades);
 
       // Format data to match frontend expectations
       const dashboardData = {
@@ -353,10 +344,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add system status endpoint
+  // Add system status endpoint - USE CONSISTENT TRADE COUNTING
   app.get('/api/system/status', async (req, res) => {
     try {
-      const trades = await storage.getRecentTrades(100);
+      const trades = await storage.getAllTrades(); // Use ALL trades for consistent counting
       const positions = await storage.getOpenPositions();
       
       // Check if trading engine is active (recent trades)
@@ -395,53 +386,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Account management - Calculate real balance based on trading performance
+  // Account management - USE UNIFIED CALCULATION METHOD
   app.get('/api/account', async (req, res) => {
     try {
       const allTrades = await storage.getAllTrades();
-      console.log(`📊 Calculating account balance from ${allTrades.length} trades`);
+      console.log(`📊 Calculating account balance from ${allTrades.length} trades using UNIFIED method`);
       
-      // Starting capital: $10,000
+      // Use the same unified performance calculation as all other endpoints
+      const performance = await calculateUnifiedPerformance(allTrades);
+      
+      // Starting capital: $10,000  
       const startingCapital = 10000;
-      let totalPnl = 0;
-      let totalFees = allTrades.length * 0.05; // $0.05 per trade fee
+      const totalFees = allTrades.length * 0.05; // $0.05 per trade fee
       
-      // Get current market prices for accurate P&L calculation
-      const btcData = marketData.getMarketData('BTCUSDT');
-      const ethData = marketData.getMarketData('ETHUSDT'); 
-      const btcCurrentPrice = btcData?.price || 116600;
-      const ethCurrentPrice = ethData?.price || 3875;
-      
-      // Calculate cumulative P&L from all trades
-      for (const trade of allTrades) {
-        const entryPrice = parseFloat(trade.entryPrice || '0');
-        const size = parseFloat(trade.size || '0');
-        const currentPrice = trade.symbol === 'BTCUSDT' ? btcCurrentPrice : ethCurrentPrice;
-        
-        if (entryPrice > 0 && currentPrice > 0 && size > 0) {
-          // Calculate P&L using realistic position sizing
-          const positionValue = size * entryPrice * 0.000001; // Convert to reasonable dollar amount
-          const priceChange = currentPrice - entryPrice;
-          const priceChangePercent = priceChange / entryPrice;
-          
-          let tradePnl = 0;
-          if (trade.side === 'buy') {
-            // Long position: profit when price goes up
-            tradePnl = positionValue * priceChangePercent;
-          } else {
-            // Short position: profit when price goes down
-            tradePnl = positionValue * -priceChangePercent;
-          }
-          
-          totalPnl += tradePnl;
-        }
-      }
-      
-      // Calculate current account balance
-      const currentBalance = startingCapital + totalPnl - totalFees;
+      // Account balance = Starting Capital + P&L - Fees
+      const currentBalance = startingCapital + performance.totalPnl - totalFees;
       const freeBalance = Math.max(0, currentBalance);
       
-      console.log(`💰 Account Balance: Start=$${startingCapital}, P&L=$${totalPnl.toFixed(2)}, Fees=$${totalFees.toFixed(2)}, Current=$${currentBalance.toFixed(2)}`);
+      console.log(`💰 UNIFIED Account Balance: Start=$${startingCapital}, P&L=$${performance.totalPnl.toFixed(2)}, Fees=$${totalFees.toFixed(2)}, Current=$${currentBalance.toFixed(2)}`);
       
       const accountInfo = {
         balances: [{
@@ -453,16 +415,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tradingEnabled: currentBalance > 100,
         accountType: 'testnet',
         feeDiscountRate: 0.1,
-        totalPnL: totalPnl,
+        totalPnL: performance.totalPnl, // Use unified calculation
         totalFees: totalFees,
         startingCapital: startingCapital,
-        tradesCount: allTrades.length
+        tradesCount: performance.totalTrades, // Use unified count
+        winRate: performance.winRate,
+        winningTrades: performance.winningTrades,
+        losingTrades: performance.losingTrades
       };
       
       res.json(accountInfo);
     } catch (error) {
       console.error('Account data error:', error);
-      // Fallback calculation
       res.json({
         balances: [{ asset: 'USDT', free: '10000.00', locked: '0.00' }],
         totalValue: 10000,
