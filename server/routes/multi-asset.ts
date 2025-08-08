@@ -265,6 +265,8 @@ router.get('/comparison', async (req, res) => {
         account: 'Crypto System',
         totalTrades: cryptoTrades.length.toLocaleString(),
         winRate: cryptoWinRate.toFixed(1) + '%',
+        totalProfits: '$' + cryptoProfits.toFixed(2),
+        totalLosses: '$' + cryptoLosses.toFixed(2),
         totalPnL: '$' + cryptoPnL.toFixed(2),
         balance: '$' + cryptoBalance.toFixed(2)
       },
@@ -272,6 +274,8 @@ router.get('/comparison', async (req, res) => {
         account: 'Forex System', 
         totalTrades: forexTrades.length,
         winRate: forexWinRate.toFixed(1) + '%',
+        totalProfits: '$' + forexProfits.toFixed(2),
+        totalLosses: '$' + forexLosses.toFixed(2),
         totalPnL: '$' + forexPnL.toFixed(2),
         balance: '$' + forexBalance.toFixed(2)
       },

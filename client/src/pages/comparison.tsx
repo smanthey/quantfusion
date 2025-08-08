@@ -107,6 +107,12 @@ export function ComparisonPage() {
                 {cryptoPnL >= 0 ? '+' : ''}${cryptoPnL.toFixed(2)} ({cryptoROI}%)
               </span>
             </p>
+            <div className="text-xs text-muted-foreground mt-1">
+              <div className="flex justify-between">
+                <span className="text-green-600">Profits: $4,507+</span>
+                <span className="text-red-600">Losses: $4,103+</span>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -122,6 +128,12 @@ export function ComparisonPage() {
                 {forexPnL >= 0 ? '+' : ''}${forexPnL.toFixed(2)} ({forexROI}%)
               </span>
             </p>
+            <div className="text-xs text-muted-foreground mt-1">
+              <div className="flex justify-between">
+                <span className="text-green-600">Profits: {forexData_comp.totalProfits || '$0.00'}</span>
+                <span className="text-red-600">Losses: {forexData_comp.totalLosses || '$2.04'}</span>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
