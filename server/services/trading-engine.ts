@@ -59,6 +59,15 @@ export class TradingEngine {
     await this.createAlert("error", "Emergency Stop", "Emergency stop activated - all positions flattened");
   }
 
+  stopTrading(): void {
+    this.isRunning = false;
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = undefined;
+    }
+    console.log("Trading engine force stopped");
+  }
+
   private async tradingLoop(): Promise<void> {
     // 1. Check risk constraints
     const riskCheck = await this.riskManager.checkConstraints();

@@ -279,6 +279,82 @@ export class RiskManager {
       totalExposure: metrics.totalPositionSize.toString()
     };
   }
+
+  // New methods required by trading engine
+  async checkConstraints(): Promise<{ canTrade: boolean; reason?: string }> {
+    try {
+      const portfolio = await storage.getPortfolioSummary();
+      const activePositions = await storage.getOpenPositions();
+      
+      // Check daily P&L limit
+      if (portfolio.dailyPnl < -this.limits.maxDailyLoss) {
+        return { canTrade: false, reason: "Daily loss limit exceeded" };
+      }
+      
+      // Check maximum drawdown
+      if (portfolio.maxDrawdown > this.limits.maxDrawdown) {
+        return { canTrade: false, reason: "Maximum drawdown exceeded" };
+      }
+      
+      // Check maximum number of positions
+      if (activePositions.length >= this.limits.maxPositions) {
+        return { canTrade: false, reason: "Maximum positions limit reached" };
+      }
+      
+      if (this.isTradeHalted) {
+        return { canTrade: false, reason: "Trading manually halted" };
+      }
+      
+      return { canTrade: true };
+    } catch (error) {
+      console.error('Error checking constraints:', error);
+      return { canTrade: false, reason: "Risk system error" };
+    }
+  }
+
+  async canExecuteTrade(signal: any): Promise<boolean> {
+    try {
+      const constraints = await this.checkConstraints();
+      if (!constraints.canTrade) {
+        return false;
+      }
+
+      // Additional signal-specific checks
+      const positionSize = await this.calculatePositionSize2(signal);
+      return positionSize > 0;
+    } catch (error) {
+      console.error('Error checking trade constraints:', error);
+      return false;
+    }
+  }
+
+  async calculatePositionSize2(signal: any): Promise<number> {
+    try {
+      const portfolio = await storage.getPortfolioSummary();
+      const maxPositionValue = portfolio.totalValue * (this.limits.maxPositionSize / 100000); // Convert to percentage
+      
+      // Calculate position size based on signal confidence and risk
+      const baseSize = maxPositionValue / parseFloat(signal.price);
+      const confidenceMultiplier = signal.confidence || 0.5;
+      
+      return Math.floor(baseSize * confidenceMultiplier);
+    } catch (error) {
+      console.error('Error calculating position size:', error);
+      return 0;
+    }
+  }
+
+  async flattenAllPositions(): Promise<void> {
+    try {
+      const openPositions = await storage.getOpenPositions();
+      for (const position of openPositions) {
+        await storage.updatePosition(position.id, { status: 'closed' });
+      }
+      console.log(`Emergency stop: Flattened ${openPositions.length} positions`);
+    } catch (error) {
+      console.error('Error flattening positions:', error);
+    }
+  }
 }
 
 export const riskManager = new RiskManager();
