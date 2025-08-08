@@ -23,6 +23,10 @@ export interface OrderBook {
 }
 
 import { binanceClient } from './binance-client';
+import { coinGeckoClient } from './coingecko-client';
+import { coinLoreClient } from './coinlore-client';
+import { coinCapClient } from './coincap-client';
+import { multiApiClient } from './multi-api-client';
 import { historicalDataService } from './historical-data';
 
 export class MarketDataService {
@@ -41,10 +45,35 @@ export class MarketDataService {
   }
 
   private async initializeService() {
-    // Use REAL Binance market data only
-    console.log('Initializing REAL Binance market data feeds');
-    this.useLiveData = true;
-    await this.startLiveDataFeeds();
+    console.log('🌍 Initializing MULTI-API STACKED market data feeds (FREE APIs Aggregated)');
+    
+    // Test API availability
+    const apiStatus = await multiApiClient.getApiStatus();
+    const availableApis = Object.entries(apiStatus)
+      .filter(([_, status]) => status.available)
+      .map(([name]) => name);
+    
+    console.log(`✅ Available APIs: ${availableApis.join(', ')} (${availableApis.length}/4 active)`);
+    
+    if (availableApis.includes('CoinLore')) {
+      console.log('✅ CoinLore API connected - using as primary data source (NO REGISTRATION)');
+      this.useLiveData = true;
+      await this.startCoinLoreDataFeeds();
+    } else if (availableApis.includes('CoinCap')) {
+      console.log('✅ CoinCap API connected - using as primary data source (NO REGISTRATION)');
+      this.useLiveData = true;
+      await this.startCoinCapDataFeeds();
+    } else if (availableApis.length > 0) {
+      console.log('🎯 Starting AGGREGATED multi-API data feeds with weighted averaging');
+      this.useLiveData = true;
+      await this.startMultiApiDataFeeds();
+    } else {
+      console.log('⚠️ No APIs available - using cached data only');
+      this.useLiveData = false;
+    }
+    
+    // Start aggregated price polling with multi-API fallback
+    this.startMultiApiPricePolling();
   }
 
   private async startLiveDataFeeds() {
@@ -131,7 +160,127 @@ export class MarketDataService {
     }
   }
 
-  // Simulation removed - only authentic Binance API data allowed
+  // Multi-API data feed methods
+  
+  private async startMultiApiDataFeeds() {
+    console.log('🎯 Starting MULTI-API AGGREGATED data feeds...');
+    
+    // Initial aggregated data load
+    const aggregatedData = await multiApiClient.getAggregatedMarketData(this.symbols);
+    
+    aggregatedData.forEach((data, symbol) => {
+      // Convert to our MarketData format
+      const marketData: MarketData = {
+        symbol: data.symbol,
+        price: data.price,
+        timestamp: data.timestamp,
+        volume: data.volume,
+        spread: data.spread,
+        volatility: data.volatility
+      };
+      
+      this.data.set(symbol, marketData);
+      this.notifySubscribers(marketData);
+      console.log(`🎯 Aggregated ${symbol}: $${data.price.toFixed(2)} (${Math.round(data.confidence * 100)}% confidence, ${data.sources.length} sources)`);
+    });
+    
+    // Start regular aggregated updates every 15 seconds
+    setInterval(async () => {
+      try {
+        const updatedData = await multiApiClient.getAggregatedMarketData(this.symbols);
+        updatedData.forEach((data, symbol) => {
+          const marketData: MarketData = {
+            symbol: data.symbol,
+            price: data.price,
+            timestamp: data.timestamp,
+            volume: data.volume,
+            spread: data.spread,
+            volatility: data.volatility
+          };
+          
+          this.data.set(symbol, marketData);
+          this.notifySubscribers(marketData);
+        });
+      } catch (error) {
+        console.error('Multi-API update failed:', error);
+      }
+    }, 15000);
+  }
+
+  private async startCoinLoreDataFeeds() {
+    console.log('💰 Starting CoinLore real-time data feeds (FREE - No Registration)...');
+    
+    // Initial data load
+    const marketData = await coinLoreClient.getMultipleTickers(this.symbols);
+    
+    marketData.forEach((data, symbol) => {
+      this.data.set(symbol, data);
+      this.notifySubscribers(data);
+      console.log(`📊 CoinLore: ${symbol} @ $${data.price.toFixed(2)} (24h: ${data.priceChangePercent24h?.toFixed(2)}%)`);
+    });
+    
+    // Start regular updates every 10 seconds (CoinLore has generous limits)
+    setInterval(async () => {
+      try {
+        const updatedData = await coinLoreClient.getMultipleTickers(this.symbols);
+        updatedData.forEach((data, symbol) => {
+          this.data.set(symbol, data);
+          this.notifySubscribers(data);
+        });
+      } catch (error) {
+        console.error('CoinLore update failed:', error);
+      }
+    }, 10000);
+  }
+
+  private async startCoinCapDataFeeds() {
+    console.log('🚀 Starting CoinCap real-time data feeds (FREE - No Registration)...');
+    
+    // Initial data load
+    const marketData = await coinCapClient.getMultipleAssets(this.symbols);
+    
+    marketData.forEach((data, symbol) => {
+      this.data.set(symbol, data);
+      this.notifySubscribers(data);
+      console.log(`📊 CoinCap: ${symbol} @ $${data.price.toFixed(2)} (24h: ${data.priceChangePercent24h?.toFixed(2)}%)`);
+    });
+    
+    // Start regular updates every 5 seconds
+    setInterval(async () => {
+      try {
+        const updatedData = await coinCapClient.getMultipleAssets(this.symbols);
+        updatedData.forEach((data, symbol) => {
+          this.data.set(symbol, data);
+          this.notifySubscribers(data);
+        });
+      } catch (error) {
+        console.error('CoinCap update failed:', error);
+      }
+    }, 5000);
+  }
+  
+  private startMultiApiPricePolling() {
+    if (this.pollIntervals) {
+      this.pollIntervals.forEach((interval) => clearInterval(interval));
+    }
+    
+    this.pollIntervals = new Map();
+    
+    this.symbols.forEach((symbol) => {
+      const interval = setInterval(async () => {
+        try {
+          const price = await this.getCurrentPrice(symbol);
+          console.log(`📊 Multi-API: ${symbol} @ $${price.toFixed(2)} (Aggregated from multiple sources)`);
+        } catch (error) {
+          console.error(`Failed to poll aggregated price for ${symbol}:`, error);
+        }
+      }, 30000);
+      
+      this.pollIntervals!.set(symbol, interval);
+    });
+  }
+
+  // Legacy methods maintained for compatibility
 
   private startPollingForSymbol(symbol: string) {
     // Poll price data every 5 seconds as fallback
@@ -265,7 +414,24 @@ export class MarketDataService {
     return () => this.subscribers.delete(callback);
   }
 
-  getCurrentPrice(symbol: string): number {
+  async getCurrentPrice(symbol: string): Promise<number> {
+    try {
+      // Use multi-API aggregated pricing for best accuracy
+      return await multiApiClient.getAggregatedPrice(symbol);
+    } catch (error) {
+      console.error(`Failed to get aggregated price for ${symbol}:`, error);
+      
+      // Fallback to stored data if available
+      const cachedData = this.data.get(symbol);
+      if (cachedData) {
+        return cachedData.price;
+      }
+      
+      return 0;
+    }
+  }
+
+  getCurrentPriceSync(symbol: string): number {
     return this.data.get(symbol)?.price ?? 0;
   }
 
