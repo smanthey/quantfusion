@@ -8,6 +8,7 @@ import { PortfolioOptimizer } from "./portfolio-optimizer";
 import { CustomIndicatorEngine } from "./custom-indicators";
 import { mlPredictor } from "./ml-predictor";
 import { historicalDataCollector } from "./historical-data-collector";
+import { abTesting } from "./ab-testing";
 
 export class TradingEngine {
   private strategyEngine: StrategyEngine;
