@@ -311,7 +311,7 @@ export class TradingEngine {
         
         // RESEARCH IMPROVEMENT: Circuit breaker check
         if (!this.profitableStrategies.checkCircuitBreaker()) {
-          console.log(`🚨 CIRCUIT BREAKER: Daily loss limit reached - halting all trading operations`); all trading`);
+          console.log(`🚨 CIRCUIT BREAKER: Daily loss limit reached - halting all trading operations`);
           break; // Stop all trading for today
         }
 
@@ -1135,8 +1135,7 @@ export class TradingEngine {
             `System performance improved ${(learningMetrics.learningVelocity * 100).toFixed(2)}% through learned patterns. ${learningMetrics.adaptationRulesCount} rules actively filtering trades.`);
         } else if (learningMetrics.learningVelocity < -0.03) {
           console.log(`⚠️ LEARNING RESPONSE: Adapting to performance decline with ${failurePatterns.commonFailureConditions.length} identified issues`);
-          await this.createAlert("warning", "Learning Adaptation", 
-            `System adapting to performance decline. Identified ${failurePatterns.commonFailureConditions.length} issues requiring attention.`);", "AI Learning Adapting", 
+          await this.createAlert("warning", "AI Learning Adapting", 
             `Learning system identified ${failurePatterns.commonFailureConditions.length} failure patterns and is adapting strategy. Some trades may be blocked.`);
         }
       }

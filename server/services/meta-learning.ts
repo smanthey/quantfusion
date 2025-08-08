@@ -199,7 +199,7 @@ export class DatabaseMetaLearning implements MetaLearningService {
         },
         recentLearningActions: []
       };
-    }atch (error) {
+    } catch (error) {
       console.error('Meta-learning analysis error:', error);
       return {
         metaLearningStats: {

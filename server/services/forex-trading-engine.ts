@@ -395,33 +395,26 @@ export class ForexTradingEngine {
   }
 
   /**
-   * Calculate forex position size based on strategy and risk management
+   * Calculate realistic forex position size based on strategy and risk management
    */
   private calculateForexPositionSize(pair: string, strategy: string | number): number {
-    const riskPerTrade = 0.02; // 2% risk per trade (research-based)
-    const accountBalance = this.forexAccount.freeMargin;
-    const riskAmount = accountBalance * riskPerTrade;
+    const riskPerTrade = 0.01; // 1% risk per trade (more conservative)
+    const accountBalance = this.forexAccount.balance;
+    const riskAmount = accountBalance * riskPerTrade; // $100 max risk per trade
     
-    // Pip values vary by pair
-    const pipValue = this.getPipValue(pair);
+    // Use realistic forex lot sizes
+    const standardLot = 100000; // 100,000 units
+    const miniLot = 10000; // 10,000 units  
+    const microLot = 1000; // 1,000 units
     
-    let stopPips = 15; // Default
-    if (typeof strategy === 'string') {
-      switch (strategy) {
-        case 'scalping_major_pairs': stopPips = 5; break;
-        case 'carry_trade': stopPips = 25; break;
-        case 'range_trading': stopPips = 15; break;
-        case 'breakout_momentum': stopPips = 12; break;
-        case 'currency_correlation': stopPips = 18; break;
-      }
+    // Conservative position sizing for $10K account
+    if (riskAmount <= 50) {
+      return microLot * 0.1; // 100 units (very small)
+    } else if (riskAmount <= 100) {
+      return microLot * 0.5; // 500 units (small)
+    } else {
+      return microLot; // 1,000 units (conservative)
     }
-    
-    // Position size = Risk Amount / (Stop Pips * Pip Value)
-    const positionSize = riskAmount / (stopPips * pipValue);
-    
-    // Apply leverage limits (max 10:1 for forex)
-    const maxSize = accountBalance * 10;
-    return Math.min(positionSize, maxSize, 100000); // Max 1 standard lot
   }
 
   /**
@@ -436,17 +429,19 @@ export class ForexTradingEngine {
   }
 
   /**
-   * Execute forex trade
+   * Execute forex trade with proper recording
    */
   private async executeForexTrade(signal: any, strategy: string): Promise<void> {
     try {
-      // Check if we have enough free margin
-      if (this.forexAccount.freeMargin < signal.size * 100) {
-        console.log(`💱 Insufficient margin for ${signal.pair} trade`);
+      // Realistic margin check (use 2% margin requirement)
+      const marginRequired = signal.size * signal.rate * 0.02; // 2% margin for forex
+      
+      if (this.forexAccount.freeMargin < marginRequired) {
+        console.log(`💱 Insufficient margin for ${signal.pair} trade - Required: $${marginRequired.toFixed(2)}, Available: $${this.forexAccount.freeMargin.toFixed(2)}`);
         return;
       }
       
-      // Create forex trade
+      // Create forex trade with realistic values
       const forexTrade: ForexTrade = {
         id: `forex_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         pair: signal.pair,
@@ -456,7 +451,9 @@ export class ForexTradingEngine {
         timestamp: Date.now(),
         strategy,
         status: 'open',
-        fees: this.calculateForexFees(signal.size, signal.pair)
+        fees: this.calculateForexFees(signal.size, signal.pair),
+        stopLoss: signal.stopPips ? signal.rate + (signal.action === 'sell' ? signal.stopPips * 0.0001 : -signal.stopPips * 0.0001) : undefined,
+        takeProfit: signal.targetPips ? signal.rate + (signal.action === 'buy' ? signal.targetPips * 0.0001 : -signal.targetPips * 0.0001) : undefined
       };
       
       // Add to positions
@@ -465,11 +462,31 @@ export class ForexTradingEngine {
       }
       this.forexPositions.get(signal.pair)!.push(forexTrade);
       
-      // Add to trades history
+      // Add to trades history  
       this.forexTrades.push(forexTrade);
       
-      // Update account
-      this.forexAccount.margin += signal.size * 100; // Simplified margin calculation
+      // CRITICAL FIX: Save forex trade to database storage
+      try {
+        await storage.createTrade({
+          symbol: `FOREX_${signal.pair}`,
+          side: signal.action,
+          size: signal.size.toString(),
+          entryPrice: signal.rate.toString(),
+          exitPrice: null,
+          pnl: null,
+          fees: forexTrade.fees?.toString(),
+          duration: null,
+          strategyId: `forex_${strategy}`,
+          positionId: forexTrade.id
+        });
+        
+        console.log(`💱 FOREX TRADE RECORDED: ${signal.action} ${signal.size.toFixed(0)} ${signal.pair} at ${signal.rate}`);
+      } catch (error) {
+        console.error('Failed to save forex trade to database:', error);
+      }
+      
+      // Update account with realistic margin
+      this.forexAccount.margin += marginRequired;
       this.forexAccount.freeMargin = this.forexAccount.balance - this.forexAccount.margin;
       this.forexAccount.openPositions += 1;
       
