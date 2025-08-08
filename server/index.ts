@@ -65,7 +65,19 @@ app.use((req, res, next) => {
     port,
     host: "0.0.0.0",
     reusePort: true,
-  }, () => {
+  }, async () => {
     log(`serving on port ${port}`);
+    
+    // AUTO-START ALL AUTOMATION SYSTEMS
+    setTimeout(async () => {
+      try {
+        const { TradingEngine } = await import('./services/trading-engine');
+        const tradingEngine = new TradingEngine();
+        await tradingEngine.start();
+        console.log('🚀 FULL AUTOMATION SYSTEMS ACTIVATED - Auto Trading, Learning, Data Collection Now Running');
+      } catch (error) {
+        console.error('Error starting automation systems:', error);
+      }
+    }, 5000); // Start after 5 seconds to allow full server initialization
   });
 })();
