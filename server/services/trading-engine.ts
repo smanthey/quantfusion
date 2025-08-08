@@ -292,10 +292,65 @@ export class TradingEngine {
     }
   }
 
+  private calculatePositionSize(signal: any, price: number): number {
+    // Calculate position size based on signal strength and available capital
+    const baseSize = signal.size || 100; // Default $100 position
+    const maxRiskPerTrade = 0.02; // 2% max risk per trade
+    const accountBalance = 10000; // Mock account balance
+    
+    // Adjust size based on confidence if available
+    let adjustedSize = baseSize;
+    if (signal.confidence) {
+      adjustedSize = baseSize * signal.confidence;
+    }
+    
+    // Cap at maximum risk per trade
+    const maxPositionSize = accountBalance * maxRiskPerTrade;
+    adjustedSize = Math.min(adjustedSize, maxPositionSize);
+    
+    // Ensure minimum position size
+    adjustedSize = Math.max(adjustedSize, 50);
+    
+    return adjustedSize;
+  }
+
+  private async recordTradingDecision(signal: any, mlPrediction: any, position: any): Promise<void> {
+    try {
+      // Record the trading decision for ML learning
+      const record = {
+        symbol: signal.symbol,
+        action: signal.action,
+        price: signal.price,
+        confidence: signal.confidence,
+        mlPrediction: mlPrediction.priceDirection,
+        mlConfidence: mlPrediction.confidence,
+        positionId: position.id,
+        timestamp: new Date()
+      };
+      
+      console.log(`📝 Recorded trading decision: ${signal.action} ${signal.symbol} (ML: ${mlPrediction.priceDirection})`);
+    } catch (error) {
+      console.error('Error recording trading decision:', error);
+    }
+  }
+
   private calculateFees(size: number, price: number): number {
     const notional = size;  // size is already in USD
     const feeRate = 0.001; // 0.1% trading fee
     return notional * feeRate;
+  }
+
+  private calculatePositionSize(signal: any, price: number): number {
+    // Base position size from signal, with risk management
+    const baseSize = signal.size || 100;
+    const riskLimit = 500; // Maximum position size
+    const confidenceMultiplier = signal.confidence || 0.7;
+    
+    // Scale position size based on signal confidence
+    const adjustedSize = baseSize * confidenceMultiplier;
+    
+    // Apply risk limits
+    return Math.min(adjustedSize, riskLimit);
   }
 
   // Generate realistic trading signals based on current market conditions
