@@ -142,7 +142,7 @@ export class TradingEngine {
 
     // Get current market price
     const currentPrice = await this.marketData.getCurrentPrice(signal.symbol);
-    const stopPrice = this.calculateStopPrice(signal, currentPrice);
+    const stopPrice = this.calculateStopPrice(signal, currentPrice.toString());
 
     // Create position
     const position = await storage.createPosition({
@@ -150,9 +150,9 @@ export class TradingEngine {
       symbol: signal.symbol,
       side: signal.action === 'buy' ? 'long' : 'short',
       size: positionSize.toString(),
-      entryPrice: currentPrice,
+      entryPrice: currentPrice.toString(),
       stopPrice: stopPrice.toString(),
-      currentPrice: currentPrice,
+      currentPrice: currentPrice.toString(),
       unrealizedPnl: "0",
       status: 'open'
     });
@@ -164,10 +164,10 @@ export class TradingEngine {
       symbol: signal.symbol,
       side: signal.action === 'buy' ? 'long' : 'short',
       size: positionSize.toString(),
-      entryPrice: currentPrice,
+      entryPrice: currentPrice.toString(),
       exitPrice: null,
       pnl: null,
-      fees: this.calculateFees(positionSize, parseFloat(currentPrice)),
+      fees: this.calculateFees(positionSize, currentPrice).toString(),
       duration: null
     });
 
@@ -203,14 +203,14 @@ export class TradingEngine {
     for (const position of openPositions) {
       try {
         const currentPrice = await this.marketData.getCurrentPrice(position.symbol);
-        const unrealizedPnl = this.calculateUnrealizedPnl(position, currentPrice);
+        const unrealizedPnl = this.calculateUnrealizedPnl(position, currentPrice.toString());
         
         // Update position with current price and PnL
-        await storage.updatePositionPnL(position.id, currentPrice, unrealizedPnl.toString());
+        await storage.updatePositionPnL(position.id, currentPrice.toString(), unrealizedPnl.toString());
         
         // Check for stop loss or take profit
-        if (this.shouldClosePosition(position, currentPrice)) {
-          await this.closePosition(position, currentPrice);
+        if (this.shouldClosePosition(position, currentPrice.toString())) {
+          await this.closePosition(position, currentPrice.toString());
         }
       } catch (error) {
         console.error(`Error updating position ${position.id}:`, error);

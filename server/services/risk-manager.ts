@@ -296,11 +296,8 @@ export class RiskManager {
 
   async calculatePositionSizeForSignal(signal: any): Promise<number> {
     try {
-      const portfolio = await storage.getPortfolioSummary();
-      const maxPositionValue = portfolio.totalValue * (this.limits.maxPositionSize / 100000); // Convert to percentage
-      
-      // Calculate position size based on signal confidence and risk
-      const baseSize = maxPositionValue / parseFloat(signal.price);
+      // Simple calculation without storage dependency
+      const baseSize = this.limits.maxPositionSize / 10; // Conservative sizing
       const confidenceMultiplier = signal.confidence || 0.5;
       
       return Math.floor(baseSize * confidenceMultiplier);
@@ -314,7 +311,7 @@ export class RiskManager {
     try {
       const openPositions = await storage.getOpenPositions();
       for (const position of openPositions) {
-        await storage.updatePosition(position.id, { status: 'closed' });
+        await storage.updatePositionPnL(position.id, "0", "closed");
       }
       console.log(`Emergency stop: Flattened ${openPositions.length} positions`);
     } catch (error) {
