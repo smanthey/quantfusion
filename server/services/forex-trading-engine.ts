@@ -54,13 +54,13 @@ export class ForexTradingEngine {
   private forexPositions: Map<string, ForexTrade[]> = new Map();
   private forexTrades: ForexTrade[] = [];
   
-  // Forex-specific strategies based on research
+  // OPTIMIZED: Only use profitable strategies based on learning data
   private forexStrategies = [
-    'scalping_major_pairs',    // Research: Best for EURUSD, GBPUSD
-    'carry_trade',            // Research: High-yield differential pairs
-    'range_trading',          // Research: Sideways market conditions
-    'breakout_momentum',      // Research: News events and volatility spikes
-    'currency_correlation'    // Research: Cross-pair arbitrage
+    'scalping_major_pairs',    // WINNER: +$54.66 total P&L, $0.67 avg per trade
+    'breakout_momentum',      // ACCEPTABLE: +$10.68 total P&L, 33.8% win rate
+    // DISABLED: 'currency_correlation' - break even performance
+    // DISABLED: 'range_trading' - break even performance  
+    // DISABLED: 'carry_trade' - losing $49.83 total
   ];
 
   constructor() {
@@ -125,9 +125,9 @@ export class ForexTradingEngine {
       const forexRates = this.forexData.getAllForexRates();
       console.log(`💱 FOREX: Processing ${forexRates.length} currency pairs...`);
       
-      // Force execute trades on major pairs for comparison
-      const majorPairs = ['EURUSD', 'GBPUSD', 'USDJPY'];
-      for (const pair of majorPairs) {
+      // OPTIMIZED: Only trade profitable pairs based on learning data
+      const profitablePairs = ['EURUSD', 'GBPUSD']; // DISABLED USDJPY: -$2,284.62 P&L
+      for (const pair of profitablePairs) {
         const rate = forexRates.find(r => r.symbol === pair);
         if (rate) {
           console.log(`💱 FOREX: Processing ${pair} at rate ${rate.price}`);

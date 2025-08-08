@@ -38,7 +38,7 @@ export class ForexDataService {
   
   // Major forex pairs to track
   private readonly MAJOR_PAIRS = [
-    'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 
+    'EURUSD', 'GBPUSD', /* DISABLED: 'USDJPY' - MAJOR LOSER: -$2,284.62 P&L, 8.6% win rate */ 'AUDUSD', 
     'USDCAD', 'USDCHF', 'NZDUSD', 'EURGBP'
   ];
 

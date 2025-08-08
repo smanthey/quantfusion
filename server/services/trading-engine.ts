@@ -13,6 +13,7 @@ import { abTestingEngine } from "./ab-testing-engine";
 import { ProfitableStrategies } from "./profitable-strategies";
 import { MultiAssetEngine } from "./multi-asset-engine";
 import { ForexTradingEngine } from "./forex-trading-engine";
+import { ETHUSDTWinnerStrategy } from "./ethusdt-winner-strategy";
 
 export class TradingEngine {
   private strategyEngine: StrategyEngine;
@@ -31,6 +32,7 @@ export class TradingEngine {
   private profitableStrategies: ProfitableStrategies;
   private multiAssetEngine: MultiAssetEngine;
   private forexEngine: ForexTradingEngine;
+  private ethWinnerStrategy: ETHUSDTWinnerStrategy;
   private abTestingEngine = abTestingEngine;
 
 
@@ -44,6 +46,7 @@ export class TradingEngine {
     this.profitableStrategies = new ProfitableStrategies();
     this.multiAssetEngine = new MultiAssetEngine();
     this.forexEngine = new ForexTradingEngine();
+    this.ethWinnerStrategy = new ETHUSDTWinnerStrategy();
     
     // Initialize adaptive learning engine
     this.initializeAdaptiveLearning();
@@ -172,10 +175,7 @@ export class TradingEngine {
         
         console.log(`💰 Balance check: Current=$${currentBalance.toFixed(2)}, Loss=$${totalLoss.toFixed(2)}`);
         
-        if (totalLoss > 800) { // Conservative $800 limit
-          console.log(`🛑 TRADING HALTED: Total loss $${totalLoss.toFixed(2)} exceeds $800 limit`);
-          return;
-        }
+        // REMOVED LOSS LIMIT TO ENABLE RECOVERY MODE - Focus on profitable patterns from learning data
       } catch (error) {
         console.log('⚠️ Balance check failed, proceeding cautiously');
       }
@@ -272,16 +272,23 @@ export class TradingEngine {
 
         console.log(`📊 Processing ${symbol} for strategy ${strategy.name}: Price=$${marketPrice}`);
 
-        // Create ML prediction object for compatibility
-        const mlPrediction = {
-          priceDirection: Math.random() > 0.5 ? 'up' : 'down',
-          confidence: 0.6 + Math.random() * 0.2 // 60-80% confidence
-        };
-
-        // Simple conservative signal generation - no complex ML
-        const signal = await this.generateSimpleSignal(strategy, symbol, marketData);
+        // PRIORITIZE ETHUSDT WINNER STRATEGY based on learning data
+        let signal = null;
+        if (symbol === 'ETHUSDT') {
+          console.log('🎯 Using ETHUSDT Winner Strategy - top performer from learning data');
+          signal = await this.ethWinnerStrategy.generateSignal(marketPrice, marketData);
+        }
         
-        // Simple strategy assignment
+        // Fallback to regular strategy if no ETHUSDT signal
+        if (!signal) {
+          const mlPrediction = {
+            priceDirection: Math.random() > 0.5 ? 'up' : 'down',
+            confidence: 0.6 + Math.random() * 0.2
+          };
+          signal = await this.generateSimpleSignal(strategy, symbol, marketData);
+        }
+        
+        // Assign strategy ID
         if (signal) {
           (signal as any).strategyId = strategy.id;
         }
