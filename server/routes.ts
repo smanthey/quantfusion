@@ -124,42 +124,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return aTime - bTime;
     });
 
-    // STANDARDIZED P&L calculation used across ALL endpoints
+    // SIMPLE P&L: Use actual database P&L values instead of recalculating
     for (const trade of sortedTrades) {
-      const entryPrice = parseFloat(trade.entryPrice || '0');
-      const size = parseFloat(trade.size || '0');
       const executedAt = trade.executedAt ? new Date(trade.executedAt) : new Date();
-      const currentPrice = trade.symbol === 'BTCUSDT' ? btcCurrentPrice : ethCurrentPrice;
-
-      if (entryPrice > 0 && currentPrice > 0 && size > 0) {
-        // CONSISTENT P&L Formula: Position Value * Price Change %
-        const positionValue = size * entryPrice * 0.000001; // Convert to realistic dollar amount
-        const priceChange = currentPrice - entryPrice;
-        const priceChangePercent = priceChange / entryPrice;
-
-        let tradePnl = 0;
-        if (trade.side === 'buy') {
-          // Long: profit when price rises
-          tradePnl = positionValue * priceChangePercent;
-        } else {
-          // Short: profit when price falls
-          tradePnl = positionValue * -priceChangePercent;
-        }
-
-        // Subtract realistic transaction costs
-        tradePnl -= 0.05; // $0.05 per trade
-
+      
+      // Use actual P&L from database if available, otherwise skip
+      if (trade.pnl !== null && trade.pnl !== undefined) {
+        const tradePnl = parseFloat(trade.pnl);
+        
         totalPnl += tradePnl;
         runningEquity += tradePnl;
         returns.push(tradePnl);
 
-        // Track wins/losses
+        // Track wins/losses using actual P&L
         if (tradePnl > 0) {
           winningTrades++;
           profits += tradePnl;
         } else {
           losingTrades++;
-          losses += Math.abs(tradePnl);
+          losses += Math.abs(tradePnl); // Keep losses as positive numbers for display
         }
 
         // Calculate proper drawdown
@@ -305,6 +288,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Calculate actual performance metrics from all trades
       const allTrades = await storage.getAllTrades();
       const performance = await calculateUnifiedPerformance(allTrades);
+      
+      // Calculate P&L using separate profit and loss fields from database
+      let totalProfits = 0;
+      let totalLosses = 0;
+      let winCount = 0;
+      let lossCount = 0;
+      
+      // Use database profit/loss fields for accurate calculation
+      for (const trade of allTrades) {
+        const profit = parseFloat(trade.profit || '0');
+        const loss = parseFloat(trade.loss || '0');
+        
+        if (profit > 0) {
+          totalProfits += profit;
+          winCount++;
+        }
+        if (loss > 0) {
+          totalLosses += loss;
+          lossCount++;
+        }
+      }
+      
+      // Total P&L = Total Profits - Total Losses
+      const totalPnL = totalProfits - totalLosses;
 
       // Format data to match frontend expectations
       const dashboardData = {
@@ -313,15 +320,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         recentTrades: recentTrades || [],
         systemAlerts: systemAlerts || [],
         performance: {
-          totalPnl: performance.totalPnl,
+          totalPnL: totalPnL, // Net P&L (profits - losses)
+          totalWins: totalProfits, // Total profits from database
+          totalLosses: -totalLosses, // Total losses (displayed as negative)
           dailyPnL: performance.dailyPnL,
           drawdown: performance.drawdown,
-          winRate: performance.winRate,
-          profitFactor: performance.profitFactor,
+          winRate: allTrades.length > 0 ? winCount / allTrades.length : 0,
+          profitFactor: totalLosses > 0 ? totalProfits / totalLosses : (totalProfits > 0 ? 2.0 : 0),
           sharpeRatio: performance.sharpeRatio,
-          totalTrades: performance.totalTrades,
+          totalTrades: allTrades.length,
+          winningTrades: winCount,
+          losingTrades: lossCount,
           equity: performance.equity,
-          accountBalance: performance.accountBalance
+          accountBalance: 10000 + totalPnL // Starting balance + net P&L
         },
         marketData: {
           BTCUSDT: {
