@@ -21,6 +21,10 @@ import { BacktestEngine } from "./services/backtest-engine";
 import { MarketDataService } from "./services/market-data";
 import { binanceTradingService } from "./services/binance-trading";
 import { historicalDataService } from "./services/historical-data";
+import { mlPredictor } from "./services/ml-predictor";
+import { AdvancedOrderManager } from "./services/advanced-order-types";
+import { PortfolioOptimizer } from "./services/portfolio-optimizer";
+import { CustomIndicatorEngine } from "./services/custom-indicators";
 
 // Initialize trading services
 const marketData = new MarketDataService();
@@ -29,6 +33,9 @@ const regimeDetector = new RegimeDetector(marketData);
 const metaAllocator = new MetaAllocator();
 const riskManager = new RiskManager();
 const backtestEngine = new BacktestEngine();
+const orderManager = new AdvancedOrderManager();
+const portfolioOptimizer = new PortfolioOptimizer();
+const indicatorEngine = new CustomIndicatorEngine();
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -450,6 +457,292 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(regimes);
     } catch (error) {
       res.status(500).json({ error: 'Failed to fetch regime history' });
+    }
+  });
+
+  // ML Prediction endpoints
+  app.get('/api/ml/predictions/:symbol', async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      const { timeHorizon = '1h' } = req.query;
+      
+      const prediction = await mlPredictor.generatePrediction(
+        symbol.toUpperCase(),
+        timeHorizon as string
+      );
+      
+      res.json(prediction);
+    } catch (error) {
+      console.error('Error generating ML prediction:', error);
+      res.status(500).json({ error: 'Failed to generate prediction' });
+    }
+  });
+
+  app.get('/api/ml/models/metrics', async (req, res) => {
+    try {
+      const metrics = mlPredictor.getModelMetrics();
+      res.json(metrics);
+    } catch (error) {
+      console.error('Error fetching model metrics:', error);
+      res.status(500).json({ error: 'Failed to fetch model metrics' });
+    }
+  });
+
+  app.get('/api/ml/learning-report', async (req, res) => {
+    try {
+      const { period = '24h' } = req.query;
+      const report = await mlPredictor.generateLearningReport(period as string);
+      res.json(report);
+    } catch (error) {
+      console.error('Error generating learning report:', error);
+      res.status(500).json({ error: 'Failed to generate learning report' });
+    }
+  });
+
+  app.get('/api/ml/prediction-history', async (req, res) => {
+    try {
+      const { limit = '100' } = req.query;
+      const history = mlPredictor.getPredictionHistory(parseInt(limit as string));
+      res.json(history);
+    } catch (error) {
+      console.error('Error fetching prediction history:', error);
+      res.status(500).json({ error: 'Failed to fetch prediction history' });
+    }
+  });
+
+  // Advanced Order Management endpoints
+  app.post('/api/orders/iceberg', async (req, res) => {
+    try {
+      const orderResult = await orderManager.executeIcebergOrder(req.body);
+      res.json(orderResult);
+    } catch (error) {
+      console.error('Error executing iceberg order:', error);
+      res.status(500).json({ error: 'Failed to execute iceberg order' });
+    }
+  });
+
+  app.post('/api/orders/twap', async (req, res) => {
+    try {
+      const orderResult = await orderManager.executeTWAPOrder(req.body);
+      res.json(orderResult);
+    } catch (error) {
+      console.error('Error executing TWAP order:', error);
+      res.status(500).json({ error: 'Failed to execute TWAP order' });
+    }
+  });
+
+  app.post('/api/orders/vwap', async (req, res) => {
+    try {
+      const orderResult = await orderManager.executeVWAPOrder(req.body);
+      res.json(orderResult);
+    } catch (error) {
+      console.error('Error executing VWAP order:', error);
+      res.status(500).json({ error: 'Failed to execute VWAP order' });
+    }
+  });
+
+  app.post('/api/orders/implementation-shortfall', async (req, res) => {
+    try {
+      const orderResult = await orderManager.executeImplementationShortfall(req.body);
+      res.json(orderResult);
+    } catch (error) {
+      console.error('Error executing implementation shortfall order:', error);
+      res.status(500).json({ error: 'Failed to execute implementation shortfall order' });
+    }
+  });
+
+  app.get('/api/orders/routing/analysis', async (req, res) => {
+    try {
+      const { symbol } = req.query;
+      const analysis = await orderManager.analyzeOrderRouting(symbol as string);
+      res.json(analysis);
+    } catch (error) {
+      console.error('Error analyzing order routing:', error);
+      res.status(500).json({ error: 'Failed to analyze order routing' });
+    }
+  });
+
+  // Portfolio Optimization endpoints
+  app.get('/api/portfolio/optimization', async (req, res) => {
+    try {
+      const { method = 'markowitz', riskTolerance = '0.5' } = req.query;
+      const optimization = await portfolioOptimizer.optimizePortfolio(
+        method as 'markowitz' | 'kelly' | 'risk_parity',
+        parseFloat(riskTolerance as string)
+      );
+      res.json(optimization);
+    } catch (error) {
+      console.error('Error optimizing portfolio:', error);
+      res.status(500).json({ error: 'Failed to optimize portfolio' });
+    }
+  });
+
+  app.get('/api/portfolio/risk-analysis', async (req, res) => {
+    try {
+      const analysis = await portfolioOptimizer.calculateRiskMetrics();
+      res.json(analysis);
+    } catch (error) {
+      console.error('Error calculating risk metrics:', error);
+      res.status(500).json({ error: 'Failed to calculate risk metrics' });
+    }
+  });
+
+  app.post('/api/portfolio/rebalance', async (req, res) => {
+    try {
+      const result = await portfolioOptimizer.rebalancePortfolio(req.body);
+      
+      broadcast({
+        type: 'portfolio_rebalanced',
+        data: result,
+        timestamp: new Date().toISOString()
+      });
+      
+      res.json(result);
+    } catch (error) {
+      console.error('Error rebalancing portfolio:', error);
+      res.status(500).json({ error: 'Failed to rebalance portfolio' });
+    }
+  });
+
+  app.get('/api/portfolio/correlation-matrix', async (req, res) => {
+    try {
+      const matrix = await portfolioOptimizer.calculateCorrelationMatrix();
+      res.json(matrix);
+    } catch (error) {
+      console.error('Error calculating correlation matrix:', error);
+      res.status(500).json({ error: 'Failed to calculate correlation matrix' });
+    }
+  });
+
+  // Custom Technical Indicators endpoints
+  app.get('/api/indicators/adaptive-rsi/:symbol', async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      const { period = '14' } = req.query;
+      
+      const data = historicalDataService.getHistoricalData(symbol);
+      const rsi = indicatorEngine.calculateAdaptiveRSI(data, { 
+        period: parseInt(period as string) 
+      });
+      
+      res.json(rsi);
+    } catch (error) {
+      console.error('Error calculating adaptive RSI:', error);
+      res.status(500).json({ error: 'Failed to calculate adaptive RSI' });
+    }
+  });
+
+  app.get('/api/indicators/sentiment-oscillator/:symbol', async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      const { period = '20' } = req.query;
+      
+      const data = historicalDataService.getHistoricalData(symbol);
+      const sentiment = indicatorEngine.calculateSentimentOscillator(data, { 
+        period: parseInt(period as string) 
+      });
+      
+      res.json(sentiment);
+    } catch (error) {
+      console.error('Error calculating sentiment oscillator:', error);
+      res.status(500).json({ error: 'Failed to calculate sentiment oscillator' });
+    }
+  });
+
+  app.get('/api/indicators/market-regime/:symbol', async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      const { period = '20' } = req.query;
+      
+      const data = historicalDataService.getHistoricalData(symbol);
+      const regime = indicatorEngine.calculateMarketRegime(data, { 
+        period: parseInt(period as string) 
+      });
+      
+      res.json(regime);
+    } catch (error) {
+      console.error('Error calculating market regime:', error);
+      res.status(500).json({ error: 'Failed to calculate market regime' });
+    }
+  });
+
+  app.get('/api/indicators/volume-profile/:symbol', async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      const { period = '50' } = req.query;
+      
+      const data = historicalDataService.getHistoricalData(symbol);
+      const profile = indicatorEngine.calculateVolumeProfile(data, { 
+        period: parseInt(period as string) 
+      });
+      
+      res.json(profile);
+    } catch (error) {
+      console.error('Error calculating volume profile:', error);
+      res.status(500).json({ error: 'Failed to calculate volume profile' });
+    }
+  });
+
+  app.get('/api/indicators/volatility-bands/:symbol', async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      const { period = '20', multiplier = '2' } = req.query;
+      
+      const data = historicalDataService.getHistoricalData(symbol);
+      const bands = indicatorEngine.calculateVolatilityBands(data, { 
+        period: parseInt(period as string),
+        multiplier: parseFloat(multiplier as string)
+      });
+      
+      res.json(bands);
+    } catch (error) {
+      console.error('Error calculating volatility bands:', error);
+      res.status(500).json({ error: 'Failed to calculate volatility bands' });
+    }
+  });
+
+  // Strategy Performance Analysis
+  app.get('/api/analytics/strategy-performance', async (req, res) => {
+    try {
+      const { period = '7d' } = req.query;
+      const strategies = await storage.getActiveStrategies();
+      const performance = [];
+      
+      for (const strategy of strategies) {
+        const trades = await storage.getTradesByStrategy(strategy.id);
+        const analysis = await backtestEngine.analyzeStrategyPerformance(strategy, trades);
+        performance.push({
+          strategy: strategy.name,
+          ...analysis
+        });
+      }
+      
+      res.json(performance);
+    } catch (error) {
+      console.error('Error analyzing strategy performance:', error);
+      res.status(500).json({ error: 'Failed to analyze strategy performance' });
+    }
+  });
+
+  // Advanced Analytics endpoints
+  app.get('/api/analytics/market-microstructure', async (req, res) => {
+    try {
+      const { symbol = 'BTCUSDT' } = req.query;
+      const analysis = await orderManager.analyzeMicrostructure(symbol as string);
+      res.json(analysis);
+    } catch (error) {
+      console.error('Error analyzing market microstructure:', error);
+      res.status(500).json({ error: 'Failed to analyze market microstructure' });
+    }
+  });
+
+  app.get('/api/analytics/regime-detection', async (req, res) => {
+    try {
+      const regimes = await regimeDetector.detectRegimes();
+      res.json(regimes);
+    } catch (error) {
+      console.error('Error detecting market regimes:', error);
+      res.status(500).json({ error: 'Failed to detect market regimes' });
     }
   });
 
