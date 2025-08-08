@@ -92,8 +92,10 @@ app.use((req, res, next) => {
       await forexEngine.start();
       console.log('✅ Forex trading engine started');
 
-      const server = app.listen(port, host, () => {
+      // Use the HTTP server from registerRoutes that includes WebSocket support
+      server.listen(port, host, () => {
         console.log(`🌐 Server running on http://${host}:${port}`);
+        console.log(`🔌 WebSocket server running on ws://${host}:${port}/ws`);
       });
 
       return server;

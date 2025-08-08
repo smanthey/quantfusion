@@ -52,7 +52,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   wss.on('connection', (ws) => {
     clients.add(ws);
-    console.log('Client connected to WebSocket');
+    console.log('✅ Client connected to WebSocket');
 
     // Send initial data
     ws.send(JSON.stringify({
@@ -61,13 +61,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       timestamp: new Date().toISOString()
     }));
 
+    // Handle ping/pong for connection health
+    ws.on('message', (data) => {
+      try {
+        const message = JSON.parse(data.toString());
+        if (message.type === 'ping') {
+          ws.send(JSON.stringify({
+            type: 'pong',
+            timestamp: new Date().toISOString()
+          }));
+        }
+      } catch (err) {
+        console.error('WebSocket message parse error:', err);
+      }
+    });
+
     ws.on('close', () => {
       clients.delete(ws);
-      console.log('Client disconnected from WebSocket');
+      console.log('🔌 Client disconnected from WebSocket');
     });
 
     ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
+      console.error('❌ WebSocket error:', error);
       clients.delete(ws);
     });
   });
@@ -414,6 +429,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         riskMetrics: riskData
       };
 
+      // Broadcast real-time dashboard updates to all connected clients
+      broadcast({
+        type: 'dashboard_update',
+        data: dashboardData,
+        timestamp: new Date().toISOString()
+      });
 
       res.json(dashboardData);
     } catch (error) {
