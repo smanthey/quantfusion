@@ -3,11 +3,17 @@ import { storage } from "../storage";
 import { StrategyEngine } from "./strategy-engine";
 import { RiskManager } from "./risk-manager";
 import { MarketDataService } from "./market-data";
+import { AdvancedOrderManager } from "./advanced-order-types";
+import { PortfolioOptimizer } from "./portfolio-optimizer";
+import { CustomIndicatorEngine } from "./custom-indicators";
 
 export class TradingEngine {
   private strategyEngine: StrategyEngine;
   private riskManager: RiskManager;
   private marketData: MarketDataService;
+  private orderManager: AdvancedOrderManager;
+  private portfolioOptimizer: PortfolioOptimizer;
+  private indicatorEngine: CustomIndicatorEngine;
   private isRunning = false;
   private intervalId?: NodeJS.Timeout;
 
@@ -15,6 +21,9 @@ export class TradingEngine {
     this.strategyEngine = new StrategyEngine();
     this.riskManager = new RiskManager();
     this.marketData = new MarketDataService();
+    this.orderManager = new AdvancedOrderManager();
+    this.portfolioOptimizer = new PortfolioOptimizer();
+    this.indicatorEngine = new CustomIndicatorEngine();
   }
 
   async start(): Promise<void> {
@@ -79,26 +88,29 @@ export class TradingEngine {
   }
 
   private async processStrategy(strategy: Strategy): Promise<void> {
-    // Generate signals for the strategy
-    const signals = await this.strategyEngine.generateSignals(strategy);
+    // Generate signals for each symbol the strategy trades
+    const symbols = ['BTCUSDT', 'ETHUSDT']; // Default symbols
     
-    for (const signal of signals) {
-      // Check if we can execute this signal
-      const canExecute = await this.riskManager.canExecuteTrade(signal);
-      if (!canExecute) {
-        continue;
-      }
-
-      // Execute the trade
+    for (const symbol of symbols) {
       try {
+        const signal = await this.strategyEngine.generateSignal(strategy, symbol);
+        if (!signal) continue;
+        
+        // Check if we can execute this signal
+        const canExecute = await this.riskManager.canExecuteTrade(signal);
+        if (!canExecute) {
+          continue;
+        }
+
+        // Execute the trade
         const position = await this.executeTrade(strategy, signal);
         if (position) {
-          console.log(`Executed ${signal.side} ${signal.symbol} for strategy ${strategy.name}`);
+          console.log(`Executed ${signal.action} ${signal.symbol} for strategy ${strategy.name}`);
         }
       } catch (error) {
         console.error(`Failed to execute trade for ${strategy.name}:`, error);
         await this.createAlert("error", "Trade Execution Failed", 
-          `Failed to execute ${signal.side} ${signal.symbol}: ${error instanceof Error ? error.message : String(error)}`);
+          `Failed to execute trade for ${strategy.name}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
   }
@@ -118,7 +130,7 @@ export class TradingEngine {
     const position = await storage.createPosition({
       strategyId: strategy.id,
       symbol: signal.symbol,
-      side: signal.side,
+      side: signal.action === 'buy' ? 'long' : 'short',
       size: positionSize.toString(),
       entryPrice: currentPrice,
       stopPrice: stopPrice.toString(),
@@ -132,7 +144,7 @@ export class TradingEngine {
       strategyId: strategy.id,
       positionId: position.id,
       symbol: signal.symbol,
-      side: signal.side,
+      side: signal.action === 'buy' ? 'long' : 'short',
       size: positionSize.toString(),
       entryPrice: currentPrice,
       exitPrice: null,
@@ -146,9 +158,15 @@ export class TradingEngine {
 
   private calculateStopPrice(signal: any, entryPrice: string): number {
     const price = parseFloat(entryPrice);
+    
+    // Use the signal's stop loss if available, otherwise default to 2%
+    if (signal.stopLoss) {
+      return signal.stopLoss;
+    }
+    
     const stopDistance = price * 0.02; // 2% stop loss
     
-    if (signal.side === 'long') {
+    if (signal.action === 'buy') {
       return price - stopDistance;
     } else {
       return price + stopDistance;

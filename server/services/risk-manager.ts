@@ -1,4 +1,5 @@
 import { marketDataService } from './market-data';
+import { storage } from '../storage';
 
 export interface RiskLimits {
   maxPositionSize: number;
@@ -6,6 +7,7 @@ export interface RiskLimits {
   maxDrawdown: number;
   perTradeRisk: number;
   exploreBudget: number;
+  maxPositions: number;
 }
 
 export interface RiskMetrics {
@@ -32,7 +34,8 @@ export class RiskManager {
     maxDailyLoss: 500,
     maxDrawdown: 2000,
     perTradeRisk: 100,
-    exploreBudget: 200
+    exploreBudget: 200,
+    maxPositions: 10
   };
 
   private isTradeHalted = false;
@@ -98,6 +101,48 @@ export class RiskManager {
       this.todaysStart = today;
       this.dailyStartEquity = this.currentEquity;
     }
+  }
+
+  async checkConstraints(): Promise<{ canTrade: boolean; reason?: string; riskLevel: 'low' | 'medium' | 'high' }> {
+    if (this.isTradeHalted) {
+      return {
+        canTrade: false,
+        reason: 'Trading halted due to risk limits',
+        riskLevel: 'high'
+      };
+    }
+
+    const metrics = this.getCurrentMetrics();
+    
+    // Check daily loss limit
+    if (metrics.dailyPnL <= -this.limits.maxDailyLoss) {
+      this.haltTrading('Daily loss limit exceeded');
+      return { canTrade: false, reason: 'Daily loss limit exceeded', riskLevel: 'high' };
+    }
+
+    // Check max drawdown
+    if (metrics.currentDrawdown >= this.limits.maxDrawdown) {
+      this.haltTrading('Maximum drawdown exceeded');
+      return { canTrade: false, reason: 'Maximum drawdown exceeded', riskLevel: 'high' };
+    }
+
+    // Calculate risk level
+    const riskUtilization = Math.max(
+      Math.abs(metrics.dailyPnL) / this.limits.maxDailyLoss,
+      metrics.currentDrawdown / this.limits.maxDrawdown
+    );
+
+    let riskLevel: 'low' | 'medium' | 'high' = 'low';
+    if (riskUtilization > 0.7) riskLevel = 'high';
+    else if (riskUtilization > 0.4) riskLevel = 'medium';
+
+    return { canTrade: true, riskLevel };
+  }
+
+  async flattenAllPositions(): Promise<void> {
+    console.log('Emergency stop: Flattening all positions');
+    this.haltTrading('Emergency stop activated');
+    // In production, this would close all open positions
   }
 
   getCurrentMetrics(): RiskMetrics {
