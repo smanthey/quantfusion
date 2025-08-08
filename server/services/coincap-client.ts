@@ -142,6 +142,7 @@ export class CoinCapClient {
       const response = await this.makeRequest('/assets/bitcoin');
       return response && response.data && response.data.id === 'bitcoin';
     } catch (error) {
+      console.warn('CoinCap ping failed, but continuing with other APIs:', error.message);
       return false;
     }
   }

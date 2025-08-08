@@ -120,18 +120,30 @@ export function TradingDashboard() {
   // Show dashboard with fallback data if API fails
   const safeCurrentData = currentData || {
     marketData: {
-      BTCUSDT: { price: 116450, change24h: 0.12, volume: 1000000000 },
-      ETHUSDT: { price: 3975, change24h: 4.15, volume: 800000000 }
+      BTCUSDT: { price: 116450, change: 0.12, volume: 1000000000 },
+      ETHUSDT: { price: 3975, change: 4.15, volume: 800000000 }
     },
     positions: [],
     strategies: [],
     performance: {
-      totalPnL: 0,
-      dailyPnL: 0,
+      totalPnl: 0,
+      dailyPnl: 0,
       winRate: 0,
-      totalTrades: 0
+      totalTrades: 0,
+      drawdown: 0,
+      profitFactor: 0,
+      sharpeRatio: 0,
+      equity: [],
     },
-    systemAlerts: []
+    systemAlerts: [],
+    riskMetrics: {
+      currentDrawdown: 0,
+      dailyPnL: 0,
+      totalPositionSize: 0,
+      riskUtilization: 0,
+      isHalted: false,
+      circuitBreakers: [],
+    }
   };
 
   if (dashboardError && !currentData) {
@@ -150,7 +162,7 @@ export function TradingDashboard() {
   };
 
   // Use safe data for rendering
-  const currentData = safeCurrentData;
+  const finalData = safeCurrentData;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -224,18 +236,18 @@ export function TradingDashboard() {
             <CardHeader>
               <CardTitle className="flex justify-between items-center">
                 BTC/USDT
-                <Badge variant={currentData.marketData.BTCUSDT.change >= 0 ? "secondary" : "destructive"}>
-                  {formatPercentage(currentData.marketData.BTCUSDT.change)}
+                <Badge variant={finalData.marketData.BTCUSDT.change >= 0 ? "secondary" : "destructive"}>
+                  {formatPercentage(finalData.marketData.BTCUSDT.change)}
                 </Badge>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{formatCurrency(currentData.marketData.BTCUSDT.price)}</p>
+              <p className="text-2xl font-bold">{formatCurrency(finalData.marketData.BTCUSDT.price)}</p>
               <p className="text-sm text-muted-foreground">
-                Volume: {currentData.marketData.BTCUSDT.volume.toLocaleString()}
+                Volume: {finalData.marketData.BTCUSDT.volume.toLocaleString()}
               </p>
               <p className="text-sm text-muted-foreground">
-                Volatility: {formatPercentage(currentData.marketData.BTCUSDT.volatility)}
+                Volatility: {formatPercentage(finalData.marketData.BTCUSDT.volatility)}
               </p>
             </CardContent>
           </Card>
@@ -244,18 +256,18 @@ export function TradingDashboard() {
             <CardHeader>
               <CardTitle className="flex justify-between items-center">
                 ETH/USDT
-                <Badge variant={currentData.marketData.ETHUSDT.change >= 0 ? "secondary" : "destructive"}>
-                  {formatPercentage(currentData.marketData.ETHUSDT.change)}
+                <Badge variant={finalData.marketData.ETHUSDT.change >= 0 ? "secondary" : "destructive"}>
+                  {formatPercentage(finalData.marketData.ETHUSDT.change)}
                 </Badge>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{formatCurrency(currentData.marketData.ETHUSDT.price)}</p>
+              <p className="text-2xl font-bold">{formatCurrency(finalData.marketData.ETHUSDT.price)}</p>
               <p className="text-sm text-muted-foreground">
-                Volume: {currentData.marketData.ETHUSDT.volume.toLocaleString()}
+                Volume: {finalData.marketData.ETHUSDT.volume.toLocaleString()}
               </p>
               <p className="text-sm text-muted-foreground">
-                Volatility: {formatPercentage(currentData.marketData.ETHUSDT.volatility)}
+                Volatility: {formatPercentage(finalData.marketData.ETHUSDT.volatility)}
               </p>
             </CardContent>
           </Card>
@@ -268,15 +280,15 @@ export function TradingDashboard() {
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Current</span>
-                  <Badge variant="outline">{currentData.marketData.regime.current}</Badge>
+                  <Badge variant="outline">{finalData.marketData.regime.current}</Badge>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Strength</span>
-                  <span className="text-sm">{(currentData.marketData.regime.strength * 100).toFixed(0)}%</span>
+                  <span className="text-sm">{(finalData.marketData.regime.strength * 100).toFixed(0)}%</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Confidence</span>
-                  <span className="text-sm">{(currentData.marketData.regime.confidence * 100).toFixed(0)}%</span>
+                  <span className="text-sm">{(finalData.marketData.regime.confidence * 100).toFixed(0)}%</span>
                 </div>
               </div>
             </CardContent>
@@ -291,10 +303,10 @@ export function TradingDashboard() {
             </CardHeader>
             <CardContent>
               <p className="text-2xl font-bold text-green-600">
-                {formatCurrency(currentData.performance.totalPnl)}
+                {formatCurrency(finalData.performance.totalPnl)}
               </p>
               <p className="text-sm text-muted-foreground">
-                Daily: {formatCurrency(currentData.performance.dailyPnl)}
+                Daily: {formatCurrency(finalData.performance.dailyPnl)}
               </p>
             </CardContent>
           </Card>
@@ -304,9 +316,9 @@ export function TradingDashboard() {
               <CardTitle>Win Rate</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{formatPercentage(currentData.performance.winRate)}</p>
+              <p className="text-2xl font-bold">{formatPercentage(finalData.performance.winRate)}</p>
               <p className="text-sm text-muted-foreground">
-                {currentData.performance.totalTrades} total trades
+                {finalData.performance.totalTrades} total trades
               </p>
             </CardContent>
           </Card>
@@ -316,9 +328,9 @@ export function TradingDashboard() {
               <CardTitle>Profit Factor</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{currentData.performance.profitFactor.toFixed(2)}</p>
+              <p className="text-2xl font-bold">{finalData.performance.profitFactor.toFixed(2)}</p>
               <p className="text-sm text-muted-foreground">
-                Sharpe: {currentData.performance.sharpeRatio.toFixed(2)}
+                Sharpe: {finalData.performance.sharpeRatio.toFixed(2)}
               </p>
             </CardContent>
           </Card>
@@ -329,7 +341,7 @@ export function TradingDashboard() {
             </CardHeader>
             <CardContent>
               <p className="text-2xl font-bold text-red-600">
-                {formatPercentage(currentData.performance.drawdown)}
+                {formatPercentage(finalData.performance.drawdown)}
               </p>
               <p className="text-sm text-muted-foreground">
                 Max historical drawdown
@@ -347,20 +359,20 @@ export function TradingDashboard() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <p className="text-sm text-muted-foreground">Current Drawdown</p>
-                <p className="text-lg font-semibold">{formatPercentage(currentData.riskMetrics.currentDrawdown / 100)}</p>
+                <p className="text-lg font-semibold">{formatPercentage(finalData.riskMetrics.currentDrawdown / 100)}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Position Size</p>
-                <p className="text-lg font-semibold">{formatCurrency(currentData.riskMetrics.totalPositionSize)}</p>
+                <p className="text-lg font-semibold">{formatCurrency(finalData.riskMetrics.totalPositionSize)}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Risk Utilization</p>
-                <p className="text-lg font-semibold">{formatPercentage(currentData.riskMetrics.riskUtilization)}</p>
+                <p className="text-lg font-semibold">{formatPercentage(finalData.riskMetrics.riskUtilization)}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Trading Status</p>
-                <Badge variant={currentData.riskMetrics.isHalted ? "destructive" : "secondary"}>
-                  {currentData.riskMetrics.isHalted ? "Halted" : "Active"}
+                <Badge variant={finalData.riskMetrics.isHalted ? "destructive" : "secondary"}>
+                  {finalData.riskMetrics.isHalted ? "Halted" : "Active"}
                 </Badge>
               </div>
             </div>
@@ -537,14 +549,14 @@ export function TradingDashboard() {
         </Card>
 
         {/* System Alerts */}
-        {currentData.systemAlerts.length > 0 && (
+        {finalData.systemAlerts.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>System Alerts ({currentData.systemAlerts.length})</CardTitle>
+              <CardTitle>System Alerts ({finalData.systemAlerts.length})</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {currentData.systemAlerts.slice(0, 5).map((alert: any, index: number) => (
+                {finalData.systemAlerts.slice(0, 5).map((alert: any, index: number) => (
                   <div key={index} className="flex justify-between items-center p-2 bg-muted rounded">
                     <div>
                       <p className="font-medium">{alert.title}</p>
