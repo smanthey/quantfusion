@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { useState, useEffect } from 'react';
+import { Link } from "wouter";
 
 interface DashboardData {
   strategies: any[];
@@ -162,6 +163,21 @@ export function TradingDashboard() {
                 <Badge variant="destructive">Disconnected</Badge>
               )}
             </div>
+          </div>
+          {/* Navigation Buttons */}
+          <div className="flex gap-2">
+            <Button asChild variant="outline">
+              <Link href="/">Dashboard</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/manage-orders">Manage Orders</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/portfolio">Portfolio</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/settings">Settings</Link>
+            </Button>
           </div>
         </div>
 
@@ -368,9 +384,9 @@ export function TradingDashboard() {
                     <p className="text-lg font-semibold">78.5%</p>
                   </div>
                 </div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => window.open('/api/ml/predictions/BTCUSDT?timeHorizon=1h')}
                 >
                   View Detailed Predictions
@@ -399,8 +415,8 @@ export function TradingDashboard() {
                   <p className="text-sm text-muted-foreground">Expected Sharpe Ratio</p>
                   <p className="text-lg font-semibold">2.15</p>
                 </div>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={() => window.open('/api/portfolio/optimization?method=markowitz')}
                 >
@@ -427,8 +443,8 @@ export function TradingDashboard() {
                   <p className="text-sm text-muted-foreground">Active Advanced Orders</p>
                   <p className="text-lg font-semibold">0</p>
                 </div>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={() => window.open('/api/orders/advanced')}
                 >
@@ -459,8 +475,8 @@ export function TradingDashboard() {
                   <p className="text-sm text-muted-foreground">Volume Profile Signal</p>
                   <Badge variant="secondary">Accumulation</Badge>
                 </div>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={() => window.open('/api/indicators/adaptive-rsi/BTCUSDT')}
                 >
@@ -496,15 +512,15 @@ export function TradingDashboard() {
               </div>
             </div>
             <div className="mt-4 flex gap-2">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={() => window.open('/api/ml/models/metrics')}
               >
                 Full Model Metrics
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={() => window.open('/api/ml/models/learning-report')}
               >
