@@ -134,21 +134,19 @@ export function TradingDashboard() {
     );
   }
 
-  const safeCurrentData = currentData;
-
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-    }).format(value);
+    }).format(value || 0);
   };
 
   const formatPercentage = (value: number) => {
-    return `${(value * 100).toFixed(2)}%`;
+    return `${((value || 0) * 100).toFixed(2)}%`;
   };
 
-  // Use safe data for rendering
-  const finalData = safeCurrentData;
+  // Use current data directly
+  const finalData = currentData;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
