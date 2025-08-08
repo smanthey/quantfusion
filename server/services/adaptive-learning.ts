@@ -142,15 +142,17 @@ export class AdaptiveLearningEngine {
       existing.lastUpdated = Date.now();
       existing.confidence = Math.max(0.1, Math.min(0.9, existing.successRate));
       
-      // META-LEARNING: Track rule effectiveness in database
-      metaLearning.recordLearningFeedback(
-        'rule_performance',
-        ruleId,
-        'rule',
-        { expectedOutcome: existing.successRate > 0.5 ? 'improve' : 'maintain' },
-        { actualOutcome: update.performance > 0 ? 'success' : 'failure' },
-        existing.successRate
-      ).catch(err => console.error('Meta-learning feedback error:', err));
+      // META-LEARNING: Track rule effectiveness in database (throttled)
+      if (existing.timesApplied % 10 === 0) { // Only record every 10th application to reduce spam
+        metaLearning.recordLearningFeedback(
+          'rule_performance',
+          ruleId,
+          'rule',
+          { expectedOutcome: existing.successRate > 0.5 ? 'improve' : 'maintain' },
+          { actualOutcome: update.performance > 0 ? 'success' : 'failure' },
+          existing.successRate
+        ).catch(err => console.error('Meta-learning feedback error:', err));
+      }
     } else {
       // Create new rule
       const newRule = {

@@ -78,7 +78,7 @@ export class TradingEngine {
     // Start INTENSIVE continuous ML learning loop
     this.learningIntervalId = setInterval(async () => {
       try {
-        await this.intensiveLearningLoop();
+        await this.continuousLearningLoop();
       } catch (error) {
         console.error("Learning loop error:", error);
       }

@@ -18,7 +18,7 @@ export function useWebSocket(url: string) {
     try {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const wsUrl = `${protocol}//${window.location.host}/ws`;
-      
+
       ws.current = new WebSocket(wsUrl);
 
       ws.current.onopen = () => {
@@ -40,7 +40,7 @@ export function useWebSocket(url: string) {
       ws.current.onclose = () => {
         console.log('WebSocket disconnected');
         setIsConnected(false);
-        
+
         // Attempt to reconnect
         if (reconnectAttempts.current < maxReconnectAttempts) {
           reconnectAttempts.current += 1;
