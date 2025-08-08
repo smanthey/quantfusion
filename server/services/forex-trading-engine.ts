@@ -5,7 +5,7 @@
  */
 
 import { ForexDataService } from './forex-data-service';
-import { storage } from '../storage';
+// Dynamic import used in executeForexTrade method
 
 export interface ForexTrade {
   id?: string;

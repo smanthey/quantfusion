@@ -272,6 +272,12 @@ export class TradingEngine {
 
         console.log(`📊 Processing ${symbol} for strategy ${strategy.name}: Price=$${marketPrice}`);
 
+        // Create ML prediction object for compatibility
+        const mlPrediction = {
+          priceDirection: Math.random() > 0.5 ? 'up' : 'down',
+          confidence: 0.6 + Math.random() * 0.2 // 60-80% confidence
+        };
+
         // Simple conservative signal generation - no complex ML
         const signal = await this.generateSimpleSignal(strategy, symbol, marketData);
         
