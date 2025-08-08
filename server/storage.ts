@@ -47,6 +47,7 @@ export interface IStorage {
   updatePositionStatus(id: string, status: string): Promise<Position>;
   
   // Trade management
+  getAllTrades(): Promise<Trade[]>;
   getRecentTrades(limit: number): Promise<Trade[]>;
   getTradesSince(date: Date): Promise<Trade[]>;
   getTradesByStrategy(strategyId: string): Promise<Trade[]>;
@@ -191,6 +192,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Trade management
+  async getAllTrades(): Promise<Trade[]> {
+    return await db.select().from(trades).orderBy(desc(trades.executedAt));
+  }
+
   async getRecentTrades(limit: number): Promise<Trade[]> {
     return await db
       .select()
