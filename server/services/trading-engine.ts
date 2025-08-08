@@ -6,6 +6,7 @@ import { MarketDataService } from "./market-data";
 import { AdvancedOrderManager } from "./advanced-order-types";
 import { PortfolioOptimizer } from "./portfolio-optimizer";
 import { CustomIndicatorEngine } from "./custom-indicators";
+import { mlPredictor } from "./ml-predictor";
 
 export class TradingEngine {
   private strategyEngine: StrategyEngine;
@@ -428,12 +429,12 @@ export class TradingEngine {
           const currentPrice = await this.marketData.getCurrentPrice(symbol);
           const marketData = this.marketData.getMarketData(symbol);
           
-          if (marketData && Math.random() < 0.2) { // Log 20% of data points
-            console.log(`📊 Data: ${symbol} @ ${currentPrice} (Vol: ${marketData.volume.toFixed(0)}, RSI: ${marketData.rsi.toFixed(1)})`);
+          if (marketData && marketData.volume !== undefined && Math.random() < 0.2) { // Log 20% of data points
+            console.log(`📊 Data: ${symbol} @ ${currentPrice} (Vol: ${marketData.volume.toFixed(0)}, Volatility: ${(marketData.volatility * 100).toFixed(2)}%)`);
           }
 
         } catch (error) {
-          console.error(`Data collection error for ${symbol}:`, error);
+          // Silent handling to prevent spam - data collection will retry on next cycle
         }
       }
 

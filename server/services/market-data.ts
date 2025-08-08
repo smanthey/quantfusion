@@ -41,10 +41,10 @@ export class MarketDataService {
   }
 
   private async initializeService() {
-    // Force simulation mode to avoid any API errors
-    console.log('Using simulated market data to avoid API errors');
-    this.useLiveData = false;
-    this.startDataSimulation();
+    // Use REAL Binance market data only
+    console.log('Initializing REAL Binance market data feeds');
+    this.useLiveData = true;
+    await this.startLiveDataFeeds();
   }
 
   private async startLiveDataFeeds() {
@@ -125,42 +125,13 @@ export class MarketDataService {
 
       } catch (error) {
         console.error(`Failed to set up live data for ${symbol}:`, error);
-        // Fall back to simulation for this symbol
-        this.startSymbolSimulation(symbol);
+        // Use basic polling instead of simulation for authentic data
+        this.startPollingForSymbol(symbol);
       }
     }
   }
 
-  private startDataSimulation() {
-    console.log('Starting market data simulation...');
-    this.simulationInterval = setInterval(() => {
-      this.symbols.forEach(symbol => {
-        const currentData = this.data.get(symbol) || {
-          symbol,
-          price: symbol === 'BTCUSDT' ? 43000 : 2500,
-          timestamp: Date.now(),
-          volume: 1000000,
-          spread: 0.01,
-          volatility: 0.02
-        };
-
-        // Simulate price movement with random walk
-        const change = (Math.random() - 0.5) * 0.001; // ±0.1% change
-        const newPrice = currentData.price * (1 + change);
-
-        const updatedData: MarketData = {
-          ...currentData,
-          price: newPrice,
-          timestamp: Date.now(),
-          volume: currentData.volume * (1 + (Math.random() - 0.5) * 0.1),
-          volatility: Math.abs(change)
-        };
-
-        this.data.set(symbol, updatedData);
-        this.notifySubscribers(updatedData);
-      });
-    }, 1000);
-  }
+  // Simulation removed - only authentic Binance API data allowed
 
   private startPollingForSymbol(symbol: string) {
     // Poll price data every 5 seconds as fallback
