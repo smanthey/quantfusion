@@ -49,6 +49,7 @@ export interface IStorage {
   // Trade management
   getRecentTrades(limit: number): Promise<Trade[]>;
   getTradesSince(date: Date): Promise<Trade[]>;
+  getTradesByStrategy(strategyId: string): Promise<Trade[]>;
   createTrade(trade: InsertTrade): Promise<Trade>;
   
   // Market regime
@@ -203,6 +204,14 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(trades)
       .where(gte(trades.executedAt, date))
+      .orderBy(desc(trades.executedAt));
+  }
+
+  async getTradesByStrategy(strategyId: string): Promise<Trade[]> {
+    return await db
+      .select()
+      .from(trades)
+      .where(eq(trades.strategyId, strategyId))
       .orderBy(desc(trades.executedAt));
   }
 

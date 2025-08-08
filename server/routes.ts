@@ -112,16 +112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         positions: positions || [],
         recentTrades: recentTrades || [],
         systemAlerts: systemAlerts || [],
-        performance: {
-          totalPnl: currentMetrics.dailyPnL + 12456.78, // Simulated total
-          dailyPnl: currentMetrics.dailyPnL,
-          drawdown: riskData.currentDrawdown,
-          winRate: 0.68,
-          profitFactor: 1.45,
-          sharpeRatio: 1.23,
-          totalTrades: recentTrades?.length || 0,
-          equity: [] // Would be populated with historical equity data
-        },
+        performance: await this.calculateRealPerformance(recentTrades),
         marketData: {
           BTCUSDT: {
             price: btcData?.price || 43000,

@@ -7,6 +7,7 @@ import { AdvancedOrderManager } from "./advanced-order-types";
 import { PortfolioOptimizer } from "./portfolio-optimizer";
 import { CustomIndicatorEngine } from "./custom-indicators";
 import { mlPredictor } from "./ml-predictor";
+import { historicalDataCollector } from "./historical-data-collector";
 
 export class TradingEngine {
   private strategyEngine: StrategyEngine;
@@ -36,6 +37,12 @@ export class TradingEngine {
 
     this.isRunning = true;
     console.log("🚀 FULL AUTOMATION ACTIVATED - Auto-Trading, Auto-Learning, and Data Collection Started");
+
+    // Start historical data collection for ML training
+    console.log("🏛️ Starting 5-year historical data collection...");
+    setTimeout(() => {
+      historicalDataCollector.startHistoricalCollection();
+    }, 10000); // Start after 10 seconds
 
     // Initialize default strategies if none exist
     await this.initializeDefaultStrategies();
