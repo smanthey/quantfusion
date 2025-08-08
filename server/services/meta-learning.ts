@@ -231,15 +231,6 @@ export class DatabaseMetaLearning implements MetaLearningService {
         learningWinRate: 0,
         avgEffectiveness: 0
       };
-    } catch (error: any) {
-      console.error('Learning effectiveness error:', error);
-      return {
-        totalApplications: 0,
-        winningApplications: 0,
-        losingApplications: 0,
-        learningWinRate: 0,
-        avgEffectiveness: 0
-      };
     }
   }
 }
