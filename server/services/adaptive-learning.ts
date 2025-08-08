@@ -71,7 +71,7 @@ export class AdaptiveLearningEngine {
       });
     }
 
-    // Pattern: Time-based performance
+    // Pattern: Time-based performance (more aggressive learning)
     const hour = new Date(feedback.timestamp).getHours();
     const timeRule = `time_${hour}_${feedback.symbol}`;
     this.updateRule(timeRule, {
@@ -80,15 +80,52 @@ export class AdaptiveLearningEngine {
       performance: feedback.actualOutcome === 'win' ? 1 : 0
     });
 
-    // Pattern: Consecutive losses
-    const recentFeedback = this.feedbackHistory.slice(-10);
-    const recentLosses = recentFeedback.filter(f => f.actualOutcome === 'loss').length;
+    // Pattern: Prediction accuracy learning
+    const predictionRule = `prediction_${feedback.prediction}_${feedback.symbol}`;
+    const predictionCorrect = (feedback.prediction === 'buy' && feedback.actualOutcome === 'win') || 
+                             (feedback.prediction === 'sell' && feedback.actualOutcome === 'win');
+    this.updateRule(predictionRule, {
+      condition: `${feedback.prediction} prediction for ${feedback.symbol}`,
+      action: predictionCorrect ? 'trust_prediction' : 'distrust_prediction',
+      performance: predictionCorrect ? 1 : 0
+    });
+
+    // Pattern: Market condition learning
+    if (feedback.marketConditions) {
+      const conditionRule = `market_${feedback.marketConditions}_${feedback.symbol}`;
+      this.updateRule(conditionRule, {
+        condition: `${feedback.marketConditions} conditions for ${feedback.symbol}`,
+        action: feedback.actualOutcome === 'win' ? 'favorable_condition' : 'unfavorable_condition',
+        performance: feedback.actualOutcome === 'win' ? 1 : 0
+      });
+    }
+
+    // Pattern: Consecutive losses (more sophisticated)
+    const recentSymbolFeedback = this.feedbackHistory.slice(-30).filter(f => f.symbol === feedback.symbol);
+    const recentLosses = recentSymbolFeedback.filter(f => f.actualOutcome === 'loss').length;
     
-    if (recentLosses >= 7) {
-      const lossStreakRule = `loss_streak_${feedback.symbol}`;
+    if (recentLosses >= 20) { // 20+ losses in last 30 trades for this symbol
+      const lossStreakRule = `loss_streak_severe_${feedback.symbol}`;
       this.updateRule(lossStreakRule, {
-        condition: `Consecutive losses detected for ${feedback.symbol}`,
+        condition: `Severe loss streak for ${feedback.symbol}`,
+        action: 'block_trades',
+        performance: 0
+      });
+    } else if (recentLosses >= 15) {
+      const lossStreakRule = `loss_streak_moderate_${feedback.symbol}`;
+      this.updateRule(lossStreakRule, {
+        condition: `Moderate loss streak for ${feedback.symbol}`,
         action: 'reduce_confidence',
+        performance: 0
+      });
+    }
+
+    // Pattern: Large loss learning (avoid repeating big losses)
+    if (feedback.pnl < -50) { // Loss greater than $50
+      const largeLossRule = `large_loss_${feedback.marketConditions}_${feedback.symbol}`;
+      this.updateRule(largeLossRule, {
+        condition: `Large loss in ${feedback.marketConditions} for ${feedback.symbol}`,
+        action: 'avoid_similar_conditions',
         performance: 0
       });
     }
@@ -122,46 +159,76 @@ export class AdaptiveLearningEngine {
     const marketConditions = this.getCurrentMarketConditions(symbol);
     
     let adaptedConfidence = basePrediction.confidence;
-    let adaptedAction = basePrediction.action;
-    let adaptedSize = basePrediction.size;
+    let adaptedDirection = basePrediction.priceDirection;
+    let shouldRejectTrade = false;
+    let adaptationReasons: string[] = [];
 
-    // Apply adaptation rules
+    // Apply adaptation rules with strong impact
     for (const [ruleId, rule] of Array.from(this.adaptationRules.entries())) {
-      if (rule.confidence < this.learningConfig.confidenceThreshold) continue;
+      if (rule.confidence < 0.5) continue; // Only apply confident rules
       
-      // Time-based adaptations
+      // AGGRESSIVE Time-based learning: Block trading at bad times
       if (ruleId.includes(`time_${currentHour}_${symbol}`)) {
-        if (rule.action === 'avoid_trades' && rule.successRate < 0.3) {
-          adaptedConfidence *= 0.5; // Reduce confidence for poor-performing times
-        } else if (rule.action === 'favor_trades' && rule.successRate > 0.6) {
-          adaptedConfidence *= 1.2; // Increase confidence for good-performing times
+        if (rule.action === 'avoid_trades' && rule.successRate < 0.25 && rule.timesApplied > 20) {
+          shouldRejectTrade = true;
+          adaptationReasons.push(`BLOCKED: Hour ${currentHour} has ${(rule.successRate * 100).toFixed(1)}% win rate over ${rule.timesApplied} trades`);
+        } else if (rule.action === 'favor_trades' && rule.successRate > 0.65) {
+          adaptedConfidence *= 1.4; // Strong boost for good times
+          adaptationReasons.push(`BOOSTED: Hour ${currentHour} performs well (${(rule.successRate * 100).toFixed(1)}% win rate)`);
         }
       }
 
-      // Volatility-based adaptations
+      // AGGRESSIVE Volatility learning
       if (ruleId.includes('high_volatility') && marketConditions.includes('high_volatility')) {
-        if (rule.action === 'reduce_position_size') {
-          adaptedSize *= 0.7; // Reduce position size in volatile conditions
-        } else if (rule.action === 'increase_position_size') {
-          adaptedSize *= 1.3; // Increase position size when volatility works in our favor
+        if (rule.action === 'reduce_position_size' && rule.successRate < 0.3) {
+          adaptedConfidence *= 0.4; // Massive reduction in volatile losses
+          adaptationReasons.push(`REDUCED: High volatility leads to losses (${(rule.successRate * 100).toFixed(1)}% success)`);
         }
       }
 
-      // Loss streak adaptations
-      if (ruleId.includes('loss_streak') && rule.action === 'reduce_confidence') {
-        adaptedConfidence *= 0.6; // Significant reduction during loss streaks
+      // AGGRESSIVE Loss streak learning: Change direction or block trades
+      if (ruleId.includes('loss_streak')) {
+        const recentLosses = this.feedbackHistory.slice(-20).filter(f => f.actualOutcome === 'loss' && f.symbol === symbol).length;
+        if (recentLosses >= 15) { // 15+ losses in last 20 trades
+          // Flip the prediction direction - maybe we're consistently wrong
+          adaptedDirection = adaptedDirection === 'up' ? 'down' : 'up';
+          adaptedConfidence *= 0.3;
+          adaptationReasons.push(`FLIPPED: ${recentLosses}/20 recent losses - reversing prediction direction`);
+        } else if (recentLosses >= 10) {
+          adaptedConfidence *= 0.2; // Extremely low confidence
+          adaptationReasons.push(`CAUTION: ${recentLosses}/20 recent losses - very low confidence`);
+        }
+      }
+
+      // Pattern-based rejections: Learn from consistent failures
+      if (rule.timesApplied > 50 && rule.successRate < 0.2) {
+        shouldRejectTrade = true;
+        adaptationReasons.push(`PATTERN_BLOCK: This pattern failed ${rule.timesApplied - Math.floor(rule.successRate * rule.timesApplied)}/${rule.timesApplied} times`);
       }
     }
 
-    // Ensure bounds
-    adaptedConfidence = Math.max(0.1, Math.min(0.9, adaptedConfidence));
+    // Hard rejection threshold
+    if (adaptedConfidence < 0.15 || shouldRejectTrade) {
+      return {
+        ...basePrediction,
+        confidence: 0.0, // This will prevent trade execution
+        priceDirection: adaptedDirection,
+        adaptationApplied: true,
+        adaptationReason: `TRADE_REJECTED: ${adaptationReasons.join('; ')}`,
+        rejected: true
+      };
+    }
+
+    // Ensure bounds but allow higher confidence for good patterns
+    adaptedConfidence = Math.max(0.15, Math.min(0.95, adaptedConfidence));
 
     return {
       ...basePrediction,
       confidence: adaptedConfidence,
-      size: adaptedSize,
-      adaptationApplied: true,
-      adaptationReason: this.getAdaptationSummary(symbol, currentHour)
+      priceDirection: adaptedDirection,
+      adaptationApplied: adaptationReasons.length > 0,
+      adaptationReason: adaptationReasons.length > 0 ? adaptationReasons.join('; ') : 'No significant adaptations',
+      rejected: false
     };
   }
 

@@ -229,15 +229,34 @@ export class TradingEngine {
             trendStrength: adaptedPrediction.trendStrength || basePrediction.trendStrength,
             volatilityForecast: adaptedPrediction.volatilityForecast || basePrediction.volatilityForecast
           };
+          
+          // Show learning impact clearly
           if (adaptedPrediction.adaptationApplied) {
-            console.log(`🧠 Learning adapted prediction: ${adaptedPrediction.adaptationReason}`);
+            console.log(`🧠 LEARNING IMPACT: ${adaptedPrediction.adaptationReason}`);
+          }
+          
+          // Check if trade was rejected by learning system
+          if (adaptedPrediction.rejected || adaptedPrediction.confidence < 0.15) {
+            console.log(`❌ TRADE BLOCKED BY LEARNING: ${symbol} trade rejected due to learned patterns`);
+            continue; // Skip this symbol entirely
           }
         }
 
         // Create realistic trading signals based on market data and adapted ML
         const signal = await this.generateTradingSignal(strategy, symbol, marketData, mlPrediction);
-        console.log(`🎯 Signal generated for ${symbol}:`, signal ? `${signal.action} at $${signal.price} (confidence: ${signal.confidence})` : 'No signal generated');
-        if (!signal) continue;
+        
+        if (!signal) {
+          console.log(`🚫 No signal generated for ${symbol} - conditions not met or learning system rejected`);
+          continue;
+        }
+        
+        console.log(`🎯 Signal generated for ${symbol}: ${signal.action} at $${signal.price} (confidence: ${signal.confidence})`);
+        
+        // Additional learning-based signal filtering
+        if (this.adaptiveLearning && signal.confidence < 0.3) {
+          console.log(`🛑 LEARNING FILTER: ${symbol} signal confidence too low (${signal.confidence}) - trade skipped`);
+          continue;
+        }
 
         // Execute the trade with validated price
         console.log(`🔄 Executing ${signal.action} trade for ${symbol} at $${signal.price}`);
@@ -827,20 +846,31 @@ export class TradingEngine {
         const learningMetrics = await this.adaptiveLearning.getLearningMetrics();
         const failurePatterns = await this.adaptiveLearning.analyzeFailurePatterns();
         
-        console.log(`📈 Learning Metrics: Win Rate=${(learningMetrics.recentWinRate * 100).toFixed(1)}%, Rules=${learningMetrics.adaptationRulesCount}, Velocity=${(learningMetrics.learningVelocity * 100).toFixed(2)}%`);
+        console.log(`📈 LEARNING IMPACT: Win Rate=${(learningMetrics.recentWinRate * 100).toFixed(1)}%, Active Rules=${learningMetrics.adaptationRulesCount}, Learning Velocity=${(learningMetrics.learningVelocity * 100).toFixed(2)}%`);
         
-        if (failurePatterns.recommendations.length > 0) {
-          console.log(`💡 Learning Recommendations: ${failurePatterns.recommendations[0]}`);
-          await this.createAlert("info", "Learning Insight", failurePatterns.recommendations[0]);
+        // Show concrete learning actions
+        const topRules = learningMetrics.topPerformingRules.slice(0, 2);
+        if (topRules.length > 0) {
+          console.log(`🎯 TOP LEARNED PATTERNS:`);
+          topRules.forEach(rule => {
+            console.log(`  - ${rule.condition}: ${rule.action} (${(rule.successRate * 100).toFixed(1)}% success over ${rule.timesApplied} applications)`);
+          });
         }
         
-        // Alert if performance is improving
-        if (learningMetrics.learningVelocity > 0.05) {
-          await this.createAlert("success", "Learning Progress", 
-            `System is improving! Win rate increased by ${(learningMetrics.learningVelocity * 100).toFixed(2)}% with ${learningMetrics.adaptationRulesCount} learned patterns.`);
-        } else if (learningMetrics.learningVelocity < -0.05) {
-          await this.createAlert("warning", "Performance Decline", 
-            `Performance declining. Analyzing ${failurePatterns.commonFailureConditions.length} failure patterns for optimization.`);
+        if (failurePatterns.recommendations.length > 0) {
+          console.log(`🚨 ACTIVE LEARNING ACTIONS: ${failurePatterns.recommendations[0]}`);
+          await this.createAlert("info", "Learning Action", failurePatterns.recommendations[0]);
+        }
+        
+        // Show concrete performance changes
+        if (learningMetrics.learningVelocity > 0.03) {
+          console.log(`🚀 LEARNING SUCCESS: Performance improving by ${(learningMetrics.learningVelocity * 100).toFixed(2)}% with ${learningMetrics.adaptationRulesCount} active rules`);
+          await this.createAlert("success", "AI Learning Working", 
+            `System performance improved ${(learningMetrics.learningVelocity * 100).toFixed(2)}% through learned patterns. ${learningMetrics.adaptationRulesCount} rules actively filtering trades.`);
+        } else if (learningMetrics.learningVelocity < -0.03) {
+          console.log(`⚠️ LEARNING RESPONSE: Adapting to performance decline with ${failurePatterns.commonFailureConditions.length} identified issues`);
+          await this.createAlert("warning", "AI Learning Adapting", 
+            `Learning system identified ${failurePatterns.commonFailureConditions.length} failure patterns and is adapting strategy. Some trades may be blocked.`);
         }
       }
 
