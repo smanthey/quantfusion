@@ -86,20 +86,23 @@ export class ETHUSDTWinnerStrategy {
 
   /**
    * Calculate position size based on learning data patterns
+   * FIXED: Return token quantity, not dollar amount
    */
   private calculatePosition(price: number, volatility: number, action: string): number {
-    let baseSize = this.MIN_POSITION_SIZE;
+    let baseDollarSize = this.MIN_POSITION_SIZE; // Dollar amount
     
     // Increase size for shorting (higher avg profit per trade)
     if (action === 'short') {
-      baseSize = this.MIN_POSITION_SIZE * 1.5; // Larger shorts for higher profits
+      baseDollarSize = this.MIN_POSITION_SIZE * 1.5; // Larger shorts for higher profits
     }
     
     // Adjust for volatility (higher vol = smaller position for risk control)
     const volatilityAdjustment = Math.max(0.5, 1 - volatility);
-    const adjustedSize = baseSize * volatilityAdjustment;
+    const adjustedDollarSize = baseDollarSize * volatilityAdjustment;
+    const finalDollarSize = Math.min(adjustedDollarSize, this.MAX_POSITION_SIZE);
     
-    return Math.min(adjustedSize, this.MAX_POSITION_SIZE);
+    // CRITICAL FIX: Convert dollar amount to token quantity
+    return finalDollarSize / price; // Return token quantity, not dollar amount
   }
 
   /**

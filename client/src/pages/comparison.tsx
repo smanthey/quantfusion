@@ -14,7 +14,10 @@ interface ForexAccount {
   dailyPnL: number;
   openPositions: number;
   tradesCount: number;
+  totalTrades?: number;
   winRate: number;
+  totalProfits?: string;
+  totalLosses?: string;
 }
 
 interface CryptoAccount {
@@ -22,6 +25,8 @@ interface CryptoAccount {
   totalPnL: number;
   winRate: number;
   tradesCount: number;
+  totalProfits?: string;
+  totalLosses?: string;
 }
 
 interface ComparisonData {
@@ -64,6 +69,25 @@ export function ComparisonPage() {
     return ((pnl / initial) * 100).toFixed(2);
   };
 
+  // Add comma formatting for large numbers
+  const formatCurrency = (amount: number | string) => {
+    const num = typeof amount === 'string' ? parseFloat(amount.replace(/[$,]/g, '')) : amount;
+    return new Intl.NumberFormat('en-US', { 
+      style: 'currency', 
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(num);
+  };
+
+  const formatNumber = (num: number | string) => {
+    if (typeof num === 'string') {
+      const number = parseFloat(num.replace(/[,%]/g, ''));
+      return new Intl.NumberFormat('en-US').format(number);
+    }
+    return new Intl.NumberFormat('en-US').format(num);
+  };
+
   // Extract data from comparison API with type safety
   const cryptoData_comp = (comparisonData as ComparisonData)?.crypto || {} as any;
   const forexData_comp = (comparisonData as ComparisonData)?.forex || {} as any;
@@ -72,7 +96,8 @@ export function ComparisonPage() {
   const cryptoPnL = parseFloat(String(cryptoData_comp.totalPnL || '0').replace(/[$,]/g, ''));
   const cryptoROI = parseFloat(String((comparisonData as ComparisonData)?.performance?.cryptoROI || '0').replace('%', ''));
   
-  const forexBalance = parseFloat(String(forexData_comp.balance || '10000').replace(/[$,]/g, ''));
+  const forexBalanceStr = String(forexData_comp.balance || '10000');
+  const forexBalance = parseFloat(forexBalanceStr.replace(/[$,]/g, ''));
   const forexPnL = parseFloat(forexData_comp.totalPnL?.replace(/[$,]/g, '') || '0');
   const forexROI = parseFloat((comparisonData as ComparisonData)?.performance?.forexROI?.replace('%', '') || '0');
   
@@ -182,7 +207,7 @@ export function ComparisonPage() {
               <div>
                 <div className="text-sm text-muted-foreground">Total P&L</div>
                 <div className={`text-lg font-semibold ${cryptoPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ${cryptoPnL.toFixed(2)}
+                  {formatCurrency(cryptoPnL)}
                 </div>
               </div>
               <div>
@@ -199,7 +224,7 @@ export function ComparisonPage() {
               </div>
               <div>
                 <div className="text-sm text-muted-foreground">Total Trades</div>
-                <div className="text-lg font-semibold">{(dashboardData as any)?.totalTrades || 4500}</div>
+                <div className="text-lg font-semibold">{formatNumber((dashboardData as any)?.totalTrades || 4500)}</div>
               </div>
             </div>
 
@@ -242,7 +267,7 @@ export function ComparisonPage() {
               <div>
                 <div className="text-sm text-muted-foreground">Total P&L</div>
                 <div className={`text-lg font-semibold ${forexPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {forexData_comp.totalPnL || '$0.00'}
+                  {formatCurrency(forexData_comp.totalPnL || '0')}
                 </div>
               </div>
               <div>
@@ -259,7 +284,7 @@ export function ComparisonPage() {
               </div>
               <div>
                 <div className="text-sm text-muted-foreground">Total Trades</div>
-                <div className="text-lg font-semibold">{forexData_comp.totalTrades || '0'}</div>
+                <div className="text-lg font-semibold">{formatNumber(forexData_comp.totalTrades || '0')}</div>
               </div>
             </div>
 
