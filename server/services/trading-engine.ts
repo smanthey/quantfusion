@@ -158,8 +158,10 @@ export class TradingEngine {
     console.log('🔄 Trading loop executing...');
     
     try {
-      // EMERGENCY: Check total losses IMMEDIATELY
-      const currentBalance = await this.getCurrentBalance();
+      // EMERGENCY: Check total losses IMMEDIATELY using storage
+      const allTrades = await storage.getAllTrades();
+      const totalPnL = allTrades.reduce((sum, trade) => sum + (parseFloat(trade.pnl?.toString() || '0')), 0);
+      const currentBalance = 10000 + totalPnL;
       const totalLoss = 10000 - currentBalance;
       if (totalLoss > 500) {
         console.log(`🚨 EMERGENCY HALT: Total loss $${totalLoss.toFixed(2)} exceeds $500 limit - STOPPING ALL TRADING`);

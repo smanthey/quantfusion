@@ -465,8 +465,20 @@ export class ForexTradingEngine {
       // Add to trades history  
       this.forexTrades.push(forexTrade);
       
-      // CRITICAL FIX: Save forex trade to database storage
+      // FIXED: Create position first, then trade
       try {
+        // Create position in database first
+        const position = await storage.createPosition({
+          strategyId: `forex_${strategy}`,
+          symbol: `FOREX_${signal.pair}`,
+          side: signal.action as 'buy' | 'sell',
+          size: signal.size.toString(),
+          entryPrice: signal.rate.toString(),
+          currentPrice: signal.rate.toString(),
+          status: 'open' as const
+        });
+        
+        // Now create trade linked to position
         await storage.createTrade({
           symbol: `FOREX_${signal.pair}`,
           side: signal.action,
@@ -477,7 +489,7 @@ export class ForexTradingEngine {
           fees: forexTrade.fees?.toString(),
           duration: null,
           strategyId: `forex_${strategy}`,
-          positionId: forexTrade.id
+          positionId: position.id
         });
         
         console.log(`💱 FOREX TRADE RECORDED: ${signal.action} ${signal.size.toFixed(0)} ${signal.pair} at ${signal.rate}`);
