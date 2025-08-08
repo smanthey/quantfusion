@@ -1295,11 +1295,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/forex/trades', async (req, res) => {
     try {
-      const trades = forexEngine.getForexTrades();
-      res.json(trades);
+      // Get all trades from storage - wait for data to be available
+      let allTrades = await storage.getAllTrades();
+      
+      // If no trades yet, wait a bit and try again (trades might still be loading)
+      if (allTrades.length === 0) {
+        console.log(`⏳ FOREX: No trades found, waiting for system to generate data...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        allTrades = await storage.getAllTrades();
+      }
+      
+      console.log(`🔍 FOREX DEBUG: Retrieved ${allTrades.length} total trades from storage`);
+      
+      if (allTrades.length === 0) {
+        console.log(`⚠️ FOREX: Still no trades - system may be starting up`);
+        return res.json([]);
+      }
+      
+      // Debug: Show sample of what we're working with
+      const sampleTrades = allTrades.slice(0, 5).map(t => ({
+        symbol: t.symbol,
+        side: t.side,
+        entryPrice: t.entryPrice
+      }));
+      console.log(`🔍 FOREX SAMPLE:`, JSON.stringify(sampleTrades, null, 2));
+      
+      // Filter forex trades using currency pair patterns
+      const forexTrades = allTrades.filter(trade => {
+        if (!trade.symbol) return false;
+        
+        const symbol = trade.symbol.toUpperCase();
+        const forexPairs = ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCAD', 'AUDUSD', 'NZDUSD', 'EURGBP', 'EURJPY'];
+        const isForex = forexPairs.some(pair => symbol === pair || symbol.includes(pair));
+        
+        if (isForex) {
+          console.log(`✅ FOREX FOUND: ${symbol} | ${trade.side} | $${trade.pnl || '0'}`);
+        }
+        return isForex;
+      });
+      
+      console.log(`📊 FOREX RESULT: Found ${forexTrades.length} forex trades out of ${allTrades.length} total`);
+      res.json(forexTrades);
+      
     } catch (error) {
-      console.error('Error getting forex trades:', error);
-      res.status(500).json({ error: 'Failed to get forex trades' });
+      console.error('❌ FOREX ERROR:', error);
+      res.status(500).json({ error: 'Failed to retrieve forex trades' });
     }
   });
 
