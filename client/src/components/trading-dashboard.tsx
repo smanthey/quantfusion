@@ -73,6 +73,36 @@ export function TradingDashboard() {
     refetchInterval: 10000, // Refresh every 10 seconds
   });
 
+  // Show loading state
+  if (dashboardLoading || accountLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="text-2xl font-bold text-green-500 mb-4">🚀 Crypto Trading Platform</div>
+          <div className="text-lg mb-4">Loading multi-API market data...</div>
+          <div className="text-sm text-gray-400">
+            Connecting to CoinLore, CoinCap, CoinGecko & Binance
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (dashboardError) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="text-2xl font-bold text-red-500 mb-4">⚠️ Connection Error</div>
+          <div className="text-lg mb-4">Unable to load dashboard data</div>
+          <div className="text-sm text-gray-400">
+            Error: {dashboardError.message}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // WebSocket connection for real-time updates
   const { isConnected, data: lastMessage } = useWebSocket('/ws');
 
