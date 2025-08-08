@@ -120,8 +120,13 @@ export function TradingDashboard() {
   // Show dashboard with fallback data if API fails
   const safeCurrentData = currentData || {
     marketData: {
-      BTCUSDT: { price: 116450, change: 0.12, volume: 1000000000 },
-      ETHUSDT: { price: 3975, change: 4.15, volume: 800000000 }
+      BTCUSDT: { price: 116450, change: 0.12, volume: 1000000000, volatility: 0.02 },
+      ETHUSDT: { price: 3975, change: 4.15, volume: 800000000, volatility: 0.03 },
+      regime: {
+        current: 'Trending',
+        strength: 0.7,
+        confidence: 0.8
+      }
     },
     positions: [],
     strategies: [],
@@ -247,7 +252,7 @@ export function TradingDashboard() {
                 Volume: {finalData.marketData.BTCUSDT.volume.toLocaleString()}
               </p>
               <p className="text-sm text-muted-foreground">
-                Volatility: {formatPercentage(finalData.marketData.BTCUSDT.volatility)}
+                Volatility: {formatPercentage(finalData.marketData.BTCUSDT.volatility || 0)}
               </p>
             </CardContent>
           </Card>
@@ -267,7 +272,7 @@ export function TradingDashboard() {
                 Volume: {finalData.marketData.ETHUSDT.volume.toLocaleString()}
               </p>
               <p className="text-sm text-muted-foreground">
-                Volatility: {formatPercentage(finalData.marketData.ETHUSDT.volatility)}
+                Volatility: {formatPercentage(finalData.marketData.ETHUSDT.volatility || 0)}
               </p>
             </CardContent>
           </Card>
@@ -280,15 +285,15 @@ export function TradingDashboard() {
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Current</span>
-                  <Badge variant="outline">{finalData.marketData.regime.current}</Badge>
+                  <Badge variant="outline">{finalData.marketData.regime?.current || 'Unknown'}</Badge>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Strength</span>
-                  <span className="text-sm">{(finalData.marketData.regime.strength * 100).toFixed(0)}%</span>
+                  <span className="text-sm">{((finalData.marketData.regime?.strength || 0) * 100).toFixed(0)}%</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Confidence</span>
-                  <span className="text-sm">{(finalData.marketData.regime.confidence * 100).toFixed(0)}%</span>
+                  <span className="text-sm">{((finalData.marketData.regime?.confidence || 0) * 100).toFixed(0)}%</span>
                 </div>
               </div>
             </CardContent>
@@ -328,9 +333,9 @@ export function TradingDashboard() {
               <CardTitle>Profit Factor</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{finalData.performance.profitFactor.toFixed(2)}</p>
+              <p className="text-2xl font-bold">{(finalData.performance.profitFactor || 0).toFixed(2)}</p>
               <p className="text-sm text-muted-foreground">
-                Sharpe: {finalData.performance.sharpeRatio.toFixed(2)}
+                Sharpe: {(finalData.performance.sharpeRatio || 0).toFixed(2)}
               </p>
             </CardContent>
           </Card>

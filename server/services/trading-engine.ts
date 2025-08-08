@@ -222,14 +222,14 @@ export class TradingEngine {
 
     try {
       // Use the price from the signal if available, otherwise fetch fresh price
-      let price = signal.price;
+      let price = typeof signal.price === 'string' ? parseFloat(signal.price) : signal.price;
 
       if (!price || price <= 0) {
         const marketPrice = await this.marketData.getCurrentPrice(signal.symbol);
         price = marketPrice;
       }
 
-      if (!price || price <= 0) {
+      if (!price || price <= 0 || typeof price !== 'number' || isNaN(price)) {
         console.error(`Invalid price received for ${signal.symbol}: ${price}`);
         return null;
       }
@@ -237,7 +237,7 @@ export class TradingEngine {
       // Calculate position size based on signal strength and risk limits
       const positionSize = this.calculatePositionSize(signal, price);
 
-      if (!positionSize || positionSize <= 0) {
+      if (!positionSize || positionSize <= 0 || typeof positionSize !== 'number' || isNaN(positionSize)) {
         console.error(`Invalid position size calculated for ${signal.symbol}: ${positionSize}`);
         return null;
       }
@@ -340,18 +340,7 @@ export class TradingEngine {
     return notional * feeRate;
   }
 
-  private calculatePositionSize(signal: any, price: number): number {
-    // Base position size from signal, with risk management
-    const baseSize = signal.size || 100;
-    const riskLimit = 500; // Maximum position size
-    const confidenceMultiplier = signal.confidence || 0.7;
-    
-    // Scale position size based on signal confidence
-    const adjustedSize = baseSize * confidenceMultiplier;
-    
-    // Apply risk limits
-    return Math.min(adjustedSize, riskLimit);
-  }
+
 
   // Generate realistic trading signals based on current market conditions
   private async generateTradingSignal(strategy: Strategy, symbol: string, marketData: any, mlPrediction: any) {
@@ -367,9 +356,9 @@ export class TradingEngine {
         signal = {
           symbol,
           action: mlPrediction.priceDirection === 'bearish' ? 'buy' : 'sell', // Contrarian
-          price: price ? price.toString() : "0",
+          price: price || 0,
           size: 200 + Math.random() * 300, // $200-500 position
-          stopPrice: price && mlPrediction.priceDirection === 'bearish' ? (price * 0.98).toString() : price ? (price * 1.02).toString() : "0",
+          stopPrice: price && mlPrediction.priceDirection === 'bearish' ? (price * 0.98) : price ? (price * 1.02) : 0,
           confidence: mlPrediction.confidence,
           type: 'mean_reversion'
         };
@@ -380,9 +369,9 @@ export class TradingEngine {
         signal = {
           symbol,
           action: mlPrediction.priceDirection === 'bullish' ? 'buy' : 'sell', // Follow trend
-          price: price ? price.toString() : "0",
+          price: price || 0,
           size: 150 + Math.random() * 350, // $150-500 position
-          stopPrice: price && mlPrediction.priceDirection === 'bullish' ? (price * 0.97).toString() : price ? (price * 1.03).toString() : "0",
+          stopPrice: price && mlPrediction.priceDirection === 'bullish' ? (price * 0.97) : price ? (price * 1.03) : 0,
           confidence: mlPrediction.confidence,
           type: 'trend_following'
         };
@@ -396,8 +385,7 @@ export class TradingEngine {
   private async simulateTradeOutcome(position: Position, trade: Trade, strategy: Strategy): Promise<void> {
     try {
       // Get current market price for exit
-      const marketData = await this.marketData.getCurrentPrice(position.symbol);
-      const currentPrice = marketData.price;
+      const currentPrice = await this.marketData.getCurrentPrice(position.symbol);
       const entryPrice = parseFloat(position.entryPrice);
       const size = parseFloat(position.size);
 
