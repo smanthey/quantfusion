@@ -385,8 +385,9 @@ export class TradingEngine {
       return null;
     }
 
-    // Round price to 8 decimal places to prevent floating point precision issues
-    price = Number(price.toFixed(8));
+    // Round price to appropriate decimal places based on symbol
+    const decimals = signal.symbol === 'BTCUSDT' ? 2 : 2; // USD pairs typically use 2 decimals
+    price = Number(price.toFixed(decimals));
 
     try {
       console.log(`🧮 About to calculate position size for ${signal.symbol} at price ${price}`);
@@ -563,14 +564,14 @@ export class TradingEngine {
   private calculatePositionSize(signal: any, price: number): number {
     try {
       // RESEARCH FIX: Use research-based position sizing
-      if (signal.size && typeof signal.size === 'number') {
-        return signal.size; // Use the research-calculated size directly
+      if (signal.size && typeof signal.size === 'number' && signal.size > 1) {
+        return signal.size; // Use the research-calculated size directly if it's in USD
       }
       
       // Get A/B test variant for position sizing  
       const variant = abTesting.getVariantForStrategy(signal.strategyId || 'default', 'position-sizing-v1');
       
-      let baseSize = signal.size || 300;
+      let baseSize = 300; // Default $300 position in USD
       let confidenceMultiplier = signal.confidence || 0.6;
       let maxRisk = 0.015; // 1.5% default
       
@@ -582,14 +583,16 @@ export class TradingEngine {
         console.log(`🧪 A/B TEST: Using ${variant.name} for position sizing`);
       }
       
-      const adjustedSize = baseSize * confidenceMultiplier;
+      // Calculate position size in USD, then convert to crypto units
+      const usdAmount = baseSize * confidenceMultiplier;
+      const cryptoUnits = usdAmount / price; // Convert USD to crypto units
       
-      console.log(`📐 Position size calculation: base=${baseSize}, confidence=${confidenceMultiplier}, adjusted=${adjustedSize}, final=${adjustedSize}`);
+      console.log(`📐 Position size calculation: USD=${usdAmount}, price=${price}, crypto_units=${cryptoUnits}`);
       
-      return Math.max(adjustedSize, 0.001); // Ensure minimum size
+      return Math.max(cryptoUnits, 0.001); // Ensure minimum size
     } catch (error) {
       console.error('Position size calculation error:', error);
-      return 100; // Safe fallback
+      return 100 / price; // Safe fallback: $100 worth
     }
   }
 

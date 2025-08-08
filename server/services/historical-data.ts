@@ -35,11 +35,12 @@ export class HistoricalDataService {
 
     symbols.forEach(symbol => {
       const data: HistoricalDataPoint[] = [];
-      const basePrice = symbol === 'BTCUSDT' ? 30000 : 2000;
+      const basePrice = symbol === 'BTCUSDT' ? 50000 : 2500; // More realistic starting prices
       let currentPrice = basePrice;
       
-      // Generate realistic market data for the past year
-      for (let i = oneYear; i >= 0; i -= oneMinute) {
+      // Generate realistic market data for the past 3 months (more manageable)
+      const threeMonths = 90 * 24 * 60 * 60 * 1000;
+      for (let i = threeMonths; i >= 0; i -= oneMinute) {
         const timestamp = now - i;
         
         // Create realistic price movements with trends, volatility, and patterns
@@ -74,11 +75,17 @@ export class HistoricalDataService {
         const maxPrice = basePrice * 3;
         currentPrice = Math.max(minPrice, Math.min(maxPrice, currentPrice));
         
-        // Generate OHLC data
+        // Generate OHLC data with proper bounds checking
         const volatilityRange = currentPrice * volatility;
-        const high = currentPrice + Math.random() * volatilityRange;
-        const low = currentPrice - Math.random() * volatilityRange;
+        const high = Math.max(currentPrice + Math.random() * volatilityRange, currentPrice);
+        const low = Math.min(currentPrice - Math.random() * volatilityRange, currentPrice);
         const open = currentPrice + (Math.random() - 0.5) * volatilityRange * 0.5;
+        
+        // Ensure OHLC relationships are valid
+        if (isNaN(high) || isNaN(low) || isNaN(open) || isNaN(currentPrice)) {
+          console.error(`Invalid OHLC data generated for ${symbol} at ${timestamp}`);
+          continue;
+        }
         
         // Volume with realistic patterns
         const baseVolume = symbol === 'BTCUSDT' ? 1000 : 800;

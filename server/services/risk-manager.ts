@@ -112,7 +112,8 @@ export class RiskManager {
       };
     }
 
-    const metrics = this.getCurrentMetrics();
+    try {
+      const metrics = this.getCurrentMetrics();
     
     // Check daily loss limit
     if (metrics.dailyPnL <= -this.limits.maxDailyLoss) {
@@ -137,6 +138,10 @@ export class RiskManager {
     else if (riskUtilization > 0.4) riskLevel = 'medium';
 
     return { canTrade: true, riskLevel };
+    } catch (error) {
+      console.error('Error in risk constraint checking:', error);
+      return { canTrade: false, reason: 'Risk system error', riskLevel: 'high' };
+    }
   }
 
   
