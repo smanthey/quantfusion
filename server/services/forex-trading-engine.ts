@@ -74,20 +74,23 @@ export class ForexTradingEngine {
     this.isRunning = true;
     console.log('🌍 FOREX CLONE ACTIVATED - Running separate forex trading system');
     
-    // Run forex trading every 15 seconds (faster than crypto for forex volatility)
+    // Run forex trading every 10 seconds (more aggressive for comparison)
     this.intervalId = setInterval(async () => {
       try {
         await this.runForexTradingCycle();
       } catch (error) {
         console.error('❌ Forex trading cycle error:', error);
       }
-    }, 15000);
+    }, 10000);
     
-    // Initial execution
-    setTimeout(() => {
-      console.log('💱 Starting initial forex trading cycle...');
-      this.runForexTradingCycle();
-    }, 5000);
+    // Initial execution - start immediately and more frequently
+    console.log('💱 Starting initial forex trading cycle...');
+    this.runForexTradingCycle();
+    
+    // Additional immediate cycles to get trading started
+    setTimeout(() => this.runForexTradingCycle(), 2000);
+    setTimeout(() => this.runForexTradingCycle(), 4000);
+    setTimeout(() => this.runForexTradingCycle(), 6000);
   }
 
   async stop(): Promise<void> {
@@ -102,25 +105,32 @@ export class ForexTradingEngine {
    * Main forex trading cycle - completely separate from crypto
    */
   private async runForexTradingCycle(): Promise<void> {
-    if (!this.isRunning || !this.forexData.isForexMarketOpen()) {
-      return; // Skip trading when forex markets are closed
+    if (!this.isRunning) {
+      return;
     }
-
-    console.log('💱 Forex trading cycle executing...');
     
+    // Always trade for comparison (ignore market hours for demo)
+    console.log('💱 FOREX CYCLE: Running forex trading cycle...');
+
     try {
       // Get all forex rates
       const forexRates = this.forexData.getAllForexRates();
+      console.log(`💱 FOREX: Processing ${forexRates.length} currency pairs...`);
       
-      // Process each major forex pair with different strategies
-      for (const rate of forexRates) {
-        await this.processForexPair(rate.symbol, rate);
+      // Force execute trades on major pairs for comparison
+      const majorPairs = ['EURUSD', 'GBPUSD', 'USDJPY'];
+      for (const pair of majorPairs) {
+        const rate = forexRates.find(r => r.symbol === pair);
+        if (rate) {
+          console.log(`💱 FOREX: Processing ${pair} at rate ${rate.price}`);
+          await this.processForexPair(rate.symbol, rate);
+        }
       }
       
       // Update account metrics
       await this.updateForexAccount();
       
-      console.log(`💱 Forex cycle complete - Balance: $${this.forexAccount.balance.toFixed(2)}, P&L: $${this.forexAccount.totalPnL.toFixed(2)}`);
+      console.log(`💱 FOREX COMPLETE: Balance=$${this.forexAccount.balance.toFixed(2)}, P&L=$${this.forexAccount.totalPnL.toFixed(2)}, Trades=${this.forexTrades.length}`);
       
     } catch (error) {
       console.error('❌ Forex trading cycle error:', error);
