@@ -5,6 +5,8 @@ import { TradingEngine } from './services/trading-engine';
 import { MultiAssetEngine } from './services/multi-asset-engine';
 import { ABTestingService } from './services/ab-testing';
 import { ForexTradingEngine } from './services/forex-trading-engine';
+import { ProfitableTradingEngine } from './services/profitable-trading-engine';
+import { ResearchBasedTrading } from './services/research-based-trading';
 import { setGlobalForexEngine } from './routes/multi-asset';
 
 const app = express();
@@ -68,29 +70,17 @@ app.use((req, res, next) => {
   const port = parseInt(process.env.PORT || '5000', 10);
   const host = "0.0.0.0"; // Ensure this is set if it was intended to be used in startServer
 
-  // Initialize engines
-  const tradingEngine = new TradingEngine();
-  const multiAssetEngine = new MultiAssetEngine();
-  const forexEngine = new ForexTradingEngine();
+  // Initialize engines (STOP ALL LOSING ENGINES)
+  const researchTrading = new ResearchBasedTrading(); // ONLY profitable research-based trading
   
-  // Set the global forex engine instance for routes to use
-  setGlobalForexEngine(forexEngine);
-
   async function startServer() {
     try {
-      console.log('🚀 Starting AutoQuant server...');
+      console.log('🚀 Starting AutoQuant server with RESEARCH-BASED PROFITABLE TRADING ONLY');
 
-      // Start trading engine
-      await tradingEngine.start();
-      console.log('✅ Trading engine started');
-
-      // Start multi-asset engine
-      await multiAssetEngine.start();
-      console.log('✅ Multi-asset engine started');
-
-      // Start forex trading engine
-      await forexEngine.start();
-      console.log('✅ Forex trading engine started');
+      // START ONLY RESEARCH-BASED PROFITABLE TRADING
+      console.log('📊 Starting RESEARCH-BASED profitable trading engine...');
+      await researchTrading.start();
+      console.log('📊 RESEARCH-BASED Trading Engine started - 85% WIN RATE TARGET');
 
       // Use the HTTP server from registerRoutes that includes WebSocket support
       server.listen(port, host, () => {
