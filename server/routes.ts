@@ -383,8 +383,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Total P&L = Total Profits - Total Losses
-      const totalPnL = totalProfits - totalLosses;
+      // Calculate total fees for accurate P&L
+      let totalFees = 0;
+      for (const trade of allTrades) {
+        const fees = parseFloat(trade.fees || '0');
+        totalFees += fees;
+      }
+      
+      // UNIFIED P&L CALCULATION: Total Profits - Total Losses - Total Fees (MATCHES EVERYWHERE)
+      const totalPnL = totalProfits - totalLosses - totalFees;
 
       // Format data to match frontend expectations
       const dashboardData = {
@@ -917,7 +924,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         positions: positions.map(pos => ({
           ...pos,
           currentValue: parseFloat(pos.entryPrice || '0') * parseFloat(pos.size || '0'),
-          pnl: parseFloat(pos.pnl || '0')
+          pnl: parseFloat(pos.unrealizedPnl || '0') // Use unrealizedPnl field instead of pnl
         })),
         totalValue,
         totalPnL: totalValue,
@@ -1489,7 +1496,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { symbol } = req.params;
       const { period = '50' } = req.query;
 
-      const data = historicalDataService.getHistoricalData(symbol, parseInt(period as string) || 100, '1h');
+      const periodNum = parseInt(period as string) || 100;
+      const data = historicalDataService.getHistoricalData(symbol, periodNum, '1h');
       // Simulate volume profile calculation
       const profile = {
         symbol,
@@ -1511,7 +1519,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { symbol } = req.params;
       const { period = '20', multiplier = '2' } = req.query;
 
-      const data = historicalDataService.getHistoricalData(symbol, parseInt(period as string) || 100, '1h');
+      const periodNum = parseInt(period as string) || 100;
+      const data = historicalDataService.getHistoricalData(symbol, periodNum, '1h');
       // Simulate volatility bands calculation
       const bands = {
         symbol,

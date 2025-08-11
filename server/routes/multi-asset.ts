@@ -188,24 +188,26 @@ router.get('/comparison', async (req, res) => {
     // Get ALL trades and separate crypto from forex
     const allTrades = await storage.getAllTrades();
     
-    // Properly separate crypto and forex trades by symbol
-    const cryptoSymbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'ADAUSDT', 'DOGEUSDT'];
-    const forexSymbols = ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'USDCAD', 'NZDUSD', 'EURJPY'];
+    // Properly separate crypto and forex trades by symbol - MATCH DATABASE QUERY EXACTLY
+    const cryptoSymbols = ['BTCUSDT', 'ETHUSDT'];
+    const forexSymbols = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD', 'EURGBP'];
     
     const cryptoTrades = allTrades.filter(trade => cryptoSymbols.includes(trade.symbol));
     const forexTrades = allTrades.filter(trade => forexSymbols.includes(trade.symbol));
     
     console.log(`📊 TRADE SEPARATION: Crypto=${cryptoTrades.length}, Forex=${forexTrades.length}, Total=${allTrades.length}`);
     
-    // Calculate CRYPTO metrics using only crypto trades
+    // Calculate CRYPTO metrics using only crypto trades - INCLUDE FEES FOR ACCURACY
     let cryptoProfits = 0;
     let cryptoLosses = 0;
+    let cryptoFees = 0;
     let cryptoWinCount = 0;
     let cryptoLossCount = 0;
     
     for (const trade of cryptoTrades) {
       const profit = parseFloat(trade.profit || '0');
       const loss = parseFloat(trade.loss || '0');
+      const fees = parseFloat(trade.fees || '0');
       
       if (profit > 0) {
         cryptoProfits += profit;
@@ -215,17 +217,20 @@ router.get('/comparison', async (req, res) => {
         cryptoLosses += loss;
         cryptoLossCount++;
       }
+      cryptoFees += fees; // Add fees to calculation
     }
     
-    // Calculate FOREX metrics using only forex trades
+    // Calculate FOREX metrics using only forex trades - INCLUDE FEES FOR ACCURACY
     let forexProfits = 0;
     let forexLosses = 0;
+    let forexFees = 0;
     let forexWinCount = 0;
     let forexLossCount = 0;
     
     for (const trade of forexTrades) {
       const profit = parseFloat(trade.profit || '0');
       const loss = parseFloat(trade.loss || '0');
+      const fees = parseFloat(trade.fees || '0');
       
       if (profit > 0) {
         forexProfits += profit;
@@ -235,10 +240,11 @@ router.get('/comparison', async (req, res) => {
         forexLosses += loss;
         forexLossCount++;
       }
+      forexFees += fees; // Add fees to calculation
     }
     
-    const cryptoPnL = cryptoProfits - cryptoLosses; // Net crypto P&L
-    const forexPnL = forexProfits - forexLosses; // Net forex P&L
+    const cryptoPnL = cryptoProfits - cryptoLosses - cryptoFees; // Net crypto P&L INCLUDING FEES
+    const forexPnL = forexProfits - forexLosses - forexFees; // Net forex P&L INCLUDING FEES
     const cryptoWinRate = cryptoTrades.length > 0 ? (cryptoWinCount / cryptoTrades.length) * 100 : 0;
     const forexWinRate = forexTrades.length > 0 ? (forexWinCount / forexTrades.length) * 100 : 0;
     
