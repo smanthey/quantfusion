@@ -34,6 +34,8 @@ export class RiskManager {
   private maxPositionSize = 0.1; // 10% of portfolio per position
   private isHalted = false;
   private circuitBreakers: string[] = [];
+  private basePerTradeRisk = 0.02; // Base 2% risk per trade
+  private baseStopLossPercent = 0.02; // Base 2% stop loss
 
   private currentMetrics: RiskMetrics = {
     currentDrawdown: 0,
@@ -120,6 +122,81 @@ export class RiskManager {
     }
 
     return { allowed: true };
+  }
+
+  /**
+   * Calculate dynamic position size based on current market volatility
+   * Higher volatility = smaller positions to maintain consistent risk
+   */
+  calculateDynamicPositionSize(symbol: string, accountBalance: number): number {
+    const marketData = marketDataService.getMarketData(symbol);
+    if (!marketData) {
+      return accountBalance * this.basePerTradeRisk;
+    }
+
+    const volatility = marketData.volatility;
+    const normalizedVolatility = Math.min(volatility / 0.05, 2); // Normalize to 0-2 range
+    
+    // Reduce position size as volatility increases
+    const volatilityAdjustment = 1 / (1 + normalizedVolatility);
+    const adjustedRisk = this.basePerTradeRisk * volatilityAdjustment;
+    
+    return accountBalance * adjustedRisk;
+  }
+
+  /**
+   * Calculate dynamic stop loss based on ATR (Average True Range) and volatility
+   * Higher volatility = wider stops to avoid premature exits
+   */
+  calculateDynamicStopLoss(symbol: string, entryPrice: number, side: 'buy' | 'sell'): number {
+    const marketData = marketDataService.getMarketData(symbol);
+    if (!marketData) {
+      // Use base stop loss if no market data
+      return side === 'buy' 
+        ? entryPrice * (1 - this.baseStopLossPercent)
+        : entryPrice * (1 + this.baseStopLossPercent);
+    }
+
+    const volatility = marketData.volatility;
+    
+    // Use volatility to calculate ATR-based stop loss
+    // Higher volatility = wider stops (1.5x to 3x base stop)
+    const atrMultiplier = 1.5 + (volatility / 0.05); // Scales from 1.5x to 3x
+    const dynamicStopPercent = this.baseStopLossPercent * Math.min(atrMultiplier, 3);
+    
+    return side === 'buy'
+      ? entryPrice * (1 - dynamicStopPercent)
+      : entryPrice * (1 + dynamicStopPercent);
+  }
+
+  /**
+   * Get dynamic risk per trade adjusted for current market conditions
+   */
+  getDynamicRiskPerTrade(symbol: string): number {
+    const marketData = marketDataService.getMarketData(symbol);
+    if (!marketData) {
+      return this.basePerTradeRisk;
+    }
+
+    const volatility = marketData.volatility;
+    const normalizedVolatility = Math.min(volatility / 0.05, 2);
+    
+    // Reduce risk as volatility increases
+    const volatilityAdjustment = 1 / (1 + normalizedVolatility);
+    return this.basePerTradeRisk * volatilityAdjustment;
+  }
+
+  /**
+   * Get regime-adjusted limits based on market volatility
+   */
+  getDynamicLimits(symbol: string): RiskLimits {
+    const baseLimits = this.getLimits();
+    const riskPerTrade = this.getDynamicRiskPerTrade(symbol);
+    
+    return {
+      ...baseLimits,
+      perTradeRisk: riskPerTrade,
+    };
   }
 }
 
