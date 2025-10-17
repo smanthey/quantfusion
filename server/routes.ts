@@ -213,7 +213,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       equity: equityPoints,
       winningTrades,
       losingTrades,
-      accountBalance: 10000 + totalPnl // Starting balance + total P&L
+      accountBalance: 10000 + totalPnl, // Starting balance + total P&L
+      totalProfits: profits, // Total gross profits for reuse
+      totalLosses: losses,   // Total gross losses for reuse
+      totalFees: allTrades.reduce((sum, t) => sum + parseFloat(t.fees || '0'), 0) // Total fees
     };
   }
 
@@ -259,16 +262,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const winRateChange = ((((performance.winRate || 0) - (yesterdayPerf.winRate || 0)) * 100) * 100).toFixed(1);
       const pfChange = (((performance.profitFactor || 0) - (yesterdayPerf.profitFactor || 0)) * 100).toFixed(1);
 
-      // Calculate total wins and losses for display
-      let totalWins = 0;
-      let totalLosses = 0;
-      for (const trade of allTrades) {
-        const profit = parseFloat(trade.profit || '0');
-        const loss = parseFloat(trade.loss || '0');
-        if (profit > 0) totalWins += profit;
-        if (loss > 0) totalLosses += loss;
-      }
-
+      // Use unified calculation values (eliminates redundant loops and inconsistency)
       res.json({
         metrics: [
           { name: "Sharpe Ratio", value: performance.sharpeRatio?.toFixed(2) || "0.00", change: `${parseFloat(sharpeChange) > 0 ? '+' : ''}${sharpeChange}%` },
@@ -279,8 +273,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         overview: {
           totalTrades: performance.totalTrades,
           totalPnL: performance.totalPnl,
-          totalWins: totalWins,
-          totalLosses: -totalLosses,
+          totalWins: performance.totalProfits,
+          totalLosses: -performance.totalLosses,
           winRate: performance.winRate,
           profitFactor: performance.profitFactor,
           averageTrade: allTrades.length > 0 ? performance.totalPnl / allTrades.length : 0,
@@ -290,7 +284,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         performance: {
           totalPnL: performance.totalPnl,
-          totalWins: performance.totalWins,
+          totalWins: performance.totalProfits,
           totalLosses: performance.totalLosses,
           winRate: performance.winRate,
           totalTrades: performance.totalTrades,
@@ -338,36 +332,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allTrades = await storage.getAllTrades();
       const performance = await calculateUnifiedPerformance(allTrades);
       
-      // Calculate P&L using separate profit and loss fields from database
-      let totalProfits = 0;
-      let totalLosses = 0;
-      let winCount = 0;
-      let lossCount = 0;
-      
-      // Use database profit/loss fields for accurate calculation
-      for (const trade of allTrades) {
-        const profit = parseFloat(trade.profit || '0');
-        const loss = parseFloat(trade.loss || '0');
-        
-        if (profit > 0) {
-          totalProfits += profit;
-          winCount++;
-        }
-        if (loss > 0) {
-          totalLosses += loss;
-          lossCount++;
-        }
-      }
-      
-      // Calculate total fees for accurate P&L
-      let totalFees = 0;
-      for (const trade of allTrades) {
-        const fees = parseFloat(trade.fees || '0');
-        totalFees += fees;
-      }
-      
-      // UNIFIED P&L CALCULATION: Total Profits - Total Losses - Total Fees (MATCHES EVERYWHERE)
-      const totalPnL = totalProfits - totalLosses - totalFees;
+      // Use unified performance values for ALL metrics (eliminates inconsistency bugs)
+      const totalProfits = performance.totalProfits;
+      const totalLosses = performance.totalLosses;
+      const totalFees = performance.totalFees;
+      const totalPnL = performance.totalPnl;
+      const winCount = performance.winningTrades;
+      const lossCount = performance.losingTrades;
 
       // Format data to match frontend expectations
       const dashboardData = {
@@ -474,32 +445,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allTrades = await storage.getAllTrades();
       console.log(`📊 Calculating account balance from ${allTrades.length} trades using UNIFIED method`);
 
-      // Calculate P&L using separate profit and loss fields from database - SAME AS DASHBOARD
-      let totalProfits = 0;
-      let totalLosses = 0;
-      let totalFees = 0;
-      let winCount = 0;
-      let lossCount = 0;
-      
-      // Use database profit/loss/fees fields for accurate calculation
-      for (const trade of allTrades) {
-        const profit = parseFloat(trade.profit || '0');
-        const loss = parseFloat(trade.loss || '0');
-        const fees = parseFloat(trade.fees || '0');
-        
-        if (profit > 0) {
-          totalProfits += profit;
-          winCount++;
-        }
-        if (loss > 0) {
-          totalLosses += loss;
-          lossCount++;
-        }
-        totalFees += fees; // Sum actual fees from database
-      }
-      
-      // Total P&L = Total Profits - Total Losses - Total Fees
-      const totalPnL = totalProfits - totalLosses - totalFees;
+      // Use unified performance calculation for consistency
+      const performance = await calculateUnifiedPerformance(allTrades);
+      const totalProfits = performance.totalProfits;
+      const totalLosses = performance.totalLosses;
+      const totalFees = performance.totalFees;
+      const totalPnL = performance.totalPnl;
+      const winCount = performance.winningTrades;
+      const lossCount = performance.losingTrades;
 
       // Starting capital: $10,000  
       const startingCapital = 10000;
@@ -560,26 +513,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         let totalProfits = 0;
         let totalLosses = 0;
+        let totalFees = 0;
         let winCount = 0;
         let lossCount = 0;
         
         for (const trade of strategyTrades) {
           const profit = parseFloat(trade.profit || '0');
           const loss = parseFloat(trade.loss || '0');
+          const fees = parseFloat(trade.fees || '0');
+          const tradePnl = profit - loss - fees;
           
-          if (profit > 0) {
-            totalProfits += profit;
+          totalProfits += profit;
+          totalLosses += loss;
+          totalFees += fees;
+          
+          // Correct win/loss determination using net P&L after fees
+          if (tradePnl > 0) {
             winCount++;
-          }
-          if (loss > 0) {
-            totalLosses += loss;
+          } else {
             lossCount++;
           }
         }
         
         return {
           ...strategy,
-          totalPnL: totalProfits - totalLosses,
+          totalPnL: totalProfits - totalLosses - totalFees,
           totalWins: totalProfits,
           totalLosses: -totalLosses,
           winRate: strategyTrades.length > 0 ? winCount / strategyTrades.length : 0,
