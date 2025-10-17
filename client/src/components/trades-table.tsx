@@ -12,16 +12,33 @@ interface TradesTableProps {
 }
 
 export function TradesTable({ trades, onExportTrades }: TradesTableProps) {
-  const formatCurrency = (value: number) => {
+  const safeNumber = (value: any): number => {
+    const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+    return isNaN(num) || !isFinite(num) ? 0 : num;
+  };
+
+  const formatCurrency = (value: any) => {
+    const safeValue = safeNumber(value);
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
       minimumFractionDigits: 2,
-    }).format(value);
+    }).format(safeValue);
   };
 
-  const formatTime = (timestamp: number) => {
-    return new Date(timestamp).toLocaleString('en-US', {
+  const formatTime = (timestamp: any) => {
+    if (!timestamp) return '--';
+    
+    // Handle Date objects, timestamp strings, or Unix timestamps
+    const date = timestamp instanceof Date 
+      ? timestamp 
+      : typeof timestamp === 'string' 
+        ? new Date(timestamp)
+        : new Date(timestamp);
+    
+    if (isNaN(date.getTime())) return '--';
+    
+    return date.toLocaleString('en-US', {
       month: 'short',
       day: '2-digit',
       hour: '2-digit',
@@ -48,9 +65,9 @@ export function TradesTable({ trades, onExportTrades }: TradesTableProps) {
     );
   };
 
-  const totalPnL = trades.reduce((sum, trade) => sum + (trade.pnl || 0), 0);
-  const totalFees = trades.reduce((sum, trade) => sum + trade.fees, 0);
-  const winningTrades = trades.filter(trade => (trade.pnl || 0) > 0).length;
+  const totalPnL = trades.reduce((sum, trade) => sum + safeNumber(trade.pnl), 0);
+  const totalFees = trades.reduce((sum, trade) => sum + safeNumber(trade.fees), 0);
+  const winningTrades = trades.filter(trade => safeNumber(trade.pnl) > 0).length;
   const winRate = trades.length > 0 ? (winningTrades / trades.length) * 100 : 0;
 
   return (
@@ -130,16 +147,16 @@ export function TradesTable({ trades, onExportTrades }: TradesTableProps) {
                         {getSideBadge(trade.side)}
                       </TableCell>
                       <TableCell>
-                        {Number(trade.size ?? 0).toFixed(4)}
+                        {safeNumber(trade.size).toFixed(4)}
                       </TableCell>
                       <TableCell>
                         {formatCurrency(trade.price)}
                       </TableCell>
                       <TableCell>
-                        <span className={getPnLColor(trade.pnl)}>
-                          {trade.pnl !== undefined && trade.pnl !== null 
+                        <span className={getPnLColor(safeNumber(trade.pnl))}>
+                          {safeNumber(trade.pnl) !== 0 || trade.pnl !== undefined
                             ? formatCurrency(trade.pnl)
-                            : '-'
+                            : '$0.00'
                           }
                         </span>
                       </TableCell>

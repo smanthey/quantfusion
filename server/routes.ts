@@ -803,11 +803,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const trades = await storage.getAllTrades();
       const limit = Math.min(parseInt((req.query.limit as string) || '1000'), 1000);
+      
+      // Transform trades to ensure proper data types for frontend
+      const formattedTrades = trades.slice(-limit).map(trade => ({
+        ...trade,
+        // Ensure timestamp is Unix timestamp (number) for frontend
+        timestamp: trade.executedAt ? new Date(trade.executedAt).getTime() : Date.now(),
+        // Ensure numeric values are numbers not strings
+        price: parseFloat(trade.entryPrice || '0'),
+        size: parseFloat(trade.size || '0'),
+        pnl: trade.pnl ? parseFloat(trade.pnl) : undefined,
+        fees: parseFloat(trade.fees || '0'),
+        // Ensure strategy field exists
+        strategy: trade.strategyId || 'unknown'
+      }));
+      
       res.json({
-        trades: trades.slice(-limit),
+        trades: formattedTrades,
         total: trades.length
       });
     } catch (error) {
+      console.error('Failed to fetch trades:', error);
       res.status(500).json({ error: 'Failed to fetch trades' });
     }
   });
