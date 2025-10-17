@@ -237,15 +237,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const allTrades = await storage.getAllTrades();
       
-      // Calculate performance using profit/loss fields - SAME AS DASHBOARD AND ACCOUNT
+      // Calculate performance using profit/loss/fees fields - SAME AS DASHBOARD AND ACCOUNT
       let totalProfits = 0;
       let totalLosses = 0;
+      let totalFees = 0;
       let winCount = 0;
       let lossCount = 0;
       
       for (const trade of allTrades) {
         const profit = parseFloat(trade.profit || '0');
         const loss = parseFloat(trade.loss || '0');
+        const fees = parseFloat(trade.fees || '0');
         
         if (profit > 0) {
           totalProfits += profit;
@@ -255,12 +257,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalLosses += loss;
           lossCount++;
         }
+        totalFees += fees;
       }
       
-      const totalPnL = totalProfits - totalLosses;
+      const totalPnL = totalProfits - totalLosses - totalFees; // MUST include fees!
       const winRate = allTrades.length > 0 ? winCount / allTrades.length : 0;
-      const profitFactor = totalLosses > 0 ? totalProfits / totalLosses : totalProfits > 0 ? 99.9 : 1.0;
-      const maxDrawdown = 0.02; // Conservative 2% drawdown limit
+      const profitFactor = totalLosses > 0 ? totalProfits / totalLosses : (totalProfits > 0 ? 2.0 : 0);
+      
+      // Calculate REAL drawdown using peak-to-trough method
+      let peak = 10000;
+      let maxDrawdown = 0;
+      let runningEquity = 10000;
+      
+      for (const trade of allTrades.sort((a, b) => new Date(a.executedAt!).getTime() - new Date(b.executedAt!).getTime())) {
+        const profit = parseFloat(trade.profit || '0');
+        const loss = parseFloat(trade.loss || '0');
+        const fees = parseFloat(trade.fees || '0');
+        const tradePnl = profit - loss - fees;
+        
+        runningEquity += tradePnl;
+        if (runningEquity > peak) {
+          peak = runningEquity;
+        }
+        const currentDrawdown = peak > 0 ? ((peak - runningEquity) / peak) * 100 : 0;
+        maxDrawdown = Math.max(maxDrawdown, currentDrawdown);
+      }
+      
+      // Calculate REAL Sharpe ratio using proper statistical methods
+      const returns: number[] = [];
+      for (const trade of allTrades) {
+        const profit = parseFloat(trade.profit || '0');
+        const loss = parseFloat(trade.loss || '0');
+        const fees = parseFloat(trade.fees || '0');
+        returns.push(profit - loss - fees);
+      }
+      
+      const avgReturn = returns.length > 0 ? returns.reduce((a, b) => a + b, 0) / returns.length : 0;
+      const variance = returns.length > 1 ? 
+        returns.reduce((sum, ret) => sum + Math.pow(ret - avgReturn, 2), 0) / (returns.length - 1) : 0;
+      const volatility = Math.sqrt(variance);
+      const sharpeRatio = volatility > 0 ? (avgReturn / volatility) * Math.sqrt(252) : 0; // Annualized
       
       const performance = {
         totalPnl: totalPnL,
@@ -268,8 +304,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalLosses: -totalLosses,
         winRate: winRate,
         profitFactor: profitFactor,
-        sharpeRatio: 0.85, // Conservative Sharpe ratio
-        drawdown: maxDrawdown * 100, // Convert to percentage
+        sharpeRatio: Math.min(Math.max(sharpeRatio, -3), 3), // Real calculated Sharpe ratio
+        drawdown: maxDrawdown, // Real peak-to-trough drawdown
         totalTrades: allTrades.length,
         winningTrades: winCount,
         losingTrades: lossCount,
