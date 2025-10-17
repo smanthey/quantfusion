@@ -1,5 +1,7 @@
 import { HistoricalDataService, type HistoricalDataPoint } from './historical-data';
 import { CustomIndicatorEngine } from './custom-indicators';
+import { ContinuousLearner } from './continuous-learner';
+import { SentimentAnalyzer } from './sentiment-analyzer';
 
 export interface MLPrediction {
   symbol: string;
@@ -60,6 +62,8 @@ export interface LearningReport {
 export class MLPredictor {
   private historicalData: HistoricalDataService;
   private indicatorEngine: CustomIndicatorEngine;
+  private continuousLearner: ContinuousLearner;
+  private sentimentAnalyzer: SentimentAnalyzer;
   private models: Map<string, MLModel> = new Map();
   private predictionHistory: MLPrediction[] = [];
   private featureCache: Map<string, number[]> = new Map();
@@ -67,6 +71,8 @@ export class MLPredictor {
   constructor() {
     this.historicalData = new HistoricalDataService();
     this.indicatorEngine = new CustomIndicatorEngine();
+    this.continuousLearner = new ContinuousLearner();
+    this.sentimentAnalyzer = new SentimentAnalyzer();
     this.initializeModels();
   }
 
@@ -153,6 +159,9 @@ export class MLPredictor {
     const sentimentOscillator = this.indicatorEngine.calculateSentimentOscillator(data, { period: 20 });
     const marketRegime = this.indicatorEngine.calculateMarketRegime(data, { period: 20 });
 
+    // GET REAL SENTIMENT DATA from SentimentAnalyzer
+    const sentimentData = await this.sentimentAnalyzer.getAggregateSentiment(symbol);
+
     // Price action features
     const returns = this.calculateReturns(data.map(d => d.close), 20);
     const volatility = this.calculateVolatility(returns);
@@ -181,17 +190,22 @@ export class MLPredictor {
       
       // Advanced features
       adaptiveRSI: adaptiveRSI[adaptiveRSI.length - 1]?.value || 50,
-      sentiment: sentimentOscillator[sentimentOscillator.length - 1]?.value || 50,
+      sentiment: (sentimentData.overall + 1) / 2 * 100, // Use REAL sentiment (-1 to 1 => 0 to 100)
       regime: marketRegime[marketRegime.length - 1]?.value || 0,
       trendStrength,
       supportDistance: Math.abs(currentPrice - supportResistance.support) / currentPrice,
       resistanceDistance: Math.abs(supportResistance.resistance - currentPrice) / currentPrice
     };
 
+    // APPLY LEARNED FEATURE WEIGHTS from ContinuousLearner
+    const featureImportance = this.continuousLearner.getFeatureImportance();
+    const featureArray = this.featuresToArray(features);
+    const weightedFeatures = this.continuousLearner.getWeightedFeatures(featureArray);
+
     // Cache features
-    this.featureCache.set(cacheKey, [now, ...this.featuresToArray(features)]);
+    this.featureCache.set(cacheKey, [now, ...weightedFeatures]);
     
-    return features;
+    return this.arrayToFeatures(weightedFeatures);
   }
 
   private calculateConfidence(features: MLFeatures, prediction: any): number {
@@ -239,6 +253,75 @@ export class MLPredictor {
     return currentPrice + (baseMove * timeMultiplier * directionMultiplier * prediction.strength);
   }
 
+  /**
+   * CRITICAL: Learn from trade results - Wire feedback loop for continuous learning
+   */
+  async learnFromTradeResult(
+    predictionId: string,
+    actualPriceChange: number,
+    profitLoss: number
+  ): Promise<void> {
+    try {
+      // Find the prediction
+      const prediction = this.predictionHistory.find(p => 
+        p.timestamp.toString() === predictionId || 
+        Math.abs(p.timestamp - parseInt(predictionId)) < 1000
+      );
+      
+      if (!prediction) {
+        console.warn(`Prediction ${predictionId} not found for learning`);
+        return;
+      }
+
+      // Determine actual outcome
+      const actualOutcome: 'up' | 'down' | 'neutral' = 
+        actualPriceChange > 0.01 ? 'up' : 
+        actualPriceChange < -0.01 ? 'down' : 'neutral';
+
+      // Extract features from prediction
+      const features = [
+        prediction.features.technicalScore,
+        prediction.features.momentumScore,
+        prediction.features.volatilityScore,
+        prediction.features.volumeScore,
+        0, 0, 0 // placeholder for additional features
+      ];
+
+      // FEED BACK TO CONTINUOUS LEARNER
+      await this.continuousLearner.learnFromTrade(
+        features,
+        { direction: prediction.priceDirection, confidence: prediction.confidence },
+        { direction: actualOutcome, priceChange: actualPriceChange },
+        profitLoss
+      );
+
+      console.log(`✅ Learned from trade: ${prediction.symbol} ${prediction.priceDirection} -> ${actualOutcome} (P/L: ${profitLoss.toFixed(2)})`);
+    } catch (error) {
+      console.error('Error learning from trade:', error);
+    }
+  }
+
+  /**
+   * Get learning insights
+   */
+  getLearningInsights() {
+    return this.continuousLearner.getLearningInsights();
+  }
+
+  /**
+   * Get learning statistics
+   */
+  getLearningStats() {
+    return this.continuousLearner.getLearningStats();
+  }
+
+  /**
+   * Get current sentiment for symbol
+   */
+  async getSentiment(symbol: string) {
+    return await this.sentimentAnalyzer.getAggregateSentiment(symbol);
+  }
+
   async generateLearningReport(period: string = '24h'): Promise<LearningReport> {
     const reportId = `report_${Date.now()}`;
     const cutoffTime = Date.now() - this.parsePeriodToMs(period);
@@ -252,8 +335,12 @@ export class MLPredictor {
     // Analyze strategy performance
     const strategyAnalysis = await this.analyzeStrategyPerformance(period);
     
-    // Calculate feature importance
-    const featureImportance = this.calculateFeatureImportance(recentPredictions);
+    // Get feature importance from continuous learner
+    const featureImportance: { [key: string]: number } = {};
+    const learnedWeights = this.continuousLearner.getFeatureImportance();
+    learnedWeights.forEach((weight, feature) => {
+      featureImportance[feature] = weight;
+    });
     
     // Generate market insights
     const marketInsights = await this.generateMarketInsights(period);
