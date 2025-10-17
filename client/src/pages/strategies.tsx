@@ -13,7 +13,7 @@ export default function StrategiesPage() {
   });
 
   const { data: tradesData } = useQuery({
-    queryKey: ['/api/dashboard'],
+    queryKey: ['/api/trades'],
     refetchInterval: 10000,
   });
 
@@ -35,10 +35,10 @@ export default function StrategiesPage() {
   }
 
   const strategies = (dashboardData?.strategies || []).map((strategy: any) => {
-    // Calculate strategy performance from trades
-    const allTrades = tradesData?.recentTrades || dashboardData?.recentTrades || [];
-    const strategyTrades = allTrades.filter((trade: any) => trade.strategyId === strategy.id);
-    const completedTrades = strategyTrades.filter((trade: any) => trade.pnl !== null);
+    // Calculate strategy performance from ALL trades
+    const allTrades = tradesData?.trades || [];
+    const strategyTrades = allTrades.filter((trade: any) => trade.strategyId === strategy.id || trade.strategy === strategy.id);
+    const completedTrades = strategyTrades.filter((trade: any) => trade.pnl !== undefined && trade.pnl !== null);
     const totalPnl = completedTrades.reduce((sum: number, trade: any) => sum + parseFloat(trade.pnl || '0'), 0);
     const winningTrades = completedTrades.filter((trade: any) => parseFloat(trade.pnl || '0') > 0);
     const winRate = completedTrades.length > 0 ? (winningTrades.length / completedTrades.length) * 100 : 0;
@@ -48,8 +48,8 @@ export default function StrategiesPage() {
       name: strategy.name,
       status: strategy.status?.toUpperCase() || 'UNKNOWN',
       pnl: totalPnl,
-      trades: strategyTrades.length,
-      winRate,
+      trades: completedTrades.length,
+      winRate: Math.round(winRate),
       symbol: strategy.symbol || 'UNKNOWN'
     };
   });

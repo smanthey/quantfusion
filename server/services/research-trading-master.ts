@@ -25,11 +25,11 @@ export class ResearchTradingMaster {
   private isRunning = false;
   private openTrades: Map<string, { stopLoss: number; takeProfit: number }> = new Map();
   
-  // CRITICAL: Minimum 1:3 risk/reward for 60%+ win rate target!
-  private readonly MIN_RR_RATIO = 3.0;
-  private readonly MIN_ML_CONFIDENCE = 0.75; // Only trade high-confidence signals
-  private readonly BASE_STOP_PCT = 0.02;  // 2% stop loss
-  private readonly MIN_PROFIT_PCT = 0.06; // 6% minimum profit (1:3 R/R)
+  // VOLATILITY-ADAPTIVE R/R: More realistic targets based on actual market movement
+  private readonly MIN_RR_RATIO = 2.0;  // Realistic 1:2 ratio instead of unrealistic 1:3
+  private readonly MIN_ML_CONFIDENCE = 0.65; // Trade quality signals (lowered from 0.75 to allow more trades)
+  private readonly ATR_STOP_MULTIPLIER = 1.2;  // Stop at 1.2x ATR (volatility-based)
+  private readonly ATR_TARGET_MULTIPLIER = 2.4; // Target at 2.4x ATR (2:1 R/R)
   
   constructor() {
     this.marketData = new MarketDataService();
@@ -90,10 +90,13 @@ export class ResearchTradingMaster {
       return null;
     }
     
-    // === CALCULATE STOP LOSS (ATR-BASED) ===
+    // === CALCULATE VOLATILITY-BASED STOPS & TARGETS ===
     const atr = price * volatility;
     const regimeStopMultiplier = this.regimeDetector.getStopLossMultiplier(symbol);
-    let stopDistance = Math.max(atr * 1.5, price * this.BASE_STOP_PCT) * regimeStopMultiplier;
+    
+    // FULLY VOLATILITY-BASED: Stop and target scale with ATR, not fixed percentages
+    const stopDistance = atr * this.ATR_STOP_MULTIPLIER * regimeStopMultiplier;
+    const targetDistance = atr * this.ATR_TARGET_MULTIPLIER * regimeStopMultiplier;
     
     if (stopDistance === 0) return null; // Regime says no trading
     
@@ -104,13 +107,11 @@ export class ResearchTradingMaster {
     if (mtf.direction === 'bullish') {
       action = 'buy';
       stopLoss = price - stopDistance;
-      // ENFORCE 1:3 MINIMUM R/R FOR 60%+ WIN RATE
-      takeProfit = price + (stopDistance * this.MIN_RR_RATIO);
+      takeProfit = price + targetDistance;
     } else if (mtf.direction === 'bearish') {
       action = 'sell';
       stopLoss = price + stopDistance;
-      // ENFORCE 1:3 MINIMUM R/R FOR 60%+ WIN RATE
-      takeProfit = price - (stopDistance * this.MIN_RR_RATIO);
+      takeProfit = price - targetDistance;
     } else {
       return null;
     }

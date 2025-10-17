@@ -111,7 +111,7 @@ export default function OrdersPage() {
                         {order.side}
                       </Badge>
                     </TableCell>
-                    <TableCell>{order.amount}</TableCell>
+                    <TableCell>{order.amount.toFixed(10)}</TableCell>
                     <TableCell>${order.price.toLocaleString()}</TableCell>
                     <TableCell>
                       <Badge className={getStatusColor(order.status)}>
