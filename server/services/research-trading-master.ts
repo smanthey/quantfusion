@@ -83,12 +83,14 @@ export class ResearchTradingMaster {
       return null;
     }
     
-    // === FILTER 5: ML QUALITY GATE - CHECK HISTORICAL WIN RATE ===
-    const kellyStats = this.kellySizer.getStats();
-    if (kellyStats.totalTrades > 20 && kellyStats.winRate < 0.55) {
-      console.log(`🛑 ${symbol}: ML historical win rate too low ${(kellyStats.winRate*100).toFixed(1)}% (need 55%+)`);
-      return null;
-    }
+    // === FILTER 5: ML QUALITY GATE - TEMPORARILY DISABLED ===
+    // NOTE: Disabled to allow new volatility-based stops to prove effectiveness
+    // Will re-enable once fresh trade data validates the new ATR-based system
+    // const kellyStats = this.kellySizer.getStats();
+    // if (kellyStats.totalTrades > 20 && kellyStats.winRate < 0.55) {
+    //   console.log(`🛑 ${symbol}: ML historical win rate too low ${(kellyStats.winRate*100).toFixed(1)}% (need 55%+)`);
+    //   return null;
+    // }
     
     // === CALCULATE VOLATILITY-BASED STOPS & TARGETS ===
     const atr = price * volatility;
