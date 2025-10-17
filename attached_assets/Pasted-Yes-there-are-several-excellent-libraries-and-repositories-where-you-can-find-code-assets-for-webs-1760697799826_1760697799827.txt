@@ -1,0 +1,44 @@
+Yes — there are several excellent libraries and repositories where you can find code assets for websites — everything from UI components and animations to full templates and snippets. Here are some top options, grouped by category:
+
+⸻
+
+🧩 General Web Code Libraries
+	•	GitHub — The largest open-source code repository. You can search for any feature, like “responsive navbar HTML CSS” or “React portfolio template.”
+	•	CodePen — A creative playground for front-end developers. You can copy and modify HTML, CSS, and JS snippets directly.
+	•	JSFiddle and CodeSandbox — Great for live-editing and testing snippets.
+	•	StackBlitz — Focuses on frameworks like React, Angular, and Next.js with live previews.
+
+⸻
+
+🎨 Design + UI Component Libraries
+	•	Tailwind UI and Flowbite — Beautiful, prebuilt Tailwind CSS components.
+	•	Bootstrap Components — Ready-to-use layouts and UI parts using Bootstrap.
+	•	MUI (Material UI) — React-based Material Design system.
+	•	Shadcn/UI — Stylish and modular components for React and Next.js (uses Tailwind + Radix).
+
+⸻
+
+⚡ Animations, Effects & Microinteractions
+	•	Animate.css — Plug-and-play CSS animations.
+	•	LottieFiles — JSON-based animations for web and apps.
+	•	Greensock (GSAP) — The gold standard for JavaScript animations.
+
+⸻
+
+💾 Templates, Themes, and Full Projects
+	•	ThemeForest — Paid, high-quality website templates (HTML, WordPress, Shopify, etc.).
+	•	HTML5 UP — Free, responsive HTML5/CSS3 site templates.
+	•	BootstrapMade — Free and premium Bootstrap templates.
+	•	Creative Tim — Beautiful admin dashboards, templates, and UI kits.
+
+⸻
+
+👩‍💻 Code Snippet Collections
+	•	30 Seconds of Code — Handy JavaScript, React, and CSS snippets.
+	•	CSS-Tricks Almanac — Deep dives and reusable CSS tricks.
+	•	Free Frontend — Curated UI elements and effects for all web frameworks.
+
+⸻
+
+Would you like me to focus on a particular type of code asset — like UI components, effects, templates, or backend integrations?
+That’ll help me point you to the most useful, ready-to-use sources (and maybe even libraries specific to your tech stack — e.g., React, Next.js, Vue, etc.).

@@ -1,9 +1,9 @@
 
-import { TradingDashboard } from "@/components/trading-dashboard";
+import { EnhancedTradingDashboard } from "@/components/enhanced-trading-dashboard";
 
 export default function Dashboard() {
   try {
-    return <TradingDashboard />;
+    return <EnhancedTradingDashboard />;
   } catch (error) {
     console.error('Dashboard render error:', error);
     return (
