@@ -47,37 +47,51 @@ export class MarketDataService {
   }
 
   private async initializeService() {
-    console.log('💰 Initializing market data service with web-researched pricing');
+    console.log('💰 Initializing market data service with LIVE API data');
     
-    // Initialize with accurate market prices from web research (January 8, 2025)
-    // BTC: $116,300 - $117,100 range, using $116,600 as current
-    // ETH: $3,853 - $3,900 range, using $3,875 as current
+    // Initialize with fallback prices (will be replaced by live data immediately)
     this.data.set('BTCUSDT', {
       symbol: 'BTCUSDT',
-      price: 116600, // Web-researched current BTC price
+      price: 100000, // Fallback price, will be replaced by live data
       timestamp: Date.now(),
-      volume: 65000000000, // $65B daily volume from research
+      volume: 65000000000,
       spread: 0.01,
       volatility: 0.042,
-      change: 0.015, // +1.5% 24h change
-      priceChangePercent24h: 1.5
+      change: 0,
+      priceChangePercent24h: 0
     });
     
     this.data.set('ETHUSDT', {
       symbol: 'ETHUSDT', 
-      price: 3875, // Web-researched current ETH price
+      price: 3500, // Fallback price, will be replaced by live data
       timestamp: Date.now(),
-      volume: 42000000000, // $42B daily volume from research
+      volume: 42000000000,
       spread: 0.01,
       volatility: 0.048,
-      change: 0.03, // +3% 24h change
-      priceChangePercent24h: 3.0
+      change: 0,
+      priceChangePercent24h: 0
     });
     
-    console.log('✅ Initialized with web-researched prices: BTC $116,600 | ETH $3,875');
-    
-    // Start realistic price movements based on actual market volatility
-    this.startRealisticMarketSimulation();
+    // Try to start live Binance data feeds first
+    try {
+      console.log('🚀 Attempting to connect to Binance live data feeds...');
+      await this.startLiveDataFeeds();
+      console.log('✅ Successfully connected to Binance live data!');
+      this.useLiveData = true;
+    } catch (error) {
+      console.warn('⚠️ Binance connection failed, trying multi-API aggregation...', error);
+      
+      // Fallback to multi-API aggregated data
+      try {
+        await this.startMultiApiDataFeeds();
+        console.log('✅ Using multi-API aggregated real-time data');
+        this.useLiveData = true;
+      } catch (apiError) {
+        console.warn('⚠️ Multi-API failed, using simulation as last resort', apiError);
+        this.startRealisticMarketSimulation();
+        this.useLiveData = false;
+      }
+    }
   }
 
   private async startLiveDataFeeds() {

@@ -1,4 +1,5 @@
 import type { Candle } from './market-data';
+import { binanceClient } from './binance-client';
 
 export interface HistoricalDataPoint {
   timestamp: number;
@@ -21,10 +22,51 @@ export interface MarketPattern {
 export class HistoricalDataService {
   private historicalData: Map<string, HistoricalDataPoint[]> = new Map();
   private patterns: MarketPattern[] = [];
+  private usingRealData = false;
 
   constructor() {
-    this.generateHistoricalData();
+    this.initializeHistoricalData();
     this.identifyPatterns();
+  }
+
+  private async initializeHistoricalData() {
+    try {
+      console.log('📊 Fetching real historical data from Binance...');
+      await this.fetchRealHistoricalData();
+      this.usingRealData = true;
+      console.log('✅ Loaded real historical data from Binance API');
+    } catch (error) {
+      console.warn('⚠️ Failed to fetch real historical data, using synthetic data:', error);
+      this.generateHistoricalData();
+      this.usingRealData = false;
+    }
+  }
+
+  private async fetchRealHistoricalData() {
+    const symbols = ['BTCUSDT', 'ETHUSDT'];
+    
+    for (const symbol of symbols) {
+      try {
+        // Fetch 1000 1-minute candles (about 16 hours of data)
+        const klines = await binanceClient.getKlines(symbol, '1m', 1000);
+        
+        const data: HistoricalDataPoint[] = klines.map(kline => ({
+          timestamp: kline.openTime,
+          open: parseFloat(kline.open),
+          high: parseFloat(kline.high),
+          low: parseFloat(kline.low),
+          close: parseFloat(kline.close),
+          volume: parseFloat(kline.volume),
+          symbol
+        }));
+        
+        this.historicalData.set(symbol, data);
+        console.log(`✅ Loaded ${data.length} candles for ${symbol} from Binance`);
+      } catch (error) {
+        console.error(`Failed to fetch historical data for ${symbol}:`, error);
+        throw error;
+      }
+    }
   }
 
   private generateHistoricalData() {
