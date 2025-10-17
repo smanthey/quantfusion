@@ -24,11 +24,12 @@ export class ResearchTradingMaster {
   private kellySizer: KellyPositionSizer;
   private isRunning = false;
   private openTrades: Map<string, { stopLoss: number; takeProfit: number }> = new Map();
+  private tradePerformance = { wins: 0, losses: 0, totalTrades: 0 };
   
-  // MEAN REVERSION STRATEGY: Proven 65-70% win rate on oversold/overbought
-  private readonly TARGET_PROFIT_PCT = 0.015; // 1.5% profit target (covers fees + profit)
-  private readonly STOP_LOSS_PCT = 0.008;     // 0.8% stop loss (tight risk)
-  private readonly MIN_RR_RATIO = 1.8;        // 1.5% / 0.8% = 1.875:1 R/R
+  // MEAN REVERSION STRATEGY: WIDENED targets to overcome 0.2% fee drag
+  private readonly TARGET_PROFIT_PCT = 0.03;  // 3% profit target = $24 on $800 - $1.60 fees = $22.40 net
+  private readonly STOP_LOSS_PCT = 0.015;     // 1.5% stop loss = $12 + $1.60 fees = $13.60 net loss
+  private readonly MIN_RR_RATIO = 1.8;        // 3% / 1.5% = 2:1 R/R (better than minimum)
   private readonly POSITION_SIZE_PCT = 0.08;  // 8% of account per trade for meaningful profits
   
   constructor() {
@@ -44,13 +45,52 @@ export class ResearchTradingMaster {
    * MEAN REVERSION STRATEGY: Trade RSI extremes for 65-70% win rate
    */
   async generateProfitableSignal(symbol: string): Promise<any> {
+    // 🛑 GATE #0: Auto-disable if win rate too low
+    if (this.tradePerformance.totalTrades >= 20) {
+      const winRate = this.tradePerformance.wins / this.tradePerformance.totalTrades;
+      if (winRate < 0.55) {
+        console.log(`🛑 AUTO-DISABLED: Win rate ${(winRate*100).toFixed(1)}% < 55% (${this.tradePerformance.wins}W/${this.tradePerformance.losses}L)`);
+        this.isRunning = false;
+        return null;
+      }
+    }
+    
     const accountBalance = await this.getAccountBalance();
     const marketData = this.marketData.getMarketData(symbol);
     if (!marketData) return null;
     
+    // 🛑 GATE #1: Check for existing open position on this symbol
+    const hasOpenPosition = Array.from(this.openTrades.keys()).some(tradeId => {
+      const trade = storage.getTrades().find(t => t.id === tradeId && t.symbol === symbol);
+      return trade && !trade.closedAt;
+    });
+    
+    if (hasOpenPosition) {
+      console.log(`🛑 ${symbol}: Already have open position - skipping`);
+      return null;
+    }
+    
     const price = marketData.price;
     const candles = this.marketData.getCandles(symbol, 50);
     if (candles.length < 20) return null;
+    
+    // 🛑 GATE #2: Data quality - require HIGH confidence (80%+)
+    if (marketData.confidence < 0.80) {
+      console.log(`🛑 ${symbol}: Low confidence ${(marketData.confidence*100).toFixed(0)}% (need 80%+)`);
+      return null;
+    }
+    
+    // 🛑 GATE #3: Volatility filter - only trade when market is moving
+    const recentCandles = candles.slice(-10);
+    const avgChange = recentCandles.reduce((sum, c, i) => {
+      if (i === 0) return sum;
+      return sum + Math.abs((c.close - recentCandles[i-1].close) / recentCandles[i-1].close);
+    }, 0) / (recentCandles.length - 1);
+    
+    if (avgChange < 0.02) { // Need 2%+ volatility
+      console.log(`🛑 ${symbol}: Low volatility ${(avgChange*100).toFixed(2)}% (need 2%+)`);
+      return null;
+    }
     
     // Calculate RSI
     const closes = candles.map(c => c.close);
@@ -277,8 +317,17 @@ export class ResearchTradingMaster {
         // Record for Kelly learning
         this.kellySizer.recordTrade(pnl > 0, profit, loss);
         
+        // Update performance tracking for auto-disable gate
+        this.tradePerformance.totalTrades++;
+        if (pnl > 0) {
+          this.tradePerformance.wins++;
+        } else {
+          this.tradePerformance.losses++;
+        }
+        
+        const winRate = this.tradePerformance.wins / this.tradePerformance.totalTrades;
         const emoji = pnl > 0 ? '✅' : '❌';
-        console.log(`${emoji} ${trade.symbol} closed: ${reason} | P&L: $${pnl.toFixed(2)}`);
+        console.log(`${emoji} ${trade.symbol} closed: ${reason} | P&L: $${pnl.toFixed(2)} | Win Rate: ${(winRate*100).toFixed(1)}% (${this.tradePerformance.wins}W/${this.tradePerformance.losses}L)`);
       }
     }
   }
