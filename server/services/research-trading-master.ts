@@ -74,6 +74,22 @@ export class ResearchTradingMaster {
     const price = marketData.price;
     const volatility = marketData.volatility;
     
+    // === FILTER 4: VOLUME CONFIRMATION (NEW - FOR 60%+ WIN RATE) ===
+    // Only trade when volume is strong (1.5x+ average) indicating real market participation
+    const avgVolume24h = symbol === 'BTCUSDT' ? 65000000000 : 42000000000; // Historical 24h avg
+    const volumeRatio = marketData.volume / avgVolume24h;
+    if (volumeRatio < 1.5) {
+      console.log(`🛑 ${symbol}: Volume too low ${volumeRatio.toFixed(2)}x (need 1.5x+)`);
+      return null;
+    }
+    
+    // === FILTER 5: ML QUALITY GATE - CHECK HISTORICAL WIN RATE ===
+    const kellyStats = this.kellySizer.getStats();
+    if (kellyStats.totalTrades > 20 && kellyStats.winRate < 0.55) {
+      console.log(`🛑 ${symbol}: ML historical win rate too low ${(kellyStats.winRate*100).toFixed(1)}% (need 55%+)`);
+      return null;
+    }
+    
     // === CALCULATE STOP LOSS (ATR-BASED) ===
     const atr = price * volatility;
     const regimeStopMultiplier = this.regimeDetector.getStopLossMultiplier(symbol);
@@ -209,24 +225,44 @@ export class ResearchTradingMaster {
       
       const currentPrice = marketData.price;
       const entryPrice = parseFloat(trade.entryPrice);
-      const stopLoss = tradeParams.stopLoss;
+      let stopLoss = tradeParams.stopLoss;
       const takeProfit = tradeParams.takeProfit;
       const quantity = parseFloat(trade.size);
       const fees = parseFloat(trade.fees || '0');
+      
+      // === TRAILING STOP-LOSS (NEW - FOR 60%+ WIN RATE) ===
+      // Lock in 50% of unrealized profits when trade moves favorably
+      if (trade.side === 'buy' && currentPrice > entryPrice) {
+        const unrealizedProfit = currentPrice - entryPrice;
+        const trailingStop = entryPrice + (unrealizedProfit * 0.5);
+        if (trailingStop > stopLoss) {
+          stopLoss = trailingStop;
+          this.openTrades.set(trade.id, { ...tradeParams, stopLoss });
+          console.log(`📈 ${trade.symbol} trailing stop moved to $${stopLoss.toFixed(2)}`);
+        }
+      } else if (trade.side === 'sell' && currentPrice < entryPrice) {
+        const unrealizedProfit = entryPrice - currentPrice;
+        const trailingStop = entryPrice - (unrealizedProfit * 0.5);
+        if (trailingStop < stopLoss) {
+          stopLoss = trailingStop;
+          this.openTrades.set(trade.id, { ...tradeParams, stopLoss });
+          console.log(`📈 ${trade.symbol} trailing stop moved to $${stopLoss.toFixed(2)}`);
+        }
+      }
       
       let shouldClose = false;
       let exitPrice = currentPrice;
       let reason = '';
       
-      // Check stop loss
+      // Check stop loss (now with trailing logic)
       if (trade.side === 'buy' && currentPrice <= stopLoss) {
         shouldClose = true;
         exitPrice = stopLoss;
-        reason = 'Stop Loss';
+        reason = 'Stop Loss (Trailing)';
       } else if (trade.side === 'sell' && currentPrice >= stopLoss) {
         shouldClose = true;
         exitPrice = stopLoss;
-        reason = 'Stop Loss';
+        reason = 'Stop Loss (Trailing)';
       }
       
       // Check take profit
@@ -261,7 +297,6 @@ export class ResearchTradingMaster {
         // Update trade with exit data and mark as closed
         await db.update(trades)
           .set({
-            status: 'closed',
             exitPrice: exitPrice.toString(),
             profit: profit.toString(),
             loss: loss.toString(),
