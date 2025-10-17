@@ -101,8 +101,10 @@ export function ComparisonPage() {
   
   const forexBalanceStr = String(forexData_comp.balance || '10000');
   const forexBalance = parseFloat(forexBalanceStr.replace(/[$,]/g, ''));
-  const forexPnL = parseFloat(forexData_comp.totalPnL?.replace(/[$,]/g, '') || '0');
-  const forexROI = parseFloat((comparisonData as ComparisonData)?.performance?.forexROI?.replace('%', '') || '0');
+  const forexPnLStr = String(forexData_comp.totalPnL || '0');
+  const forexPnL = parseFloat(forexPnLStr.replace(/[$,]/g, ''));
+  const forexROIStr = String((comparisonData as ComparisonData)?.performance?.forexROI || '0');
+  const forexROI = parseFloat(forexROIStr.replace('%', ''));
   
   const winner = (comparisonData as ComparisonData)?.performance?.winner || 'Crypto';
 
