@@ -19,8 +19,8 @@ export class KellyPositionSizer {
   private marketData: MarketDataService;
   private tradeHistory: { win: boolean; profit: number; loss: number }[] = [];
   private readonly MAX_HISTORY = 100;
-  private readonly KELLY_FRACTION = 0.5; // Half-Kelly for safety (research recommendation)
-  private readonly MAX_POSITION_PCT = 0.10; // Never risk more than 10% of account
+  private readonly KELLY_FRACTION = 0.75; // 75% Kelly for profitability (was too conservative at 50%)
+  private readonly MAX_POSITION_PCT = 0.15; // Allow up to 15% of account per trade
   
   constructor(marketData: MarketDataService) {
     this.marketData = marketData;
