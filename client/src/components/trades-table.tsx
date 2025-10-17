@@ -130,7 +130,7 @@ export function TradesTable({ trades, onExportTrades }: TradesTableProps) {
                         {getSideBadge(trade.side)}
                       </TableCell>
                       <TableCell>
-                        {(trade.size ?? 0).toFixed(4)}
+                        {Number(trade.size ?? 0).toFixed(4)}
                       </TableCell>
                       <TableCell>
                         {formatCurrency(trade.price)}

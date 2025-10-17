@@ -25,10 +25,11 @@ export class ResearchTradingMaster {
   private isRunning = false;
   private openTrades: Map<string, { stopLoss: number; takeProfit: number }> = new Map();
   
-  // CRITICAL: Minimum 1:2 risk/reward - this makes 33% win rate profitable!
-  private readonly MIN_RR_RATIO = 2.0;
+  // CRITICAL: Minimum 1:3 risk/reward for 60%+ win rate target!
+  private readonly MIN_RR_RATIO = 3.0;
+  private readonly MIN_ML_CONFIDENCE = 0.75; // Only trade high-confidence signals
   private readonly BASE_STOP_PCT = 0.02;  // 2% stop loss
-  private readonly MIN_PROFIT_PCT = 0.04; // 4% minimum profit (1:2 R/R)
+  private readonly MIN_PROFIT_PCT = 0.06; // 6% minimum profit (1:3 R/R)
   
   constructor() {
     this.marketData = new MarketDataService();
@@ -60,6 +61,12 @@ export class ResearchTradingMaster {
       return null;
     }
     
+    // === FILTER 3: ML CONFIDENCE GATE (NEW - FOR 60%+ WIN RATE) ===
+    if (mtf.confidence < this.MIN_ML_CONFIDENCE) {
+      console.log(`🛑 ${symbol}: ML confidence too low ${(mtf.confidence*100).toFixed(1)}% (need ${(this.MIN_ML_CONFIDENCE*100)}%)`);
+      return null;
+    }
+    
     // Get market data
     const marketData = this.marketData.getMarketData(symbol);
     if (!marketData) return null;
@@ -81,12 +88,12 @@ export class ResearchTradingMaster {
     if (mtf.direction === 'bullish') {
       action = 'buy';
       stopLoss = price - stopDistance;
-      // ENFORCE 1:2 MINIMUM R/R
+      // ENFORCE 1:3 MINIMUM R/R FOR 60%+ WIN RATE
       takeProfit = price + (stopDistance * this.MIN_RR_RATIO);
     } else if (mtf.direction === 'bearish') {
       action = 'sell';
       stopLoss = price + stopDistance;
-      // ENFORCE 1:2 MINIMUM R/R
+      // ENFORCE 1:3 MINIMUM R/R FOR 60%+ WIN RATE
       takeProfit = price - (stopDistance * this.MIN_RR_RATIO);
     } else {
       return null;

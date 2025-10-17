@@ -38,7 +38,7 @@ export function AnimatedCounter({
   return (
     <span className={className}>
       {prefix}
-      {(displayValue ?? 0).toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+      {Number(displayValue ?? 0).toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
       {suffix}
     </span>
   );
