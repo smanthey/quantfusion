@@ -386,8 +386,9 @@ export class BinanceClient {
     const pollInterval = setInterval(async () => {
       try {
         if (type === 'ticker') {
-          const ticker = await this.get24hrTicker(symbol.toUpperCase());
-          if (ticker) {
+          const tickerData = await this.getTicker24hr(symbol.toUpperCase());
+          if (tickerData && !Array.isArray(tickerData)) {
+            const ticker = tickerData;
             // Convert to WebSocket ticker format for compatibility
             const wsFormat = {
               s: ticker.symbol,

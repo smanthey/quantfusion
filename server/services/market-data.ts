@@ -499,7 +499,7 @@ export class MarketDataService {
   }
 
   async getOrderBook(symbol: string): Promise<OrderBook> {
-    const price = this.getCurrentPrice(symbol);
+    const price = await this.getCurrentPrice(symbol);
     const spread = this.getSpread(symbol);
     const baseVolume = this.data.get(symbol)?.volume || 1000000;
 

@@ -1,6 +1,6 @@
 import { Strategy, BacktestResult, InsertBacktestResult } from "@shared/schema";
 import { StrategyEngine } from "./strategy-engine";
-import { MarketDataService } from "./market-data";
+import { historicalDataService } from "./historical-data";
 
 interface BacktestConfig {
   strategyId: string;
@@ -22,11 +22,9 @@ interface BacktestTrade {
 
 export class BacktestEngine {
   private strategyEngine: StrategyEngine;
-  private marketData: MarketDataService;
 
   constructor() {
     this.strategyEngine = new StrategyEngine();
-    this.marketData = new MarketDataService();
   }
 
   async run(config: BacktestConfig): Promise<InsertBacktestResult> {
@@ -34,10 +32,10 @@ export class BacktestEngine {
       console.log(`Starting backtest for strategy ${config.strategyId}`);
       
       // Get historical market data
-      const candles = await this.marketData.getHistoricalData(
+      const candles = historicalDataService.getHistoricalData(
         'BTCUSDT', // Primary symbol for backtesting
-        config.startDate,
-        config.endDate
+        config.startDate.getTime(),
+        config.endDate.getTime()
       );
 
       if (candles.length < 100) {
