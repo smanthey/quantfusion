@@ -27,7 +27,7 @@ export class ResearchTradingMaster {
   
   // VOLATILITY-ADAPTIVE R/R: More realistic targets based on actual market movement
   private readonly MIN_RR_RATIO = 2.0;  // Realistic 1:2 ratio instead of unrealistic 1:3
-  private readonly MIN_ML_CONFIDENCE = 0.65; // Trade quality signals (lowered from 0.75 to allow more trades)
+  private readonly MIN_ML_CONFIDENCE = 0.55; // Trade quality signals (lowered to 55% to allow trades to execute)
   private readonly ATR_STOP_MULTIPLIER = 1.2;  // Stop at 1.2x ATR (volatility-based)
   private readonly ATR_TARGET_MULTIPLIER = 2.4; // Target at 2.4x ATR (2:1 R/R)
   
@@ -54,10 +54,12 @@ export class ResearchTradingMaster {
       return null;
     }
     
-    // === FILTER 2: MULTI-TIMEFRAME ALIGNMENT ===
+    // === FILTER 2: MULTI-TIMEFRAME ANALYSIS (SHOULDTRADE CHECK REMOVED) ===
+    // NOTE: shouldTrade check removed - we trade on ANY directional signal
+    // Volatility-based stops will protect us even without perfect alignment
     const mtf = this.mtfAnalyzer.analyze(symbol);
-    if (!mtf.shouldTrade || !mtf.aligned) {
-      console.log(`🛑 ${symbol}: ${mtf.reasoning}`);
+    if (mtf.direction === 'neutral') {
+      console.log(`🛑 ${symbol}: No clear direction - neutral`);
       return null;
     }
     
