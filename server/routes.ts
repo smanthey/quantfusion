@@ -139,40 +139,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return aTime - bTime;
     });
 
-    // SIMPLE P&L: Use actual database P&L values instead of recalculating
+    // Calculate P&L using CORRECT method: profit - loss - fees (pnl field is corrupted)
     for (const trade of sortedTrades) {
       const executedAt = trade.executedAt ? new Date(trade.executedAt) : new Date();
       
-      // Use actual P&L from database if available, otherwise skip
-      if (trade.pnl !== null && trade.pnl !== undefined) {
-        const tradePnl = parseFloat(trade.pnl);
-        
-        totalPnl += tradePnl;
-        runningEquity += tradePnl;
-        returns.push(tradePnl);
+      // Use profit/loss/fees fields for accurate P&L calculation
+      const profit = parseFloat(trade.profit || '0');
+      const loss = parseFloat(trade.loss || '0');
+      const fees = parseFloat(trade.fees || '0');
+      const tradePnl = profit - loss - fees;
+      
+      totalPnl += tradePnl;
+      runningEquity += tradePnl;
+      returns.push(tradePnl);
 
-        // Track wins/losses using actual P&L
-        if (tradePnl > 0) {
-          winningTrades++;
-          profits += tradePnl;
-        } else {
-          losingTrades++;
-          losses += Math.abs(tradePnl); // Keep losses as positive numbers for display
-        }
-
-        // Calculate proper drawdown
-        if (runningEquity > peak) {
-          peak = runningEquity;
-        }
-        const currentDrawdown = peak > 0 ? ((peak - runningEquity) / peak) * 100 : 0;
-        maxDrawdown = Math.max(maxDrawdown, currentDrawdown);
-
-        // Track equity curve
-        equityPoints.push({
-          timestamp: executedAt,
-          value: runningEquity
-        });
+      // Track wins/losses using actual P&L
+      if (tradePnl > 0) {
+        winningTrades++;
+        profits += tradePnl;
+      } else {
+        losingTrades++;
+        losses += Math.abs(tradePnl); // Keep losses as positive numbers for display
       }
+
+      // Calculate proper drawdown
+      if (runningEquity > peak) {
+        peak = runningEquity;
+      }
+      const currentDrawdown = peak > 0 ? ((peak - runningEquity) / peak) * 100 : 0;
+      maxDrawdown = Math.max(maxDrawdown, currentDrawdown);
+
+      // Track equity curve
+      equityPoints.push({
+        timestamp: executedAt,
+        value: runningEquity
+      });
     }
 
     // Calculate performance metrics using proper financial formulas
@@ -237,80 +238,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const allTrades = await storage.getAllTrades();
       
-      // Calculate performance using profit/loss/fees fields - SAME AS DASHBOARD AND ACCOUNT
-      let totalProfits = 0;
-      let totalLosses = 0;
-      let totalFees = 0;
-      let winCount = 0;
-      let lossCount = 0;
-      
-      for (const trade of allTrades) {
-        const profit = parseFloat(trade.profit || '0');
-        const loss = parseFloat(trade.loss || '0');
-        const fees = parseFloat(trade.fees || '0');
-        
-        if (profit > 0) {
-          totalProfits += profit;
-          winCount++;
-        }
-        if (loss > 0) {
-          totalLosses += loss;
-          lossCount++;
-        }
-        totalFees += fees;
-      }
-      
-      const totalPnL = totalProfits - totalLosses - totalFees; // MUST include fees!
-      const winRate = allTrades.length > 0 ? winCount / allTrades.length : 0;
-      const profitFactor = totalLosses > 0 ? totalProfits / totalLosses : (totalProfits > 0 ? 2.0 : 0);
-      
-      // Calculate REAL drawdown using peak-to-trough method
-      let peak = 10000;
-      let maxDrawdown = 0;
-      let runningEquity = 10000;
-      
-      for (const trade of allTrades.sort((a, b) => new Date(a.executedAt!).getTime() - new Date(b.executedAt!).getTime())) {
-        const profit = parseFloat(trade.profit || '0');
-        const loss = parseFloat(trade.loss || '0');
-        const fees = parseFloat(trade.fees || '0');
-        const tradePnl = profit - loss - fees;
-        
-        runningEquity += tradePnl;
-        if (runningEquity > peak) {
-          peak = runningEquity;
-        }
-        const currentDrawdown = peak > 0 ? ((peak - runningEquity) / peak) * 100 : 0;
-        maxDrawdown = Math.max(maxDrawdown, currentDrawdown);
-      }
-      
-      // Calculate REAL Sharpe ratio using proper statistical methods
-      const returns: number[] = [];
-      for (const trade of allTrades) {
-        const profit = parseFloat(trade.profit || '0');
-        const loss = parseFloat(trade.loss || '0');
-        const fees = parseFloat(trade.fees || '0');
-        returns.push(profit - loss - fees);
-      }
-      
-      const avgReturn = returns.length > 0 ? returns.reduce((a, b) => a + b, 0) / returns.length : 0;
-      const variance = returns.length > 1 ? 
-        returns.reduce((sum, ret) => sum + Math.pow(ret - avgReturn, 2), 0) / (returns.length - 1) : 0;
-      const volatility = Math.sqrt(variance);
-      const sharpeRatio = volatility > 0 ? (avgReturn / volatility) * Math.sqrt(252) : 0; // Annualized
-      
-      const performance = {
-        totalPnl: totalPnL,
-        totalWins: totalProfits,
-        totalLosses: -totalLosses,
-        winRate: winRate,
-        profitFactor: profitFactor,
-        sharpeRatio: Math.min(Math.max(sharpeRatio, -3), 3), // Real calculated Sharpe ratio
-        drawdown: maxDrawdown, // Real peak-to-trough drawdown
-        totalTrades: allTrades.length,
-        winningTrades: winCount,
-        losingTrades: lossCount,
-        equity: [10000, 10000 + totalPnL] // Starting balance and current
-      };
+      // Use UNIFIED calculation method - same as Dashboard for consistency
+      const performance = await calculateUnifiedPerformance(allTrades);
 
       // Calculate metrics changes from actual data (compare to yesterday's performance)
       const yesterdayTrades = allTrades.filter(t => {
@@ -323,12 +252,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return tradeDate >= yesterday && tradeDate < today;
       });
 
-      const yesterdayPerf = yesterdayTrades.length > 0 ? performance : performance; // Use same method for yesterday
+      const yesterdayPerf = yesterdayTrades.length > 0 ? await calculateUnifiedPerformance(yesterdayTrades) : performance;
 
       const sharpeChange = (((performance.sharpeRatio || 0) - (yesterdayPerf.sharpeRatio || 0)) * 100).toFixed(1);
       const drawdownChange = (((performance.drawdown || 0) - (yesterdayPerf.drawdown || 0)) * 100).toFixed(1);
       const winRateChange = ((((performance.winRate || 0) - (yesterdayPerf.winRate || 0)) * 100) * 100).toFixed(1);
       const pfChange = (((performance.profitFactor || 0) - (yesterdayPerf.profitFactor || 0)) * 100).toFixed(1);
+
+      // Calculate total wins and losses for display
+      let totalWins = 0;
+      let totalLosses = 0;
+      for (const trade of allTrades) {
+        const profit = parseFloat(trade.profit || '0');
+        const loss = parseFloat(trade.loss || '0');
+        if (profit > 0) totalWins += profit;
+        if (loss > 0) totalLosses += loss;
+      }
 
       res.json({
         metrics: [
@@ -340,10 +279,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         overview: {
           totalTrades: performance.totalTrades,
           totalPnL: performance.totalPnl,
-          totalWins: performance.totalWins,
-          totalLosses: performance.totalLosses,
+          totalWins: totalWins,
+          totalLosses: -totalLosses,
           winRate: performance.winRate,
-          averageTrade: allTrades.length > 0 ? totalPnL / allTrades.length : 0,
+          profitFactor: performance.profitFactor,
+          averageTrade: allTrades.length > 0 ? performance.totalPnl / allTrades.length : 0,
           winningTrades: performance.winningTrades,
           losingTrades: performance.losingTrades,
           maxDrawdown: performance.drawdown
