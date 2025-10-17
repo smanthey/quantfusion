@@ -74,12 +74,13 @@ export class ResearchTradingMaster {
     const price = marketData.price;
     const volatility = marketData.volatility;
     
-    // === FILTER 4: VOLUME CONFIRMATION (NEW - FOR 60%+ WIN RATE) ===
-    // Only trade when volume is strong (1.5x+ average) indicating real market participation
+    // === FILTER 4: VOLUME CONFIRMATION - RELAXED ===
+    // Volume filter relaxed to 0.8x to allow more quality trades through
+    // Was blocking too many trades at 1.5x threshold
     const avgVolume24h = symbol === 'BTCUSDT' ? 65000000000 : 42000000000; // Historical 24h avg
     const volumeRatio = marketData.volume / avgVolume24h;
-    if (volumeRatio < 1.5) {
-      console.log(`🛑 ${symbol}: Volume too low ${volumeRatio.toFixed(2)}x (need 1.5x+)`);
+    if (volumeRatio < 0.8) {
+      console.log(`🛑 ${symbol}: Volume too low ${volumeRatio.toFixed(2)}x (need 0.8x+)`);
       return null;
     }
     
