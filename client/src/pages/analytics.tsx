@@ -80,8 +80,8 @@ export default function AnalyticsPage() {
                 <div className="h-64 flex items-center justify-center bg-muted rounded">
                   <p className="text-muted-foreground">
                     {analyticsData?.equityData?.length > 0 
-                      ? "Real equity curve visualization" 
-                      : "No trading data available yet"}
+                      ? `Equity data available: ${analyticsData.equityData.length} points` 
+                      : "No trading data available yet - start trading to see equity curve"}
                   </p>
                 </div>
               )}
@@ -97,7 +97,11 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className="h-64 flex items-center justify-center bg-muted rounded">
-                <p className="text-muted-foreground">Monthly returns chart would go here</p>
+                <p className="text-muted-foreground">
+                  {analyticsData?.monthlyReturns?.length > 0
+                    ? `Monthly data available: ${analyticsData.monthlyReturns.length} months`
+                    : "No trading data available yet - start trading to see returns"}
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -111,7 +115,11 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className="h-64 flex items-center justify-center bg-muted rounded">
-                <p className="text-muted-foreground">Strategy allocation chart would go here</p>
+                <p className="text-muted-foreground">
+                  {analyticsData?.strategyAllocation?.length > 0
+                    ? `Active strategies: ${analyticsData.strategyAllocation.length}`
+                    : "No strategy allocation data available yet"}
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -125,7 +133,11 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className="h-64 flex items-center justify-center bg-muted rounded">
-                <p className="text-muted-foreground">Risk metrics visualization would go here</p>
+                <p className="text-muted-foreground">
+                  {analyticsData?.riskMetrics?.length > 0
+                    ? `Risk metrics available: ${analyticsData.riskMetrics.length} data points`
+                    : "No risk metrics data available yet"}
+                </p>
               </div>
             </CardContent>
           </Card>
