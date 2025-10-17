@@ -96,6 +96,7 @@ export class MarketDataService {
 
   private async startLiveDataFeeds() {
     const symbols = ['BTCUSDT', 'ETHUSDT'];
+    let successCount = 0;
 
     for (const symbol of symbols) {
       try {
@@ -115,45 +116,7 @@ export class MarketDataService {
 
           this.data.set(symbol, marketData);
           this.notifySubscribers(marketData);
-        }
-
-        // Subscribe to real-time ticker updates with error handling
-        try {
-          const unsubscribeTicker = binanceClient.subscribeToTicker(symbol, (tickerData) => {
-            const marketData: MarketData = {
-              symbol,
-              price: parseFloat(tickerData.c), // Current price
-              timestamp: Date.now(),
-              volume: parseFloat(tickerData.v),
-              spread: parseFloat(tickerData.a) - parseFloat(tickerData.b), // Ask - Bid
-              volatility: Math.abs(parseFloat(tickerData.P)) / 100 // Price change percentage
-            };
-
-            this.data.set(symbol, marketData);
-            this.notifySubscribers(marketData);
-          });
-
-          this.unsubscribeFunctions.push(unsubscribeTicker);
-        } catch (error) {
-          console.warn(`Failed to subscribe to ticker for ${symbol}, using polling instead`);
-          this.startPollingForSymbol(symbol);
-        }
-
-        // Subscribe to kline data for more detailed price action with error handling
-        try {
-          const unsubscribeKline = binanceClient.subscribeToKline(symbol, '1m', (klineData) => {
-            // Update with kline close price if needed
-            const currentData = this.data.get(symbol);
-            if (currentData && klineData.k) {
-              currentData.price = parseFloat(klineData.k.c);
-              currentData.timestamp = Date.now();
-              this.notifySubscribers(currentData);
-            }
-          });
-
-          this.unsubscribeFunctions.push(unsubscribeKline);
-        } catch (error) {
-          console.warn(`Failed to subscribe to klines for ${symbol}`);
+          successCount++;
         }
 
         // Subscribe to kline data for historical candles
@@ -170,10 +133,37 @@ export class MarketDataService {
           this.addHistoricalCandle(symbol, candle);
         }
 
-      } catch (error) {
+      } catch (error: any) {
+        // Check if this is a geo-restriction or auth error (4xx errors)
+        if (error.message && (error.message.includes('451') || error.message.includes('403'))) {
+          console.error(`❌ Binance geo-restricted or authentication failed for ${symbol}`);
+          throw new Error(`Binance API unavailable: ${error.message}`);
+        }
         console.error(`Failed to set up live data for ${symbol}:`, error);
-        // Use basic polling instead of simulation for authentic data
-        this.startPollingForSymbol(symbol);
+        throw error;
+      }
+    }
+
+    // If we got here, Binance is working - set up WebSocket subscriptions
+    if (successCount === symbols.length) {
+      for (const symbol of symbols) {
+        try {
+          const unsubscribeTicker = binanceClient.subscribeToTicker(symbol, (tickerData) => {
+            const marketData: MarketData = {
+              symbol,
+              price: parseFloat(tickerData.c),
+              timestamp: Date.now(),
+              volume: parseFloat(tickerData.v),
+              spread: parseFloat(tickerData.a) - parseFloat(tickerData.b),
+              volatility: Math.abs(parseFloat(tickerData.P)) / 100
+            };
+            this.data.set(symbol, marketData);
+            this.notifySubscribers(marketData);
+          });
+          this.unsubscribeFunctions.push(unsubscribeTicker);
+        } catch (error) {
+          console.warn(`WebSocket failed for ${symbol}, will use REST only`);
+        }
       }
     }
   }

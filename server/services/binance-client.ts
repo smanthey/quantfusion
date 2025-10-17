@@ -86,11 +86,13 @@ export class BinanceClient {
   private connections: Map<string, WebSocket> = new Map();
 
   constructor() {
-    this.apiKey = process.env.BINANCE_API_KEY!;
-    this.apiSecret = process.env.BINANCE_SECRET_KEY!;
+    this.apiKey = process.env.BINANCE_API_KEY || '';
+    this.apiSecret = process.env.BINANCE_SECRET_KEY || '';
 
+    // Use public API if credentials not available
+    // Note: API key warnings are expected when using public endpoints only
     if (!this.apiKey || !this.apiSecret) {
-      throw new Error('Binance API credentials not found in environment variables');
+      console.warn('⚠️ Binance API credentials not found, using public endpoints only');
     }
 
     // Use testnet API which was working before geo-restrictions
