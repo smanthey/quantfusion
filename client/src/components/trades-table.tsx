@@ -150,7 +150,7 @@ export function TradesTable({ trades, onExportTrades }: TradesTableProps) {
                         {safeNumber(trade.size).toFixed(4)}
                       </TableCell>
                       <TableCell>
-                        {formatCurrency(trade.price)}
+                        {formatCurrency(trade.entryPrice)}
                       </TableCell>
                       <TableCell>
                         <span className={getPnLColor(safeNumber(trade.pnl))}>

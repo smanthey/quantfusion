@@ -30,6 +30,7 @@ import { coinLoreClient } from './coinlore-client';
 import { coinCapClient } from './coincap-client';
 import { multiApiClient } from './multi-api-client';
 import { historicalDataService } from './historical-data';
+import { ForexDataService } from './forex-data-service';
 
 export class MarketDataService {
   private data: Map<string, MarketData> = new Map();
@@ -40,9 +41,11 @@ export class MarketDataService {
   private simulationInterval?: NodeJS.Timeout;
   private unsubscribeFunctions: (() => void)[] = [];
   private pollIntervals?: Map<string, NodeJS.Timeout>;
-  private symbols = ['BTCUSDT', 'ETHUSDT'];
+  private symbols = ['BTCUSDT', 'ETHUSDT', 'EURUSD', 'GBPUSD', 'AUDUSD'];
+  private forexData: ForexDataService;
 
   constructor() {
+    this.forexData = new ForexDataService();
     this.initializeService();
   }
 
@@ -72,6 +75,23 @@ export class MarketDataService {
       priceChangePercent24h: 0
     });
     
+    // Initialize forex pairs from ForexDataService
+    const forexPairs = ['EURUSD', 'GBPUSD', 'AUDUSD'];
+    for (const pair of forexPairs) {
+      const forexRate = this.forexData.getForexRate(pair);
+      if (forexRate) {
+        this.data.set(pair, {
+          symbol: pair,
+          price: forexRate.price,
+          timestamp: forexRate.timestamp,
+          volume: forexRate.volume || 0,
+          spread: forexRate.spread,
+          volatility: forexRate.volatility || 0.001
+        });
+      }
+    }
+    console.log(`💱 Initialized ${forexPairs.length} forex pairs alongside crypto`);
+    
     // Try to start live Binance data feeds first
     try {
       console.log('🚀 Attempting to connect to Binance live data feeds...');
@@ -92,6 +112,9 @@ export class MarketDataService {
         this.useLiveData = false;
       }
     }
+    
+    // ALWAYS start forex data feeds regardless of crypto source
+    this.startForexDataFeeds();
   }
 
   private async startLiveDataFeeds() {
@@ -173,8 +196,12 @@ export class MarketDataService {
   private async startMultiApiDataFeeds() {
     console.log('🎯 Starting MULTI-API AGGREGATED data feeds...');
     
-    // Initial aggregated data load
-    const aggregatedData = await multiApiClient.getAggregatedMarketData(this.symbols);
+    // Separate crypto and forex symbols
+    const cryptoSymbols = this.symbols.filter(s => s.endsWith('USDT'));
+    const forexSymbols = this.symbols.filter(s => !s.endsWith('USDT'));
+    
+    // Initial aggregated data load for CRYPTO only
+    const aggregatedData = await multiApiClient.getAggregatedMarketData(cryptoSymbols);
     
     aggregatedData.forEach((data, symbol) => {
       // Convert to our MarketData format with proper change calculation
@@ -192,10 +219,10 @@ export class MarketDataService {
       console.log(`🎯 Aggregated ${symbol}: $${data.price.toFixed(2)} (${Math.round(data.confidence * 100)}% confidence, ${data.sources.length} sources)`);
     });
     
-    // Start regular aggregated updates every 15 seconds
+    // Start regular aggregated updates every 15 seconds for CRYPTO only
     setInterval(async () => {
       try {
-        const updatedData = await multiApiClient.getAggregatedMarketData(this.symbols);
+        const updatedData = await multiApiClient.getAggregatedMarketData(cryptoSymbols);
         updatedData.forEach((data, symbol) => {
           const marketData: MarketData = {
             symbol: data.symbol,
@@ -213,6 +240,39 @@ export class MarketDataService {
         console.error('Multi-API update failed:', error);
       }
     }, 15000);
+  }
+
+  // Dedicated forex data feed method - runs ALWAYS regardless of crypto source
+  private startForexDataFeeds() {
+    console.log('💱 Starting FOREX live data feeds...');
+    
+    const forexPairs = ['EURUSD', 'GBPUSD', 'AUDUSD'];
+    
+    // Update forex rates every 15 seconds
+    setInterval(async () => {
+      try {
+        for (const pair of forexPairs) {
+          const forexRate = this.forexData.getForexRate(pair);
+          if (forexRate) {
+            const marketData: MarketData = {
+              symbol: pair,
+              price: forexRate.price,
+              timestamp: forexRate.timestamp,
+              volume: forexRate.volume || 0,
+              spread: forexRate.spread,
+              volatility: forexRate.volatility || 0.001
+            };
+            this.data.set(pair, marketData);
+            this.notifySubscribers(marketData);
+            console.log(`💱 ${pair}: $${forexRate.price.toFixed(5)} (spread: ${forexRate.spread.toFixed(5)}, vol: ${(forexRate.volatility * 100).toFixed(2)}%)`);
+          }
+        }
+      } catch (error) {
+        console.error('Forex update failed:', error);
+      }
+    }, 15000);
+    
+    console.log(`✅ Forex feeds started for ${forexPairs.length} pairs`);
   }
 
   private async startCoinLoreDataFeeds() {

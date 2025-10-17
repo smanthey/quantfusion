@@ -40,11 +40,13 @@ export interface TradeData {
   symbol: string;
   side: 'buy' | 'sell';
   size: number;
-  price: number;
+  entryPrice: number;
+  exitPrice?: number;
   pnl?: number;
   fees: number;
   timestamp: number;
   strategy: string;
+  executedAt?: string;
 }
 
 export interface Alert {

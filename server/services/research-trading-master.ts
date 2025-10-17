@@ -74,9 +74,9 @@ export class ResearchTradingMaster {
     const candles = this.marketData.getCandles(symbol, 50);
     if (candles.length < 20) return null;
     
-    // 🛑 GATE #2: Data quality - require HIGH confidence (80%+)
-    if (marketData.confidence < 0.80) {
-      console.log(`🛑 ${symbol}: Low confidence ${(marketData.confidence*100).toFixed(0)}% (need 80%+)`);
+    // 🛑 GATE #2: Data quality - require GOOD confidence (60%+)
+    if (marketData.confidence && marketData.confidence < 0.60) {
+      console.log(`🛑 ${symbol}: Low confidence ${(marketData.confidence*100).toFixed(0)}% (need 60%+)`);
       return null;
     }
     
@@ -87,8 +87,8 @@ export class ResearchTradingMaster {
       return sum + Math.abs((c.close - recentCandles[i-1].close) / recentCandles[i-1].close);
     }, 0) / (recentCandles.length - 1);
     
-    if (avgChange < 0.02) { // Need 2%+ volatility
-      console.log(`🛑 ${symbol}: Low volatility ${(avgChange*100).toFixed(2)}% (need 2%+)`);
+    if (avgChange < 0.005) { // Need 0.5%+ volatility
+      console.log(`🛑 ${symbol}: Low volatility ${(avgChange*100).toFixed(2)}% (need 0.5%+)`);
       return null;
     }
     
@@ -347,8 +347,8 @@ export class ResearchTradingMaster {
         // Monitor existing trades
         await this.monitorTrades();
         
-        // Generate new signals
-        for (const symbol of ['BTCUSDT', 'ETHUSDT']) {
+        // Generate new signals - CRYPTO + FOREX from same account
+        for (const symbol of ['BTCUSDT', 'ETHUSDT', 'EURUSD', 'GBPUSD', 'AUDUSD']) {
           const signal = await this.generateProfitableSignal(symbol);
           if (signal) {
             await this.executeTrade(signal);
