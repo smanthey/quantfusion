@@ -1,5 +1,7 @@
 import crypto from 'crypto';
 import WebSocket from 'ws';
+import { ExponentialBackoff, AdaptiveRateLimiter, isRetryableError } from './exponential-backoff';
+import { circuitBreakerManager } from './circuit-breaker';
 
 export interface BinanceTickerData {
   symbol: string;
@@ -84,6 +86,8 @@ export class BinanceClient {
   private wsUrl: string;
   private subscribers: Map<string, Set<(data: any) => void>> = new Map();
   private connections: Map<string, WebSocket> = new Map();
+  private backoff: ExponentialBackoff;
+  private rateLimiter: AdaptiveRateLimiter;
 
   constructor() {
     this.apiKey = process.env.BINANCE_API_KEY || '';
@@ -99,6 +103,22 @@ export class BinanceClient {
     this.baseUrl = 'https://testnet.binance.vision/api';
     // WebSocket disabled due to geo-blocking, using REST polling only
     this.wsUrl = 'wss://stream.binance.com:9443/ws';
+    
+    this.backoff = new ExponentialBackoff({
+      maxAttempts: 5,
+      baseDelayMs: 1000,
+      maxDelayMs: 60000,
+      jitter: true
+    });
+    this.rateLimiter = new AdaptiveRateLimiter(10); // 10 req/sec
+    
+    // Create circuit breaker for Binance
+    circuitBreakerManager.createBreaker({
+      name: 'binance_api',
+      failureThreshold: 5,
+      successThreshold: 2,
+      timeout: 60000
+    });
   }
 
   private createSignature(queryString: string): string {

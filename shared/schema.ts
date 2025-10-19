@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, decimal, integer, timestamp, boolean, jsonb, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, decimal, integer, timestamp, boolean, jsonb, uuid, unique } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -103,6 +103,7 @@ export const riskMetrics = pgTable("risk_metrics", {
 });
 
 // Historical Market Data - Store all price data forever for backtesting and analysis
+// Note: Deduplication handled via UPSERT in code (symbol+timestamp+interval unique)
 export const historicalPrices = pgTable("historical_prices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   symbol: text("symbol").notNull(), // 'BTCUSDT', 'ETHUSDT', 'EURUSD', etc.

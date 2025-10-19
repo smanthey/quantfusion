@@ -19,6 +19,7 @@ import { politicianTradesScanner } from './politician-trades-scanner';
 import { optionsFlowScanner } from './options-flow-scanner';
 import { whaleTracker } from './whale-tracker';
 import { circuitBreakerManager } from './circuit-breaker';
+import { portfolioRiskManager } from './portfolio-var';
 import { storage } from '../storage';
 import { db } from '../db';
 import { trades } from '@shared/schema';
@@ -683,6 +684,14 @@ export class ResearchTradingMaster {
           return;
         }
         
+        // 🔴 CHECK DAILY LOSS LIMIT
+        const todaysPnL = await this.getTodaysPnL();
+        if (!portfolioRiskManager.checkDailyLossLimit(todaysPnL)) {
+          console.log(`🚨 DAILY LOSS LIMIT HIT: $${todaysPnL.toFixed(2)} (max -$${portfolioRiskManager.getRiskLimits().maxDailyLoss})`);
+          await this.emergencyStop();
+          return;
+        }
+        
         // Monitor existing trades
         await this.monitorTrades();
         
@@ -698,6 +707,28 @@ export class ResearchTradingMaster {
         console.error('Trading loop error:', error);
       }
     }, 10000);
+  }
+  
+  /**
+   * Get today's P&L
+   */
+  private async getTodaysPnL(): Promise<number> {
+    try {
+      const allTrades = await storage.getAllTrades();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const todaysTrades = allTrades.filter(t => {
+        if (!t.closedAt) return false;
+        const tradeDate = new Date(t.closedAt);
+        tradeDate.setHours(0, 0, 0, 0);
+        return tradeDate.getTime() === today.getTime();
+      });
+      
+      return todaysTrades.reduce((sum, t) => sum + (parseFloat(t.pnl || '0')), 0);
+    } catch {
+      return 0;
+    }
   }
   
   private async getAccountBalance(): Promise<number> {

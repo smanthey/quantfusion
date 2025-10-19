@@ -17,10 +17,15 @@ export interface CoinCapResponse<T> {
   timestamp: number;
 }
 
+import { ExponentialBackoff, AdaptiveRateLimiter, isRetryableError } from './exponential-backoff';
+import { circuitBreakerManager } from './circuit-breaker';
+
 export class CoinCapClient {
   private baseUrl = 'https://api.coincap.io/v2';
   private lastRequestTime = 0;
   private minRequestInterval = 500; // 2 requests per second limit
+  private backoff: ExponentialBackoff;
+  private rateLimiter: AdaptiveRateLimiter;
   
   private symbolMap = new Map([
     ['BTCUSDT', 'bitcoin'],
@@ -35,29 +40,50 @@ export class CoinCapClient {
     ['TRXUSDT', 'tron']
   ]);
 
+  constructor() {
+    this.backoff = new ExponentialBackoff({
+      maxAttempts: 5,
+      baseDelayMs: 1000,
+      maxDelayMs: 60000,
+      jitter: true
+    });
+    this.rateLimiter = new AdaptiveRateLimiter(2); // 2 req/sec
+    
+    // Create circuit breaker for CoinCap
+    circuitBreakerManager.createBreaker({
+      name: 'coincap_api',
+      failureThreshold: 5,
+      successThreshold: 2,
+      timeout: 60000
+    });
+  }
+
   private async makeRequest(endpoint: string): Promise<any> {
-    // Rate limiting
-    const now = Date.now();
-    const timeSinceLastRequest = now - this.lastRequestTime;
-    if (timeSinceLastRequest < this.minRequestInterval) {
-      await new Promise(resolve => setTimeout(resolve, this.minRequestInterval - timeSinceLastRequest));
-    }
+    const breaker = circuitBreakerManager.getBreaker('coincap_api')!;
     
-    const url = `${this.baseUrl}${endpoint}`;
-    
-    try {
-      const response = await fetch(url);
-      this.lastRequestTime = Date.now();
+    return await breaker.execute(async () => {
+      await this.rateLimiter.throttle();
       
-      if (!response.ok) {
-        throw new Error(`CoinCap API error: ${response.status} ${response.statusText}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('CoinCap API request failed:', error);
-      throw error;
-    }
+      return await this.backoff.execute(async () => {
+        const url = `${this.baseUrl}${endpoint}`;
+        const response = await fetch(url);
+        this.lastRequestTime = Date.now();
+        
+        if (!response.ok) {
+          const error: any = new Error(`CoinCap API error: ${response.status} ${response.statusText}`);
+          error.response = { status: response.status };
+          
+          if (response.status === 429) {
+            this.rateLimiter.onError();
+          }
+          
+          throw error;
+        }
+        
+        this.rateLimiter.onSuccess();
+        return await response.json();
+      }, isRetryableError);
+    });
   }
 
   private getAssetId(symbol: string): string {

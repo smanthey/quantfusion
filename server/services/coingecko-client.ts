@@ -24,10 +24,15 @@ export interface CoinGeckoOHLC {
   close: number;
 }
 
+import { ExponentialBackoff, AdaptiveRateLimiter, isRetryableError } from './exponential-backoff';
+import { circuitBreakerManager } from './circuit-breaker';
+
 export class CoinGeckoClient {
   private baseUrl = 'https://api.coingecko.com/api/v3';
   private lastRequestTime = 0;
   private minRequestInterval = 100; // 10 requests per second limit
+  private backoff: ExponentialBackoff;
+  private rateLimiter: AdaptiveRateLimiter;
   
   private symbolMap = new Map([
     ['BTCUSDT', 'bitcoin'],
@@ -42,30 +47,55 @@ export class CoinGeckoClient {
     ['TRXUSDT', 'tron']
   ]);
 
+  constructor() {
+    this.backoff = new ExponentialBackoff({
+      maxAttempts: 5,
+      baseDelayMs: 1000,
+      maxDelayMs: 60000,
+      jitter: true
+    });
+    this.rateLimiter = new AdaptiveRateLimiter(10); // 10 req/sec
+    
+    // Create circuit breaker for CoinGecko
+    circuitBreakerManager.createBreaker({
+      name: 'coingecko_api',
+      failureThreshold: 5,
+      successThreshold: 2,
+      timeout: 60000
+    });
+  }
+
   private async makeRequest(endpoint: string, params: Record<string, any> = {}): Promise<any> {
-    // Rate limiting
-    const now = Date.now();
-    const timeSinceLastRequest = now - this.lastRequestTime;
-    if (timeSinceLastRequest < this.minRequestInterval) {
-      await new Promise(resolve => setTimeout(resolve, this.minRequestInterval - timeSinceLastRequest));
-    }
+    const breaker = circuitBreakerManager.getBreaker('coingecko_api')!;
     
-    const queryString = new URLSearchParams(params).toString();
-    const url = `${this.baseUrl}${endpoint}${queryString ? '?' + queryString : ''}`;
-    
-    try {
-      const response = await fetch(url);
-      this.lastRequestTime = Date.now();
+    // Check circuit breaker first
+    return await breaker.execute(async () => {
+      // Adaptive rate limiting
+      await this.rateLimiter.throttle();
       
-      if (!response.ok) {
-        throw new Error(`CoinGecko API error: ${response.status} ${response.statusText}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('CoinGecko API request failed:', error);
-      throw error;
-    }
+      // Exponential backoff retry
+      return await this.backoff.execute(async () => {
+        const queryString = new URLSearchParams(params).toString();
+        const url = `${this.baseUrl}${endpoint}${queryString ? '?' + queryString : ''}`;
+        
+        const response = await fetch(url);
+        this.lastRequestTime = Date.now();
+        
+        if (!response.ok) {
+          const error: any = new Error(`CoinGecko API error: ${response.status} ${response.statusText}`);
+          error.response = { status: response.status };
+          
+          if (response.status === 429) {
+            this.rateLimiter.onError(); // Slow down on rate limit
+          }
+          
+          throw error;
+        }
+        
+        this.rateLimiter.onSuccess(); // Speed up on success
+        return await response.json();
+      }, isRetryableError);
+    });
   }
 
   private getGeckoId(symbol: string): string {
