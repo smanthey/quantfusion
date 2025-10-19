@@ -50,8 +50,9 @@ export class CycleDetector {
     const trendStrength = this.calculateTrendStrength(candles);
     const volumeTrend = this.detectVolumeTrend(candles);
     
-    // Price position in range
-    const priceInRange = (currentPrice - lowest50) / (highest50 - lowest50);
+    // Price position in range (guard against division by zero)
+    const range = highest50 - lowest50;
+    const priceInRange = range > 0 ? (currentPrice - lowest50) / range : 0.5;
     
     // Moving average alignment
     const bullishAlignment = sma50 > sma200 && currentPrice > sma50;

@@ -38,6 +38,24 @@ interface DashboardData {
       volume: number;
       volatility: number;
     };
+    EURUSD?: {
+      price: number;
+      change: number;
+      volume: number;
+      volatility: number;
+    };
+    GBPUSD?: {
+      price: number;
+      change: number;
+      volume: number;
+      volatility: number;
+    };
+    AUDUSD?: {
+      price: number;
+      change: number;
+      volume: number;
+      volatility: number;
+    };
     regime: {
       current: string;
       strength: number;
@@ -371,7 +389,7 @@ export function EnhancedTradingDashboard() {
         )}
 
         {/* Market Data - Animated Price Cards */}
-        <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
           {/* BTC Card */}
           <motion.div whileHover={{ scale: 1.02, y: -5 }} transition={{ type: "spring", stiffness: 300 }}>
             <Card className="backdrop-blur-xl bg-gradient-to-br from-orange-500/10 to-orange-600/5 border-orange-500/20 shadow-xl">
@@ -449,6 +467,87 @@ export function EnhancedTradingDashboard() {
               </CardContent>
             </Card>
           </motion.div>
+
+          {/* Forex Cards - EURUSD */}
+          {finalData.marketData.EURUSD && (
+            <motion.div whileHover={{ scale: 1.02, y: -5 }} transition={{ type: "spring", stiffness: 300 }}>
+              <Card className="backdrop-blur-xl bg-gradient-to-br from-green-500/10 to-green-600/5 border-green-500/20 shadow-xl" data-testid="card-eurusd">
+                <CardHeader>
+                  <CardTitle className="flex justify-between items-center text-sm">
+                    <span className="flex items-center gap-2">
+                      <span className="text-lg">€/$</span>
+                      EUR/USD
+                    </span>
+                    <Badge variant={finalData.marketData.EURUSD.change >= 0 ? "secondary" : "destructive"} 
+                           className={`text-xs ${finalData.marketData.EURUSD.change >= 0 ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
+                      {finalData.marketData.EURUSD.change >= 0 ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
+                      {formatPercentage(finalData.marketData.EURUSD.change)}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold mb-2" data-testid="price-eurusd">
+                    ${finalData.marketData.EURUSD.price.toFixed(5)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Vol: <span className="text-green-400">{formatPercentage(finalData.marketData.EURUSD.volatility || 0)}</span></p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {/* GBPUSD */}
+          {finalData.marketData.GBPUSD && (
+            <motion.div whileHover={{ scale: 1.02, y: -5 }} transition={{ type: "spring", stiffness: 300 }}>
+              <Card className="backdrop-blur-xl bg-gradient-to-br from-yellow-500/10 to-yellow-600/5 border-yellow-500/20 shadow-xl" data-testid="card-gbpusd">
+                <CardHeader>
+                  <CardTitle className="flex justify-between items-center text-sm">
+                    <span className="flex items-center gap-2">
+                      <span className="text-lg">£/$</span>
+                      GBP/USD
+                    </span>
+                    <Badge variant={finalData.marketData.GBPUSD.change >= 0 ? "secondary" : "destructive"} 
+                           className={`text-xs ${finalData.marketData.GBPUSD.change >= 0 ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
+                      {finalData.marketData.GBPUSD.change >= 0 ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
+                      {formatPercentage(finalData.marketData.GBPUSD.change)}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold mb-2" data-testid="price-gbpusd">
+                    ${finalData.marketData.GBPUSD.price.toFixed(5)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Vol: <span className="text-yellow-400">{formatPercentage(finalData.marketData.GBPUSD.volatility || 0)}</span></p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {/* AUDUSD */}
+          {finalData.marketData.AUDUSD && (
+            <motion.div whileHover={{ scale: 1.02, y: -5 }} transition={{ type: "spring", stiffness: 300 }}>
+              <Card className="backdrop-blur-xl bg-gradient-to-br from-teal-500/10 to-teal-600/5 border-teal-500/20 shadow-xl" data-testid="card-audusd">
+                <CardHeader>
+                  <CardTitle className="flex justify-between items-center text-sm">
+                    <span className="flex items-center gap-2">
+                      <span className="text-lg">A$/$</span>
+                      AUD/USD
+                    </span>
+                    <Badge variant={finalData.marketData.AUDUSD.change >= 0 ? "secondary" : "destructive"} 
+                           className={`text-xs ${finalData.marketData.AUDUSD.change >= 0 ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
+                      {finalData.marketData.AUDUSD.change >= 0 ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
+                      {formatPercentage(finalData.marketData.AUDUSD.change)}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold mb-2" data-testid="price-audusd">
+                    ${finalData.marketData.AUDUSD.price.toFixed(5)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Vol: <span className="text-teal-400">{formatPercentage(finalData.marketData.AUDUSD.volatility || 0)}</span></p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
 
           {/* Market Regime */}
           <motion.div whileHover={{ scale: 1.02, y: -5 }} transition={{ type: "spring", stiffness: 300 }}>

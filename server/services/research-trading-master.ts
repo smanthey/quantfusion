@@ -244,13 +244,13 @@ export class ResearchTradingMaster {
     const reward = Math.abs(takeProfit - price);
     const rrRatio = reward / risk;
     
-    console.log(`\n✅ MEAN REVERSION: ${action.toUpperCase()} ${symbol}`);
+    console.log(`\n✅ ${cycle.toUpperCase()} + ${regime.toUpperCase()} VOL: ${action.toUpperCase()} ${symbol}`);
     console.log(`📊 ${reasoning}`);
     console.log(`💰 Entry: $${price.toFixed(2)}`);
-    console.log(`🛡️ Stop: $${stopLoss.toFixed(2)} (-${(this.STOP_LOSS_PCT*100).toFixed(2)}%)`);
-    console.log(`🎯 Target: $${takeProfit.toFixed(2)} (+${(this.TARGET_PROFIT_PCT*100).toFixed(2)}%)`);
+    console.log(`🛡️ Stop: $${stopLoss.toFixed(2)} (-${(stopPct*100).toFixed(2)}%)`);
+    console.log(`🎯 Target: $${takeProfit.toFixed(2)} (+${(targetPct*100).toFixed(2)}%)`);
     console.log(`📈 R/R: 1:${rrRatio.toFixed(2)} | Win Prob: ${(confidence*100).toFixed(1)}%`);
-    console.log(`💵 Size: $${sizeUSD.toFixed(2)} (${(this.POSITION_SIZE_PCT*100).toFixed(1)}%)`);
+    console.log(`💵 Size: $${sizeUSD.toFixed(2)} (${(positionPct*100).toFixed(1)}%)`);
     
     return {
       action,
