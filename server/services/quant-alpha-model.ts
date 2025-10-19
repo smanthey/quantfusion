@@ -46,7 +46,7 @@ export class QuantAlphaModel {
    */
   generateAlpha(symbol: string): AlphaSignal | null {
     const candles = this.marketData.getCandles(symbol, 200);
-    if (candles.length < 100) return null;
+    if (candles.length < 20) return null; // LOWERED: Work with available data
     
     const closes = candles.map(c => c.close);
     const volumes = candles.map(c => c.volume);

@@ -68,8 +68,8 @@ export class ForexQuantTrader {
     
     // Get historical candles for technical analysis
     const candles = this.marketData.getCandles(symbol, 100);
-    if (candles.length < 50) {
-      console.log(`🛑 ${symbol}: Insufficient candle data (need 50+)`);
+    if (candles.length < 20) {
+      console.log(`🛑 ${symbol}: Insufficient candle data (need 20+)`);
       return null;
     }
     

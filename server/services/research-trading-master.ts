@@ -162,11 +162,11 @@ export class ResearchTradingMaster {
     
     const price = marketData.price;
     const candles = this.marketData.getCandles(symbol, 50);
-    if (candles.length < 20) return null;
+    if (candles.length < 10) return null; // LOWERED: Work with minimal data
     
-    // 🛑 GATE #2: Data quality - require GOOD confidence (60%+)
-    if (marketData.confidence && marketData.confidence < 0.60) {
-      console.log(`🛑 ${symbol}: Low confidence ${(marketData.confidence*100).toFixed(0)}% (need 60%+)`);
+    // 🛑 GATE #2: Data quality - require reasonable confidence (50%+)
+    if (marketData.confidence && marketData.confidence < 0.50) {
+      console.log(`🛑 ${symbol}: Low confidence ${(marketData.confidence*100).toFixed(0)}% (need 50%+)`);
       return null;
     }
     

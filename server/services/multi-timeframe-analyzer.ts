@@ -48,7 +48,7 @@ export class MultiTimeframeAnalyzer {
   analyze(symbol: string): MultiTimeframeAnalysis {
     const candles = this.marketData.getCandles(symbol, 200); // Need enough data for all timeframes
     
-    if (candles.length < 50) {
+    if (candles.length < 20) {
       return this.neutralAnalysis(symbol, 'Insufficient data for multi-timeframe analysis');
     }
     
