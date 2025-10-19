@@ -677,11 +677,18 @@ export class ResearchTradingMaster {
       if (!this.isRunning) return; // Safety check
       
       try {
-        // 🔴 CHECK CIRCUIT BREAKERS - Don't trade on stale data
+        // 🟡 CHECK CIRCUIT BREAKERS - Reduce size if degraded, only stop if critical
         const openBreakers = circuitBreakerManager.getOpenBreakers();
         if (openBreakers.length > 0) {
-          console.log(`🚨 Circuit breakers OPEN: ${openBreakers.join(', ')} - Skipping trading loop`);
-          return;
+          // INSTITUTIONAL APPROACH: Reduce position size, don't stop entirely
+          // Only skip if ALL data sources are down (critical failure)
+          const criticalBreakers = openBreakers.filter(b => b === 'market_data' || b === 'forex_data');
+          if (criticalBreakers.length > 0 && openBreakers.length >= 4) {
+            console.log(`🚨 CRITICAL: All data sources down - Skipping trading loop`);
+            return;
+          }
+          // Otherwise: Trade with reduced size (handled in position sizing)
+          console.log(`⚠️ Partial degradation: ${openBreakers.join(', ')} - Trading with reduced size`);
         }
         
         // 🔴 CHECK DAILY LOSS LIMIT
