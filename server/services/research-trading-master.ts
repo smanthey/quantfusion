@@ -15,6 +15,10 @@ import { KellyPositionSizer } from './kelly-position-sizer';
 import { CycleDetector, MarketCycle } from './cycle-detector';
 import { QuantAlphaModel } from './quant-alpha-model';
 import { ForexQuantTrader } from './forex-quant-trader';
+import { politicianTradesScanner } from './politician-trades-scanner';
+import { optionsFlowScanner } from './options-flow-scanner';
+import { whaleTracker } from './whale-tracker';
+import { circuitBreakerManager } from './circuit-breaker';
 import { storage } from '../storage';
 import { db } from '../db';
 import { trades } from '@shared/schema';
@@ -599,6 +603,12 @@ export class ResearchTradingMaster {
       clearInterval(this.tradingInterval);
       this.tradingInterval = null;
     }
+    
+    // Stop all scanners
+    politicianTradesScanner.stop();
+    optionsFlowScanner.stop();
+    whaleTracker.stop();
+    
     console.log('⏸️  Research Trading Master STOPPED');
   }
   
@@ -647,11 +657,32 @@ export class ResearchTradingMaster {
     this.isRunning = true;
     console.log('🚀 Research Trading Master STARTED');
     
+    // Start alternative data scanners for extra alpha
+    console.log('📡 Starting alternative data scanners...');
+    await politicianTradesScanner.start();
+    await optionsFlowScanner.start();
+    await whaleTracker.start();
+    
+    // Create circuit breakers for data feeds
+    circuitBreakerManager.createBreaker({
+      name: 'market_data',
+      failureThreshold: 5,
+      successThreshold: 2,
+      timeout: 60000 // 1 minute
+    });
+    
     // Main loop every 10 seconds
     this.tradingInterval = setInterval(async () => {
       if (!this.isRunning) return; // Safety check
       
       try {
+        // 🔴 CHECK CIRCUIT BREAKERS - Don't trade on stale data
+        const openBreakers = circuitBreakerManager.getOpenBreakers();
+        if (openBreakers.length > 0) {
+          console.log(`🚨 Circuit breakers OPEN: ${openBreakers.join(', ')} - Skipping trading loop`);
+          return;
+        }
+        
         // Monitor existing trades
         await this.monitorTrades();
         

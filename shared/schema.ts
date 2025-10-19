@@ -117,6 +117,55 @@ export const historicalPrices = pgTable("historical_prices", {
   source: text("source").notNull(), // 'binance', 'coingecko', 'coinlore', 'forex', etc.
 });
 
+// Alternative Data Sources - Politicians' Trades, Options Flow, Whale Tracking
+export const politicianTrades = pgTable("politician_trades", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  politician: text("politician").notNull(),
+  position: text("position").notNull(), // 'Senator', 'Representative'
+  party: text("party").notNull(), // 'Democrat', 'Republican', 'Independent'
+  symbol: text("symbol").notNull(),
+  transactionType: text("transaction_type").notNull(), // 'purchase', 'sale'
+  amountMin: decimal("amount_min", { precision: 18, scale: 2 }).notNull(),
+  amountMax: decimal("amount_max", { precision: 18, scale: 2 }).notNull(),
+  transactionDate: timestamp("transaction_date").notNull(),
+  disclosureDate: timestamp("disclosure_date").notNull(),
+  assetType: text("asset_type").notNull(),
+  committee: text("committee"), // Committee membership
+  source: text("source").notNull(), // 'quiver', 'capitol_trades', 'fmp'
+  filingUrl: text("filing_url"),
+});
+
+export const optionsFlow = pgTable("options_flow", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  symbol: text("symbol").notNull(),
+  optionType: text("option_type").notNull(), // 'CALL', 'PUT'
+  strike: decimal("strike", { precision: 18, scale: 2 }).notNull(),
+  expiration: timestamp("expiration").notNull(),
+  volume: integer("volume").notNull(),
+  openInterest: integer("open_interest").notNull(),
+  premium: decimal("premium", { precision: 18, scale: 2 }).notNull(),
+  spotPrice: decimal("spot_price", { precision: 18, scale: 2 }).notNull(),
+  isUnusual: boolean("is_unusual").default(false), // Flagged as unusual activity
+  sentiment: text("sentiment"), // 'BULLISH', 'BEARISH', 'NEUTRAL'
+  timestamp: timestamp("timestamp").notNull(),
+  source: text("source").notNull(),
+});
+
+export const whaleTransactions = pgTable("whale_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  symbol: text("symbol").notNull(),
+  blockchain: text("blockchain").notNull(), // 'ethereum', 'bitcoin', 'solana', etc.
+  fromAddress: text("from_address").notNull(),
+  toAddress: text("to_address").notNull(),
+  amount: decimal("amount", { precision: 24, scale: 8 }).notNull(),
+  valueUSD: decimal("value_usd", { precision: 18, scale: 2 }).notNull(),
+  txHash: text("tx_hash").notNull().unique(),
+  blockNumber: integer("block_number").notNull(),
+  timestamp: timestamp("timestamp").notNull(),
+  isExchange: boolean("is_exchange").default(false), // From/To exchange wallet
+  source: text("source").notNull(),
+});
+
 // Meta-Learning Tables: Learn from our learning process
 export const learningRules = pgTable("learning_rules", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

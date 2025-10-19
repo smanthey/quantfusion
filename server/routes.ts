@@ -672,6 +672,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Alternative Data Scanners - Politicians, Options, Whales
+  app.get('/api/scanners/politicians', async (req, res) => {
+    try {
+      const { politicianTradesScanner } = await import('./services/politician-trades-scanner');
+      const signals = politicianTradesScanner.getAllSignals();
+      const stats = politicianTradesScanner.getStats();
+      
+      res.json({
+        signals,
+        stats,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch politician trade signals' });
+    }
+  });
+
+  app.get('/api/scanners/options', async (req, res) => {
+    try {
+      const { optionsFlowScanner } = await import('./services/options-flow-scanner');
+      const signals = optionsFlowScanner.getAllSignals();
+      const stats = optionsFlowScanner.getStats();
+      
+      res.json({
+        signals,
+        stats,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch options flow signals' });
+    }
+  });
+
+  app.get('/api/scanners/whales', async (req, res) => {
+    try {
+      const { whaleTracker } = await import('./services/whale-tracker');
+      const signals = whaleTracker.getAllSignals();
+      const stats = whaleTracker.getStats();
+      
+      res.json({
+        signals,
+        stats,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch whale signals' });
+    }
+  });
+
+  app.get('/api/scanners/circuit-breakers', async (req, res) => {
+    try {
+      const { circuitBreakerManager } = await import('./services/circuit-breaker');
+      const stats = circuitBreakerManager.getAllStats();
+      const openBreakers = circuitBreakerManager.getOpenBreakers();
+      
+      res.json({
+        breakers: Array.from(stats.entries()).map(([name, stat]) => ({
+          name,
+          ...stat
+        })),
+        openBreakers,
+        hasOpenBreakers: circuitBreakerManager.hasOpenBreakers(),
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch circuit breaker status' });
+    }
+  });
+
   // Backtesting
   app.post('/api/backtest', async (req, res) => {
     try {
