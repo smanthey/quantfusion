@@ -12,6 +12,7 @@ import { MarketDataService } from './market-data';
 import { RegimeDetector } from './regime-detector';
 import { MultiTimeframeAnalyzer, MultiTimeframeAnalysis } from './multi-timeframe-analyzer';
 import { KellyPositionSizer } from './kelly-position-sizer';
+import { CycleDetector, MarketCycle } from './cycle-detector';
 import { storage } from '../storage';
 import { db } from '../db';
 import { trades } from '@shared/schema';
@@ -22,23 +23,41 @@ export class ResearchTradingMaster {
   private regimeDetector: RegimeDetector;
   private mtfAnalyzer: MultiTimeframeAnalyzer;
   private kellySizer: KellyPositionSizer;
+  private cycleDetector: CycleDetector;
   private isRunning = false;
   private openTrades: Map<string, { stopLoss: number; takeProfit: number }> = new Map();
   private tradePerformance = { wins: 0, losses: 0, totalTrades: 0 };
   
-  // MEAN REVERSION STRATEGY: WIDENED targets to overcome 0.2% fee drag
-  private readonly TARGET_PROFIT_PCT = 0.03;  // 3% profit target = $24 on $800 - $1.60 fees = $22.40 net
-  private readonly STOP_LOSS_PCT = 0.015;     // 1.5% stop loss = $12 + $1.60 fees = $13.60 net loss
-  private readonly MIN_RR_RATIO = 1.8;        // 3% / 1.5% = 2:1 R/R (better than minimum)
-  private readonly POSITION_SIZE_PCT = 0.08;  // 8% of account per trade for meaningful profits
+  // VOLATILITY-ADAPTIVE STRATEGY PARAMETERS
+  private readonly LOW_VOL_THRESHOLD = 0.005;    // 0.5% - choppy/range-bound
+  private readonly MED_VOL_THRESHOLD = 0.015;    // 1.5% - normal trending
+  private readonly HIGH_VOL_THRESHOLD = 0.03;    // 3%+ - high volatility/crisis
+  
+  // LOW VOLATILITY (Range Trading)
+  private readonly LOW_VOL_TARGET = 0.008;       // 0.8% tight targets
+  private readonly LOW_VOL_STOP = 0.005;         // 0.5% tight stops
+  private readonly LOW_VOL_SIZE = 0.15;          // 15% position (tighter stops = bigger size)
+  
+  // MEDIUM VOLATILITY (Mean Reversion)
+  private readonly MED_VOL_TARGET = 0.025;       // 2.5% targets
+  private readonly MED_VOL_STOP = 0.015;         // 1.5% stops
+  private readonly MED_VOL_SIZE = 0.10;          // 10% position
+  
+  // HIGH VOLATILITY (Trend + Hedge)
+  private readonly HIGH_VOL_TARGET = 0.05;       // 5% wide targets
+  private readonly HIGH_VOL_STOP = 0.03;         // 3% wide stops
+  private readonly HIGH_VOL_SIZE = 0.06;         // 6% smaller position (protect capital)
+  
+  private hedgePosition: { symbol: string; size: number } | null = null;
   
   constructor() {
     this.marketData = new MarketDataService();
     this.regimeDetector = new RegimeDetector(this.marketData);
     this.mtfAnalyzer = new MultiTimeframeAnalyzer(this.marketData);
     this.kellySizer = new KellyPositionSizer(this.marketData);
+    this.cycleDetector = new CycleDetector(this.marketData);
     
-    console.log('🧠 RESEARCH TRADING MASTER - Enforcing profitable rules');
+    console.log('🧠 RESEARCH TRADING MASTER - Cycle-Based + Volatility-Adaptive Trading');
   }
   
   /**
@@ -87,49 +106,98 @@ export class ResearchTradingMaster {
       return sum + Math.abs((c.close - recentCandles[i-1].close) / recentCandles[i-1].close);
     }, 0) / (recentCandles.length - 1);
     
-    if (avgChange < 0.005) { // Need 0.5%+ volatility
-      console.log(`🛑 ${symbol}: Low volatility ${(avgChange*100).toFixed(2)}% (need 0.5%+)`);
-      return null;
+    // === VOLATILITY REGIME DETECTION ===
+    let regime: 'low' | 'medium' | 'high';
+    let targetPct: number;
+    let stopPct: number;
+    let positionPct: number;
+    
+    if (avgChange < this.LOW_VOL_THRESHOLD) {
+      regime = 'low';
+      targetPct = this.LOW_VOL_TARGET;
+      stopPct = this.LOW_VOL_STOP;
+      positionPct = this.LOW_VOL_SIZE;
+    } else if (avgChange < this.MED_VOL_THRESHOLD) {
+      regime = 'medium';
+      targetPct = this.MED_VOL_TARGET;
+      stopPct = this.MED_VOL_STOP;
+      positionPct = this.MED_VOL_SIZE;
+    } else {
+      regime = 'high';
+      targetPct = this.HIGH_VOL_TARGET;
+      stopPct = this.HIGH_VOL_STOP;
+      positionPct = this.HIGH_VOL_SIZE;
     }
     
-    // Calculate RSI
+    // Calculate RSI and Moving Averages
     const closes = candles.map(c => c.close);
     const rsi = this.calculateRSI(closes, 14);
+    const sma20 = closes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+    const sma50 = closes.slice(-50).reduce((a, b) => a + b, 0) / 50;
+    const trend = sma20 > sma50 ? 'up' : 'down';
     
-    // MEAN REVERSION SIGNALS
+    // === STRATEGY SELECTION BY VOLATILITY REGIME ===
     let action: 'buy' | 'sell' | null = null;
     let reasoning = '';
     let confidence = 0;
     
-    if (rsi < 45) {
-      // OVERSOLD - BUY (expect bounce)
-      action = 'buy';
-      reasoning = `RSI ${rsi.toFixed(1)} OVERSOLD - Mean reversion BUY`;
-      confidence = 0.60 + ((45 - rsi) / 100); // Higher confidence for more oversold
-    } else if (rsi > 55) {
-      // OVERBOUGHT - SELL (expect pullback)
-      action = 'sell';
-      reasoning = `RSI ${rsi.toFixed(1)} OVERBOUGHT - Mean reversion SELL`;
-      confidence = 0.60 + ((rsi - 55) / 100); // Higher confidence for more overbought
+    if (regime === 'low') {
+      // LOW VOLATILITY: Range trading (RSI 40-60 with tight stops)
+      if (rsi < 40 && trend === 'up') {
+        action = 'buy';
+        reasoning = `LOW VOL Range: RSI ${rsi.toFixed(1)} + Uptrend`;
+        confidence = 0.60 + ((40 - rsi) / 100);
+      } else if (rsi > 60 && trend === 'down') {
+        action = 'sell';
+        reasoning = `LOW VOL Range: RSI ${rsi.toFixed(1)} + Downtrend`;
+        confidence = 0.60 + ((rsi - 60) / 100);
+      }
+    } else if (regime === 'medium') {
+      // MEDIUM VOLATILITY: Mean reversion (RSI <30 or >70)
+      if (rsi < 30) {
+        action = 'buy';
+        reasoning = `MED VOL Mean Reversion: RSI ${rsi.toFixed(1)} OVERSOLD`;
+        confidence = 0.65 + ((30 - rsi) / 50);
+      } else if (rsi > 70) {
+        action = 'sell';
+        reasoning = `MED VOL Mean Reversion: RSI ${rsi.toFixed(1)} OVERBOUGHT`;
+        confidence = 0.65 + ((rsi - 70) / 50);
+      }
     } else {
-      console.log(`🛑 ${symbol}: RSI ${rsi.toFixed(1)} in neutral zone (need <45 or >55)`);
+      // HIGH VOLATILITY: Trend following + hedging
+      if (rsi < 35 && trend === 'up') {
+        action = 'buy';
+        reasoning = `HIGH VOL Trend: RSI ${rsi.toFixed(1)} + Strong Uptrend (hedged)`;
+        confidence = 0.70;
+        // Activate hedge on opposite direction
+        this.hedgePosition = { symbol, size: positionPct * 0.3 }; // 30% hedge
+      } else if (rsi > 65 && trend === 'down') {
+        action = 'sell';
+        reasoning = `HIGH VOL Trend: RSI ${rsi.toFixed(1)} + Strong Downtrend (hedged)`;
+        confidence = 0.70;
+        this.hedgePosition = { symbol, size: positionPct * 0.3 };
+      }
+    }
+    
+    if (!action) {
+      console.log(`🛑 ${symbol}: ${regime.toUpperCase()} VOL (${(avgChange*100).toFixed(2)}%), RSI ${rsi.toFixed(1)}, Trend ${trend} - No signal`);
       return null;
     }
     
-    // FIXED PERCENTAGE STOPS & TARGETS for consistency
+    // VOLATILITY-ADAPTIVE STOPS & TARGETS
     let stopLoss: number;
     let takeProfit: number;
     
     if (action === 'buy') {
-      stopLoss = price * (1 - this.STOP_LOSS_PCT);
-      takeProfit = price * (1 + this.TARGET_PROFIT_PCT);
+      stopLoss = price * (1 - stopPct);
+      takeProfit = price * (1 + targetPct);
     } else {
-      stopLoss = price * (1 + this.STOP_LOSS_PCT);
-      takeProfit = price * (1 - this.TARGET_PROFIT_PCT);
+      stopLoss = price * (1 + stopPct);
+      takeProfit = price * (1 - targetPct);
     }
     
-    // FIXED POSITION SIZE for profitability
-    const sizeUSD = accountBalance * this.POSITION_SIZE_PCT;
+    // VOLATILITY-ADAPTIVE POSITION SIZE
+    const sizeUSD = accountBalance * positionPct;
     const size = sizeUSD / price;
     
     const risk = Math.abs(price - stopLoss);
