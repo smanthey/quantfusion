@@ -7,6 +7,7 @@ import {
   backtestResults, 
   systemAlerts, 
   riskMetrics,
+  historicalPrices,
   type User, 
   type InsertUser,
   type Strategy,
@@ -21,7 +22,9 @@ import {
   type SystemAlert,
   type InsertSystemAlert,
   type RiskMetric,
-  type InsertRiskMetric
+  type InsertRiskMetric,
+  type HistoricalPrice,
+  type InsertHistoricalPrice
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, gte, and } from "drizzle-orm";
@@ -69,6 +72,12 @@ export interface IStorage {
   // Risk metrics
   getCurrentRiskMetrics(): Promise<RiskMetric | undefined>;
   createRiskMetric(metrics: Omit<RiskMetric, 'id' | 'timestamp'>): Promise<RiskMetric>;
+  
+  // Historical price data - store all market data forever
+  storeHistoricalPrice(price: InsertHistoricalPrice): Promise<HistoricalPrice>;
+  storeHistoricalPrices(prices: InsertHistoricalPrice[]): Promise<void>;
+  getHistoricalPrices(symbol: string, startTime: Date, endTime: Date, interval: string): Promise<HistoricalPrice[]>;
+  getLatestPrice(symbol: string, interval: string): Promise<HistoricalPrice | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -304,6 +313,58 @@ export class DatabaseStorage implements IStorage {
       .values(metrics)
       .returning();
     return newMetrics;
+  }
+
+  // Historical price data - permanent storage for backtesting & analysis
+  async storeHistoricalPrice(price: InsertHistoricalPrice): Promise<HistoricalPrice> {
+    const [stored] = await db
+      .insert(historicalPrices)
+      .values(price)
+      .returning();
+    return stored;
+  }
+
+  async storeHistoricalPrices(prices: InsertHistoricalPrice[]): Promise<void> {
+    if (prices.length === 0) return;
+    
+    await db
+      .insert(historicalPrices)
+      .values(prices);
+  }
+
+  async getHistoricalPrices(
+    symbol: string, 
+    startTime: Date, 
+    endTime: Date, 
+    interval: string
+  ): Promise<HistoricalPrice[]> {
+    return await db
+      .select()
+      .from(historicalPrices)
+      .where(
+        and(
+          eq(historicalPrices.symbol, symbol),
+          eq(historicalPrices.interval, interval),
+          gte(historicalPrices.timestamp, startTime),
+          gte(endTime, historicalPrices.timestamp)
+        )
+      )
+      .orderBy(historicalPrices.timestamp);
+  }
+
+  async getLatestPrice(symbol: string, interval: string): Promise<HistoricalPrice | undefined> {
+    const [latest] = await db
+      .select()
+      .from(historicalPrices)
+      .where(
+        and(
+          eq(historicalPrices.symbol, symbol),
+          eq(historicalPrices.interval, interval)
+        )
+      )
+      .orderBy(desc(historicalPrices.timestamp))
+      .limit(1);
+    return latest || undefined;
   }
 }
 

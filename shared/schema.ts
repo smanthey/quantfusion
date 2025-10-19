@@ -102,6 +102,21 @@ export const riskMetrics = pgTable("risk_metrics", {
   timestamp: timestamp("timestamp").defaultNow(),
 });
 
+// Historical Market Data - Store all price data forever for backtesting and analysis
+export const historicalPrices = pgTable("historical_prices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  symbol: text("symbol").notNull(), // 'BTCUSDT', 'ETHUSDT', 'EURUSD', etc.
+  timestamp: timestamp("timestamp").notNull(),
+  open: decimal("open", { precision: 18, scale: 8 }).notNull(),
+  high: decimal("high", { precision: 18, scale: 8 }).notNull(),
+  low: decimal("low", { precision: 18, scale: 8 }).notNull(),
+  close: decimal("close", { precision: 18, scale: 8 }).notNull(),
+  volume: decimal("volume", { precision: 24, scale: 8 }).notNull(),
+  trades: integer("trades"), // Number of trades in this candle
+  interval: text("interval").notNull(), // '1m', '5m', '15m', '1h', '4h', '1d'
+  source: text("source").notNull(), // 'binance', 'coingecko', 'coinlore', 'forex', etc.
+});
+
 // Meta-Learning Tables: Learn from our learning process
 export const learningRules = pgTable("learning_rules", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -240,6 +255,10 @@ export const insertRiskMetricSchema = createInsertSchema(riskMetrics).omit({
   timestamp: true,
 });
 
+export const insertHistoricalPriceSchema = createInsertSchema(historicalPrices).omit({
+  id: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -261,5 +280,8 @@ export type SystemAlert = typeof systemAlerts.$inferSelect;
 
 export type InsertRiskMetric = z.infer<typeof insertRiskMetricSchema>;
 export type RiskMetric = typeof riskMetrics.$inferSelect;
+
+export type InsertHistoricalPrice = z.infer<typeof insertHistoricalPriceSchema>;
+export type HistoricalPrice = typeof historicalPrices.$inferSelect;
 
 export type MarketRegime = typeof marketRegimes.$inferSelect;

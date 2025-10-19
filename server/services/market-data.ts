@@ -31,6 +31,7 @@ import { coinCapClient } from './coincap-client';
 import { multiApiClient } from './multi-api-client';
 import { historicalDataService } from './historical-data';
 import { ForexDataService } from './forex-data-service';
+import { historicalPriceStorage } from './historical-price-storage';
 
 export class MarketDataService {
   private data: Map<string, MarketData> = new Map();
@@ -139,6 +140,17 @@ export class MarketDataService {
 
           this.data.set(symbol, marketData);
           this.notifySubscribers(marketData);
+          
+          // 💾 Store to database for permanent history
+          await historicalPriceStorage.storePriceUpdate(
+            symbol,
+            marketData.price,
+            marketData.volume,
+            new Date(marketData.timestamp),
+            'binance',
+            '1m'
+          );
+          
           successCount++;
         }
 
@@ -182,6 +194,16 @@ export class MarketDataService {
             };
             this.data.set(symbol, marketData);
             this.notifySubscribers(marketData);
+            
+            // 💾 Store to database for permanent history
+            historicalPriceStorage.storePriceUpdate(
+              symbol,
+              marketData.price,
+              marketData.volume,
+              new Date(marketData.timestamp),
+              'binance',
+              '1m'
+            ).catch(err => console.error('Storage error:', err));
           });
           this.unsubscribeFunctions.push(unsubscribeTicker);
         } catch (error) {
@@ -216,7 +238,17 @@ export class MarketDataService {
       
       this.data.set(symbol, marketData);
       this.notifySubscribers(marketData);
-      console.log(`🎯 Aggregated ${symbol}: $${data.price.toFixed(2)} (${Math.round(data.confidence * 100)}% confidence, ${data.sources.length} sources)`);
+      console.log(`🎯 ${symbol}: $${data.price.toFixed(2)} (${Math.round(data.confidence * 100)}% confidence from ${data.sources.join(', ')})`);
+      
+      // 💾 Store to database for permanent history
+      historicalPriceStorage.storePriceUpdate(
+        symbol,
+        marketData.price,
+        marketData.volume,
+        new Date(marketData.timestamp),
+        data.sources.join(','),
+        '1m'
+      ).catch(err => console.error('Storage error:', err));
     });
     
     // Start regular aggregated updates every 15 seconds for CRYPTO only
@@ -260,11 +292,21 @@ export class MarketDataService {
               timestamp: forexRate.timestamp,
               volume: forexRate.volume || 0,
               spread: forexRate.spread,
-              volatility: forexRate.volatility || 0.001
+              volatility: forexRate.volatility ?? 0.001
             };
             this.data.set(pair, marketData);
             this.notifySubscribers(marketData);
-            console.log(`💱 ${pair}: $${forexRate.price.toFixed(5)} (spread: ${forexRate.spread.toFixed(5)}, vol: ${(forexRate.volatility * 100).toFixed(2)}%)`);
+            console.log(`💱 ${pair}: $${forexRate.price.toFixed(5)} (spread: ${forexRate.spread.toFixed(5)}, vol: ${((forexRate.volatility ?? 0.001) * 100).toFixed(2)}%)`);
+            
+            // 💾 Store to database for permanent history
+            historicalPriceStorage.storePriceUpdate(
+              pair,
+              forexRate.price,
+              forexRate.volume || 0,
+              new Date(forexRate.timestamp),
+              'forex',
+              '1m'
+            ).catch(err => console.error('Storage error:', err));
           }
         }
       } catch (error) {
