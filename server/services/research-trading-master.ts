@@ -79,8 +79,9 @@ export class ResearchTradingMaster {
     if (!marketData) return null;
     
     // 🛑 GATE #1: Check for existing open position on this symbol
+    const allTrades = await storage.getAllTrades();
     const hasOpenPosition = Array.from(this.openTrades.keys()).some(tradeId => {
-      const trade = storage.getTrades().find(t => t.id === tradeId && t.symbol === symbol);
+      const trade = allTrades.find(t => t.id === tradeId && t.symbol === symbol);
       return trade && !trade.closedAt;
     });
     
@@ -136,51 +137,90 @@ export class ResearchTradingMaster {
     const sma50 = closes.slice(-50).reduce((a, b) => a + b, 0) / 50;
     const trend = sma20 > sma50 ? 'up' : 'down';
     
-    // === STRATEGY SELECTION BY VOLATILITY REGIME ===
+    // === MARKET CYCLE ANALYSIS ===
+    const cycleAnalysis = this.cycleDetector.detectCycle(symbol);
+    if (!cycleAnalysis) {
+      console.log(`🛑 ${symbol}: Insufficient data for cycle analysis`);
+      return null;
+    }
+    
+    // === STRATEGY SELECTION: CYCLE × VOLATILITY MATRIX ===
     let action: 'buy' | 'sell' | null = null;
     let reasoning = '';
     let confidence = 0;
     
-    if (regime === 'low') {
-      // LOW VOLATILITY: Range trading (RSI 40-60 with tight stops)
-      if (rsi < 40 && trend === 'up') {
+    const { cycle, seasonalBias, halvingPhase } = cycleAnalysis;
+    
+    // BULL MARKUP: Aggressive trend following
+    if (cycle === 'bull_markup') {
+      if (regime === 'low' && rsi < 40 && trend === 'up') {
         action = 'buy';
-        reasoning = `LOW VOL Range: RSI ${rsi.toFixed(1)} + Uptrend`;
-        confidence = 0.60 + ((40 - rsi) / 100);
-      } else if (rsi > 60 && trend === 'down') {
-        action = 'sell';
-        reasoning = `LOW VOL Range: RSI ${rsi.toFixed(1)} + Downtrend`;
-        confidence = 0.60 + ((rsi - 60) / 100);
-      }
-    } else if (regime === 'medium') {
-      // MEDIUM VOLATILITY: Mean reversion (RSI <30 or >70)
-      if (rsi < 30) {
-        action = 'buy';
-        reasoning = `MED VOL Mean Reversion: RSI ${rsi.toFixed(1)} OVERSOLD`;
-        confidence = 0.65 + ((30 - rsi) / 50);
-      } else if (rsi > 70) {
-        action = 'sell';
-        reasoning = `MED VOL Mean Reversion: RSI ${rsi.toFixed(1)} OVERBOUGHT`;
-        confidence = 0.65 + ((rsi - 70) / 50);
-      }
-    } else {
-      // HIGH VOLATILITY: Trend following + hedging
-      if (rsi < 35 && trend === 'up') {
-        action = 'buy';
-        reasoning = `HIGH VOL Trend: RSI ${rsi.toFixed(1)} + Strong Uptrend (hedged)`;
+        reasoning = `BULL MARKUP + Low Vol: Buy dip at RSI ${rsi.toFixed(1)}`;
         confidence = 0.70;
-        // Activate hedge on opposite direction
-        this.hedgePosition = { symbol, size: positionPct * 0.3 }; // 30% hedge
-      } else if (rsi > 65 && trend === 'down') {
+      } else if (regime === 'medium' && rsi < 35 && trend === 'up') {
+        action = 'buy';
+        reasoning = `BULL MARKUP + Med Vol: Momentum buy RSI ${rsi.toFixed(1)}`;
+        confidence = 0.75;
+      } else if (regime === 'high' && rsi < 40 && trend === 'up') {
+        action = 'buy';
+        reasoning = `BULL MARKUP + High Vol: Strong trend RSI ${rsi.toFixed(1)}`;
+        confidence = 0.80;
+      }
+    }
+    // BULL DISTRIBUTION: Take profits, reduce risk
+    else if (cycle === 'bull_distribution') {
+      if (rsi > 70) {
         action = 'sell';
-        reasoning = `HIGH VOL Trend: RSI ${rsi.toFixed(1)} + Strong Downtrend (hedged)`;
+        reasoning = `BULL DISTRIBUTION: Take profit RSI ${rsi.toFixed(1)}`;
         confidence = 0.70;
-        this.hedgePosition = { symbol, size: positionPct * 0.3 };
+        positionPct *= 0.6; // Reduce position size
+      }
+    }
+    // BEAR ACCUMULATION: Gradual long entries
+    else if (cycle === 'bear_accumulation') {
+      if (regime === 'low' && rsi < 30) {
+        action = 'buy';
+        reasoning = `BEAR ACCUMULATION: Bottom fishing RSI ${rsi.toFixed(1)}`;
+        confidence = 0.65;
+        positionPct *= 0.5; // Small positions
+      }
+    }
+    // BEAR MARKDOWN: Short rallies or stay flat
+    else if (cycle === 'bear_markdown') {
+      if (rsi > 65 && trend === 'down') {
+        action = 'sell';
+        reasoning = `BEAR MARKDOWN: Short rally RSI ${rsi.toFixed(1)}`;
+        confidence = 0.75;
+      }
+    }
+    // SIDEWAYS RANGE: Mean reversion only
+    else {
+      if (regime === 'low') {
+        if (rsi < 35 && trend === 'up') {
+          action = 'buy';
+          reasoning = `RANGE: Mean reversion buy RSI ${rsi.toFixed(1)}`;
+          confidence = 0.65;
+        } else if (rsi > 65 && trend === 'down') {
+          action = 'sell';
+          reasoning = `RANGE: Mean reversion sell RSI ${rsi.toFixed(1)}`;
+          confidence = 0.65;
+        }
       }
     }
     
+    // SEASONAL/HALVING ADJUSTMENTS
+    if (seasonalBias === 'bearish') {
+      confidence *= 0.85; // Reduce confidence in bearish seasons
+    } else if (seasonalBias === 'bullish') {
+      confidence *= 1.10; // Boost confidence in bullish seasons
+    }
+    
+    if (halvingPhase === 'pre' && action === 'buy') {
+      confidence *= 1.15; // Pre-halving typically bullish
+    }
+    
     if (!action) {
-      console.log(`🛑 ${symbol}: ${regime.toUpperCase()} VOL (${(avgChange*100).toFixed(2)}%), RSI ${rsi.toFixed(1)}, Trend ${trend} - No signal`);
+      console.log(`🛑 ${symbol}: ${cycle.toUpperCase()} + ${regime.toUpperCase()} VOL (${(avgChange*100).toFixed(2)}%), RSI ${rsi.toFixed(1)}, Trend ${trend} - No signal`);
       return null;
     }
     
