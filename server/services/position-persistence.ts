@@ -34,15 +34,11 @@ export class PositionPersistence {
   }): Promise<string> {
     try {
       const [trade] = await db.insert(trades).values({
+        strategyId: position.strategy,
         symbol: position.symbol,
         side: position.side,
-        entryPrice: position.entryPrice.toString(),
-        quantity: position.quantity.toString(),
-        stopLoss: position.stopLoss.toString(),
-        takeProfit: position.takeProfit.toString(),
-        strategyUsed: position.strategy,
-        openedAt: new Date(),
-        status: 'open'
+        size: position.quantity.toString(),
+        entryPrice: position.entryPrice.toString()
       }).returning();
       
       console.log(`💾 Position saved to database: ${position.symbol} ${position.side} @ ${position.entryPrice}`);
@@ -68,11 +64,11 @@ export class PositionPersistence {
         symbol: trade.symbol,
         side: trade.side as 'long' | 'short',
         entryPrice: trade.entryPrice,
-        quantity: trade.quantity,
-        stopLoss: trade.stopLoss!,
-        takeProfit: trade.takeProfit!,
-        strategyUsed: trade.strategyUsed,
-        openedAt: trade.openedAt!
+        quantity: trade.size,
+        stopLoss: '0',
+        takeProfit: '0',
+        strategyUsed: trade.strategyId,
+        openedAt: trade.executedAt || new Date()
       }));
       
       if (positions.length > 0) {
@@ -94,19 +90,9 @@ export class PositionPersistence {
     takeProfit?: number;
   }): Promise<void> {
     try {
-      const updateData: any = {};
-      if (updates.stopLoss !== undefined) {
-        updateData.stopLoss = updates.stopLoss.toString();
-      }
-      if (updates.takeProfit !== undefined) {
-        updateData.takeProfit = updates.takeProfit.toString();
-      }
-      
-      await db.update(trades)
-        .set(updateData)
-        .where(eq(trades.id, id));
-      
-      console.log(`💾 Position updated: ${id}`);
+      // Note: trades table doesn't have stopLoss/takeProfit fields
+      // This is a placeholder for future enhancement
+      console.log(`💾 Position update requested: ${id} (not implemented in schema)`);
     } catch (error) {
       console.error('Failed to update position:', error);
     }
@@ -120,9 +106,7 @@ export class PositionPersistence {
       await db.update(trades)
         .set({
           exitPrice: exitPrice.toString(),
-          closedAt: new Date(),
-          pnl: pnl.toString(),
-          status: 'closed'
+          pnl: pnl.toString()
         })
         .where(eq(trades.id, id));
       
