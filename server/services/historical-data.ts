@@ -31,15 +31,83 @@ export class HistoricalDataService {
 
   private async initializeHistoricalData() {
     try {
-      console.log('📊 Fetching real historical data from Binance...');
-      await this.fetchRealHistoricalData();
-      this.usingRealData = true;
-      console.log('✅ Loaded real historical data from Binance API');
+      // FIRST: Load all stored historical data from database
+      console.log('📊 Loading historical data from database...');
+      await this.loadFromDatabase();
+      
+      // Log what we loaded
+      for (const [symbol, data] of Array.from(this.historicalData.entries())) {
+        console.log(`✅ Loaded ${data.length} candles for ${symbol} from database`);
+      }
+      
+      // THEN: Try to supplement with fresh Binance data if available
+      try {
+        console.log('📊 Fetching fresh data from Binance...');
+        await this.fetchRealHistoricalData();
+        this.usingRealData = true;
+        console.log('✅ Supplemented with fresh Binance data');
+      } catch (error) {
+        console.log('⚠️ Binance unavailable, using database data only');
+        this.usingRealData = this.historicalData.size > 0;
+      }
     } catch (error) {
-      console.warn('⚠️ Failed to fetch real historical data, using synthetic data:', error);
+      console.warn('⚠️ Failed to load historical data, using synthetic data:', error);
       this.generateHistoricalData();
       this.usingRealData = false;
     }
+  }
+  
+  /**
+   * Load all historical candles from database into memory
+   * This gives us IMMEDIATE access to thousands of stored candles
+   */
+  private async loadFromDatabase() {
+    const { storage } = await import('../storage');
+    const symbols = ['BTCUSDT', 'ETHUSDT', 'EURUSD', 'GBPUSD', 'AUDUSD'];
+    
+    // Load last 7 days of data for each symbol
+    const endTime = new Date();
+    const startTime = new Date(endTime.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    for (const symbol of symbols) {
+      try {
+        const prices = await storage.getHistoricalPrices(symbol, startTime, endTime, '1m');
+        
+        if (prices.length > 0) {
+          const data: HistoricalDataPoint[] = prices.map(p => ({
+            timestamp: new Date(p.timestamp).getTime(),
+            open: parseFloat(p.open),
+            high: parseFloat(p.high),
+            low: parseFloat(p.low),
+            close: parseFloat(p.close),
+            volume: parseFloat(p.volume),
+            symbol
+          }));
+          
+          // Sort by timestamp and remove duplicates
+          const uniqueData = this.deduplicateByTimestamp(data);
+          this.historicalData.set(symbol, uniqueData);
+        }
+      } catch (error) {
+        console.error(`Failed to load database data for ${symbol}:`, error);
+      }
+    }
+  }
+  
+  /**
+   * Remove duplicate candles with same timestamp (keep most recent)
+   */
+  private deduplicateByTimestamp(data: HistoricalDataPoint[]): HistoricalDataPoint[] {
+    const uniqueMap = new Map<number, HistoricalDataPoint>();
+    
+    for (const point of data) {
+      const existing = uniqueMap.get(point.timestamp);
+      if (!existing || point.timestamp >= existing.timestamp) {
+        uniqueMap.set(point.timestamp, point);
+      }
+    }
+    
+    return Array.from(uniqueMap.values()).sort((a, b) => a.timestamp - b.timestamp);
   }
 
   private async fetchRealHistoricalData() {

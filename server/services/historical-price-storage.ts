@@ -23,6 +23,7 @@ export class HistoricalPriceStorage {
 
   /**
    * Store a single price update immediately (for real-time data)
+   * IMPROVED: Aggregates into 1-minute candles instead of storing every tick
    */
   async storePriceUpdate(
     symbol: string,
@@ -33,9 +34,12 @@ export class HistoricalPriceStorage {
     interval: string = '1m'
   ): Promise<void> {
     try {
+      // Round timestamp to nearest minute for 1m candles
+      const minuteTimestamp = new Date(Math.floor(timestamp.getTime() / 60000) * 60000);
+      
       const priceData: InsertHistoricalPrice = {
         symbol,
-        timestamp,
+        timestamp: minuteTimestamp,
         open: price.toString(),
         high: price.toString(),
         low: price.toString(),
@@ -45,15 +49,32 @@ export class HistoricalPriceStorage {
         source,
       };
 
-      // Add to batch buffer
+      // Add to batch buffer with AGGREGATION
       const key = `${symbol}_${interval}`;
       if (!this.batchBuffer.has(key)) {
         this.batchBuffer.set(key, []);
       }
-      this.batchBuffer.get(key)!.push(priceData);
+      
+      const batch = this.batchBuffer.get(key)!;
+      
+      // Check if we already have a candle for this minute
+      const existingIndex = batch.findIndex(
+        c => c.timestamp.getTime() === minuteTimestamp.getTime()
+      );
+      
+      if (existingIndex >= 0) {
+        // Update existing candle (aggregate OHLC)
+        const existing = batch[existingIndex];
+        existing.high = Math.max(parseFloat(existing.high), price).toString();
+        existing.low = Math.min(parseFloat(existing.low), price).toString();
+        existing.close = price.toString();
+        existing.volume = (parseFloat(existing.volume) + volume).toString();
+      } else {
+        // Add new candle
+        batch.push(priceData);
+      }
 
       // Flush if batch is full
-      const batch = this.batchBuffer.get(key)!;
       if (batch.length >= this.batchSize) {
         await this.flushBatch(key);
       }
