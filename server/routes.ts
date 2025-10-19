@@ -626,7 +626,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Trading operations
   app.post('/api/trading/start', async (req, res) => {
     try {
+      console.log('💡 Attempting to start trading engine...');
       await tradingEngine.start();
+      console.log('✅ Trading engine started successfully');
 
       broadcast({
         type: 'trading_started',
@@ -635,6 +637,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ status: 'Trading started' });
     } catch (error) {
+      console.error('❌ Failed to start trading:', error);
       res.status(500).json({ error: 'Failed to start trading' });
     }
   });

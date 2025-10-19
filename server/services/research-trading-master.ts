@@ -31,6 +31,7 @@ export class ResearchTradingMaster {
   private isRunning = false;
   private openTrades: Map<string, { stopLoss: number; takeProfit: number }> = new Map();
   private tradePerformance = { wins: 0, losses: 0, totalTrades: 0 };
+  private tradingInterval: NodeJS.Timeout | null = null;
   
   // VOLATILITY-ADAPTIVE STRATEGY PARAMETERS
   private readonly LOW_VOL_THRESHOLD = 0.005;    // 0.5% - choppy/range-bound
@@ -574,7 +575,64 @@ export class ResearchTradingMaster {
   }
   
   /**
-   * Trading loop
+   * Start trading (public API for UI)
+   */
+  async start(): Promise<void> {
+    return this.run();
+  }
+  
+  /**
+   * Stop trading (public API for UI)
+   */
+  async stop(): Promise<void> {
+    if (!this.isRunning) return;
+    
+    this.isRunning = false;
+    if (this.tradingInterval) {
+      clearInterval(this.tradingInterval);
+      this.tradingInterval = null;
+    }
+    console.log('⏸️  Research Trading Master STOPPED');
+  }
+  
+  /**
+   * Emergency stop - immediately halt all trading
+   */
+  async emergencyStop(): Promise<void> {
+    console.log('🚨 EMERGENCY STOP ACTIVATED');
+    await this.stop();
+    
+    // Close all open trades at market price
+    for (const [tradeId, _] of this.openTrades) {
+      try {
+        const trade = await storage.getTradeById(tradeId);
+        if (trade && trade.status === 'open') {
+          // Force close with current market price
+          const marketData = this.marketData.getMarketData(trade.symbol);
+          const currentPrice = marketData?.price || parseFloat(trade.entryPrice);
+          
+          await db.update(trades)
+            .set({
+              status: 'closed',
+              exitPrice: currentPrice.toString(),
+              pnl: '0', // Emergency close - no calculation
+              closedAt: new Date()
+            })
+            .where(eq(trades.id, trade.id));
+          
+          console.log(`⚠️ Emergency closed ${trade.symbol} at $${currentPrice}`);
+        }
+      } catch (error) {
+        console.error(`Failed to emergency close trade ${tradeId}:`, error);
+      }
+    }
+    
+    this.openTrades.clear();
+    console.log('✅ All positions closed - system safe');
+  }
+  
+  /**
+   * Trading loop (internal implementation)
    */
   async run(): Promise<void> {
     if (this.isRunning) return;
@@ -583,7 +641,9 @@ export class ResearchTradingMaster {
     console.log('🚀 Research Trading Master STARTED');
     
     // Main loop every 10 seconds
-    setInterval(async () => {
+    this.tradingInterval = setInterval(async () => {
+      if (!this.isRunning) return; // Safety check
+      
       try {
         // Monitor existing trades
         await this.monitorTrades();
