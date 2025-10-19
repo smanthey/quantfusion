@@ -13,6 +13,7 @@ import { RegimeDetector } from './regime-detector';
 import { MultiTimeframeAnalyzer, MultiTimeframeAnalysis } from './multi-timeframe-analyzer';
 import { KellyPositionSizer } from './kelly-position-sizer';
 import { CycleDetector, MarketCycle } from './cycle-detector';
+import { QuantAlphaModel } from './quant-alpha-model';
 import { storage } from '../storage';
 import { db } from '../db';
 import { trades } from '@shared/schema';
@@ -24,6 +25,7 @@ export class ResearchTradingMaster {
   private mtfAnalyzer: MultiTimeframeAnalyzer;
   private kellySizer: KellyPositionSizer;
   private cycleDetector: CycleDetector;
+  private alphaModel: QuantAlphaModel;
   private isRunning = false;
   private openTrades: Map<string, { stopLoss: number; takeProfit: number }> = new Map();
   private tradePerformance = { wins: 0, losses: 0, totalTrades: 0 };
@@ -56,8 +58,10 @@ export class ResearchTradingMaster {
     this.mtfAnalyzer = new MultiTimeframeAnalyzer(this.marketData);
     this.kellySizer = new KellyPositionSizer(this.marketData);
     this.cycleDetector = new CycleDetector(this.marketData);
+    this.alphaModel = new QuantAlphaModel(this.marketData);
     
-    console.log('🧠 RESEARCH TRADING MASTER - Cycle-Based + Volatility-Adaptive Trading');
+    console.log('🧠 INSTITUTIONAL QUANT SYSTEM - Multi-Model Ensemble Trading');
+    console.log('📊 Models: Cycle Detection + Multi-Factor Alpha + Volatility Regime + Kelly Sizing');
   }
   
   /**
@@ -137,75 +141,115 @@ export class ResearchTradingMaster {
     const sma50 = closes.slice(-50).reduce((a, b) => a + b, 0) / 50;
     const trend = sma20 > sma50 ? 'up' : 'down';
     
-    // === MARKET CYCLE ANALYSIS ===
+    // === MULTI-MODEL ENSEMBLE APPROACH ===
+    
+    // MODEL 1: Market Cycle Analysis (Wyckoff + Halving + Seasonal)
     const cycleAnalysis = this.cycleDetector.detectCycle(symbol);
     if (!cycleAnalysis) {
       console.log(`🛑 ${symbol}: Insufficient data for cycle analysis`);
       return null;
     }
     
-    // === STRATEGY SELECTION: CYCLE × VOLATILITY MATRIX ===
+    // MODEL 2: Multi-Factor Alpha (Momentum + Value + Quality + Mean Reversion + Volume)
+    const alphaSignal = this.alphaModel.generateAlpha(symbol);
+    if (!alphaSignal) {
+      console.log(`🛑 ${symbol}: Insufficient data for alpha model`);
+      return null;
+    }
+    
+    // === ENSEMBLE DECISION: Combine all models ===
     let action: 'buy' | 'sell' | null = null;
     let reasoning = '';
     let confidence = 0;
     
     const { cycle, seasonalBias, halvingPhase } = cycleAnalysis;
+    const { score: alphaScore, factors, confidence: alphaConfidence } = alphaSignal;
+    
+    // Alpha model vote: strong signal if |score| > 0.3
+    const alphaVote = alphaScore > 0.3 ? 'buy' : alphaScore < -0.3 ? 'sell' : null;
+    const alphaStrength = Math.abs(alphaScore);
+    
+    // === STRATEGY MATRIX: Cycle × Volatility × Alpha ===
+    let cycleVote: 'buy' | 'sell' | null = null;
+    let baseConfidence = 0;
     
     // BULL MARKUP: Aggressive trend following
     if (cycle === 'bull_markup') {
       if (regime === 'low' && rsi < 40 && trend === 'up') {
-        action = 'buy';
-        reasoning = `BULL MARKUP + Low Vol: Buy dip at RSI ${rsi.toFixed(1)}`;
-        confidence = 0.70;
+        cycleVote = 'buy';
+        baseConfidence = 0.70;
       } else if (regime === 'medium' && rsi < 35 && trend === 'up') {
-        action = 'buy';
-        reasoning = `BULL MARKUP + Med Vol: Momentum buy RSI ${rsi.toFixed(1)}`;
-        confidence = 0.75;
+        cycleVote = 'buy';
+        baseConfidence = 0.75;
       } else if (regime === 'high' && rsi < 40 && trend === 'up') {
-        action = 'buy';
-        reasoning = `BULL MARKUP + High Vol: Strong trend RSI ${rsi.toFixed(1)}`;
-        confidence = 0.80;
+        cycleVote = 'buy';
+        baseConfidence = 0.80;
       }
     }
     // BULL DISTRIBUTION: Take profits, reduce risk
     else if (cycle === 'bull_distribution') {
       if (rsi > 70) {
-        action = 'sell';
-        reasoning = `BULL DISTRIBUTION: Take profit RSI ${rsi.toFixed(1)}`;
-        confidence = 0.70;
+        cycleVote = 'sell';
+        baseConfidence = 0.70;
         positionPct *= 0.6; // Reduce position size
       }
     }
     // BEAR ACCUMULATION: Gradual long entries
     else if (cycle === 'bear_accumulation') {
       if (regime === 'low' && rsi < 30) {
-        action = 'buy';
-        reasoning = `BEAR ACCUMULATION: Bottom fishing RSI ${rsi.toFixed(1)}`;
-        confidence = 0.65;
+        cycleVote = 'buy';
+        baseConfidence = 0.65;
         positionPct *= 0.5; // Small positions
       }
     }
     // BEAR MARKDOWN: Short rallies or stay flat
     else if (cycle === 'bear_markdown') {
       if (rsi > 65 && trend === 'down') {
-        action = 'sell';
-        reasoning = `BEAR MARKDOWN: Short rally RSI ${rsi.toFixed(1)}`;
-        confidence = 0.75;
+        cycleVote = 'sell';
+        baseConfidence = 0.75;
       }
     }
     // SIDEWAYS RANGE: Mean reversion only
     else {
       if (regime === 'low') {
         if (rsi < 35 && trend === 'up') {
-          action = 'buy';
-          reasoning = `RANGE: Mean reversion buy RSI ${rsi.toFixed(1)}`;
-          confidence = 0.65;
+          cycleVote = 'buy';
+          baseConfidence = 0.65;
         } else if (rsi > 65 && trend === 'down') {
-          action = 'sell';
-          reasoning = `RANGE: Mean reversion sell RSI ${rsi.toFixed(1)}`;
-          confidence = 0.65;
+          cycleVote = 'sell';
+          baseConfidence = 0.65;
         }
       }
+    }
+    
+    // === ENSEMBLE VOTING: Both models must agree ===
+    if (cycleVote && alphaVote && cycleVote === alphaVote) {
+      // ✅ CONSENSUS: Both models agree
+      action = cycleVote;
+      confidence = (baseConfidence + alphaConfidence + alphaStrength) / 3; // Average all signals
+      reasoning = `CONSENSUS: ${cycle.toUpperCase()} + Alpha(${(alphaScore*100).toFixed(0)}%) + ${regime.toUpperCase()} Vol | RSI ${rsi.toFixed(1)}`;
+      
+      // Boost confidence with factor agreement
+      const factorBoost = (factors.momentum + factors.meanReversion) > 0 ? 0.05 : 0;
+      confidence += factorBoost;
+      
+    } else if (cycleVote && alphaVote && cycleVote !== alphaVote) {
+      // ⚠️ DISAGREEMENT: Models contradict - skip trade
+      console.log(`🛑 ${symbol}: Model disagreement - Cycle says ${cycleVote}, Alpha says ${alphaVote}`);
+      return null;
+      
+    } else if (alphaVote && alphaStrength > 0.6 && Math.abs(alphaScore) > 0.5) {
+      // 🎯 ALPHA OVERRIDE: Very strong alpha signal (>0.6 strength, >0.5 score)
+      action = alphaVote;
+      confidence = alphaConfidence * alphaStrength;
+      reasoning = `ALPHA OVERRIDE: Strong ${alphaVote.toUpperCase()} signal (${(alphaScore*100).toFixed(0)}%) | Momentum:${(factors.momentum*100).toFixed(0)}% MeanRev:${(factors.meanReversion*100).toFixed(0)}%`;
+      
+    } else {
+      // No clear signal
+      cycleVote = cycleVote || 'none';
+      alphaVote = alphaVote || 'none';
+      console.log(`🛑 ${symbol}: Weak signals - Cycle:${cycleVote}, Alpha:${alphaVote} (${(alphaScore*100).toFixed(0)}%)`);
+      return null;
     }
     
     // SEASONAL/HALVING ADJUSTMENTS
@@ -217,6 +261,35 @@ export class ResearchTradingMaster {
     
     if (halvingPhase === 'pre' && action === 'buy') {
       confidence *= 1.15; // Pre-halving typically bullish
+    }
+    
+    // === PAIRS TRADING: Statistical Arbitrage between BTC and ETH ===
+    // If one symbol shows signal, check for pairs opportunity
+    if (action) {
+      const pairSymbol = symbol === 'BTCUSDT' ? 'ETHUSDT' : 'BTCUSDT';
+      const pairsOpp = this.alphaModel.detectPairsOpportunity(symbol, pairSymbol);
+      
+      if (pairsOpp) {
+        const { zscore } = pairsOpp;
+        
+        // Z-score > 2: Spread too wide, mean reversion expected
+        // If BTC/ETH ratio is high (z>2), short BTC / long ETH
+        // If BTC/ETH ratio is low (z<-2), long BTC / short ETH
+        if (Math.abs(zscore) > 2.0) {
+          // Pairs trade opportunity!
+          const pairsAction = zscore > 2 ? 'sell' : 'buy';
+          
+          if (pairsAction === action) {
+            // BONUS: Pairs trade agrees with our signal
+            confidence += 0.10; // 10% boost for pairs confirmation
+            reasoning += ` + PairsTrade(z=${zscore.toFixed(1)})`;
+          } else {
+            // CONFLICT: Pairs trade contradicts - reduce confidence
+            confidence *= 0.8; // 20% reduction
+            reasoning += ` - PairsConflict(z=${zscore.toFixed(1)})`;
+          }
+        }
+      }
     }
     
     if (!action) {
