@@ -6,7 +6,7 @@ import { MultiAssetEngine } from './services/multi-asset-engine';
 import { ABTestingService } from './services/ab-testing';
 import { ForexTradingEngine } from './services/forex-trading-engine';
 import { ProfitableTradingEngine } from './services/profitable-trading-engine';
-import { researchTradingMaster } from './services/research-trading-master';
+import { ResearchTradingMaster } from './services/research-trading-master';
 import { setGlobalForexEngine } from './routes/multi-asset';
 
 const app = express();
@@ -70,24 +70,38 @@ app.use((req, res, next) => {
   const port = parseInt(process.env.PORT || '5000', 10);
   const host = "0.0.0.0"; // Ensure this is set if it was intended to be used in startServer
 
-  // Initialize engines - NEW RESEARCH-BACKED PROFITABLE SYSTEM
+  // Initialize engines - INSTITUTIONAL MULTI-ASSET QUANT SYSTEM
   async function startServer() {
     try {
-      console.log('🚀 Starting AutoQuant with RESEARCH TRADING MASTER - Profitable AI System');
-
-      // START RESEARCH TRADING MASTER
-      console.log('📊 Starting Research Trading Master...');
-      console.log('✅ Regime Detection: Skip crisis periods');
-      console.log('✅ Multi-Timeframe: 60-75% win rate');
-      console.log('✅ Kelly Sizing: Optimal position sizing');
-      console.log('✅ 1:2 Min R/R: Profit at 33% win rate');
-      await researchTradingMaster.run();
-      console.log('📊 RESEARCH TRADING MASTER ACTIVATED - PROFITABLE TRADING LIVE');
+      console.log('🚀 Starting Institutional Multi-Asset Quant Trading System');
+      console.log('💱 CRYPTO: Cycle + Multi-Factor Alpha + Volatility + Pairs Trading');
+      console.log('💱 FOREX: Carry Trade + PPP + Momentum + Trend + Risk Parity');
+      
+      // Note: Trading engine will be started via /api/trading/start endpoint or auto-started below
+      console.log('📊 Trading system ready - will auto-start in 5 seconds...');
 
       // Use the HTTP server from registerRoutes that includes WebSocket support
       server.listen(port, host, () => {
         console.log(`🌐 Server running on http://${host}:${port}`);
         console.log(`🔌 WebSocket server running on ws://${host}:${port}/ws`);
+        
+        // Auto-start trading after 5 seconds (allow server to fully initialize)
+        setTimeout(async () => {
+          try {
+            console.log('🤖 AUTO-STARTING INSTITUTIONAL TRADING SYSTEM...');
+            const response = await fetch(`http://localhost:${port}/api/trading/start`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            });
+            if (response.ok) {
+              console.log('✅ TRADING SYSTEM AUTO-STARTED - EXECUTING CRYPTO + FOREX TRADES');
+            } else {
+              console.log('⚠️ Failed to auto-start trading, use dashboard to start manually');
+            }
+          } catch (error) {
+            console.log('⚠️ Auto-start error, use dashboard to start manually:', error);
+          }
+        }, 5000);
       });
 
       return server;

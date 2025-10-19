@@ -226,11 +226,11 @@ export class ResearchTradingMaster {
     const { score: alphaScore, factors, confidence: alphaConfidence } = alphaSignal;
     
     // Alpha model vote: strong signal if |score| > 0.3
-    const alphaVote = alphaScore > 0.3 ? 'buy' : alphaScore < -0.3 ? 'sell' : null;
+    let alphaVote: 'buy' | 'sell' | 'none' | null = alphaScore > 0.3 ? 'buy' : alphaScore < -0.3 ? 'sell' : null;
     const alphaStrength = Math.abs(alphaScore);
     
     // === STRATEGY MATRIX: Cycle × Volatility × Alpha ===
-    let cycleVote: 'buy' | 'sell' | null = null;
+    let cycleVote: 'buy' | 'sell' | 'none' | null = null;
     let baseConfidence = 0;
     
     // BULL MARKUP: Aggressive trend following
