@@ -14,6 +14,7 @@ import { MultiTimeframeAnalyzer, MultiTimeframeAnalysis } from './multi-timefram
 import { KellyPositionSizer } from './kelly-position-sizer';
 import { CycleDetector, MarketCycle } from './cycle-detector';
 import { QuantAlphaModel } from './quant-alpha-model';
+import { ForexQuantTrader } from './forex-quant-trader';
 import { storage } from '../storage';
 import { db } from '../db';
 import { trades } from '@shared/schema';
@@ -26,6 +27,7 @@ export class ResearchTradingMaster {
   private kellySizer: KellyPositionSizer;
   private cycleDetector: CycleDetector;
   private alphaModel: QuantAlphaModel;
+  private forexTrader: ForexQuantTrader;
   private isRunning = false;
   private openTrades: Map<string, { stopLoss: number; takeProfit: number }> = new Map();
   private tradePerformance = { wins: 0, losses: 0, totalTrades: 0 };
@@ -59,15 +61,73 @@ export class ResearchTradingMaster {
     this.kellySizer = new KellyPositionSizer(this.marketData);
     this.cycleDetector = new CycleDetector(this.marketData);
     this.alphaModel = new QuantAlphaModel(this.marketData);
+    this.forexTrader = new ForexQuantTrader(this.marketData);
     
-    console.log('🧠 INSTITUTIONAL QUANT SYSTEM - Multi-Model Ensemble Trading');
-    console.log('📊 Models: Cycle Detection + Multi-Factor Alpha + Volatility Regime + Kelly Sizing');
+    console.log('🧠 INSTITUTIONAL MULTI-ASSET QUANT SYSTEM');
+    console.log('💱 CRYPTO: Cycle + Multi-Factor Alpha + Volatility + Pairs Trading');
+    console.log('💱 FOREX: Carry Trade + PPP + Momentum + Trend + Risk Parity');
   }
   
   /**
-   * MEAN REVERSION STRATEGY: Trade RSI extremes for 65-70% win rate
+   * MULTI-ASSET SIGNAL GENERATION
+   * Routes to appropriate strategy: Crypto (multi-model ensemble) or Forex (quant models)
    */
   async generateProfitableSignal(symbol: string): Promise<any> {
+    // Detect asset type
+    const isForex = ['EURUSD', 'GBPUSD', 'AUDUSD', 'USDJPY', 'USDCAD'].includes(symbol);
+    
+    if (isForex) {
+      return this.generateForexSignal(symbol);
+    } else {
+      return this.generateCryptoSignal(symbol);
+    }
+  }
+  
+  /**
+   * FOREX: Institutional quant models (Carry + PPP + Momentum + Trend)
+   */
+  private async generateForexSignal(symbol: string): Promise<any> {
+    const accountBalance = await this.getAccountBalance();
+    
+    // Generate forex signal using dedicated quant models
+    const forexSignal = this.forexTrader.generateForexSignal(symbol);
+    
+    if (!forexSignal) {
+      return null;
+    }
+    
+    const { action, confidence, reasoning, stopLoss, takeProfit, size: sizePct } = forexSignal;
+    const marketDataPoint = this.marketData.getMarketData(symbol);
+    const price = marketDataPoint?.price || 0;
+    
+    // Calculate position size
+    const sizeUSD = accountBalance * sizePct;
+    const size = sizeUSD / price; // Number of units
+    
+    console.log(`\n✅ FOREX QUANT: ${action.toUpperCase()} ${symbol}`);
+    console.log(`📊 ${reasoning}`);
+    console.log(`💰 Entry: $${price.toFixed(5)}`);
+    console.log(`🛡️ Stop: $${stopLoss.toFixed(5)}`);
+    console.log(`🎯 Target: $${takeProfit.toFixed(5)}`);
+    console.log(`📈 Confidence: ${(confidence*100).toFixed(1)}%`);
+    console.log(`💵 Size: $${sizeUSD.toFixed(2)} (${(sizePct*100).toFixed(1)}%)`);
+    
+    return {
+      action,
+      symbol,
+      price,
+      size,
+      stopLoss,
+      takeProfit,
+      confidence,
+      reasoning
+    };
+  }
+  
+  /**
+   * CRYPTO: Multi-model ensemble (Cycle + Alpha + Volatility + Pairs)
+   */
+  private async generateCryptoSignal(symbol: string): Promise<any> {
     // 🛑 GATE #0: Auto-disable if win rate too low
     if (this.tradePerformance.totalTrades >= 20) {
       const winRate = this.tradePerformance.wins / this.tradePerformance.totalTrades;

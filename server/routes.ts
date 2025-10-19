@@ -29,10 +29,11 @@ import { abTestingRouter } from "./routes/ab-testing";
 import { multiAssetRoutes } from './routes/multi-asset';
 import { ForexTradingEngine } from './services/forex-trading-engine';
 import { ForexDataService } from './services/forex-data-service';
+import { ResearchTradingMaster } from './services/research-trading-master';
 
 // Initialize trading services
 const marketData = new MarketDataService();
-const tradingEngine = new TradingEngine();
+const tradingEngine = new ResearchTradingMaster(); // ✅ UPGRADED: Multi-model quant system for crypto+forex
 const regimeDetector = new RegimeDetector(marketData);
 const metaAllocator = new MetaAllocator();
 const riskManager = new RiskManager();
