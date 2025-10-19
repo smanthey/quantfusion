@@ -324,9 +324,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         circuitBreakers: currentMetrics.circuitBreakers
       };
 
-      // Get live market data or use fallback
+      // Get live market data for ALL symbols (crypto + forex)
       const btcData = marketData.getMarketData('BTCUSDT');
       const ethData = marketData.getMarketData('ETHUSDT');
+      const eurData = marketData.getMarketData('EURUSD');
+      const gbpData = marketData.getMarketData('GBPUSD');
+      const audData = marketData.getMarketData('AUDUSD');
 
       // Calculate actual performance metrics from all trades
       const allTrades = await storage.getAllTrades();
@@ -363,17 +366,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         marketData: {
           BTCUSDT: {
-            price: btcData?.price || 116600, // Web-researched BTC price
-            change: btcData?.change || 0.015, // Web-researched 24h change
-            volume: btcData?.volume || 65000000000, // Web-researched volume
-            volatility: btcData?.volatility || 0.042 // Web-researched volatility
+            price: btcData?.price || 116600,
+            change: btcData?.change || 0.015,
+            volume: btcData?.volume || 65000000000,
+            volatility: btcData?.volatility || 0.042
           },
           ETHUSDT: {
-            price: ethData?.price || 3875, // Web-researched ETH price
-            change: ethData?.change || 0.03, // Web-researched 24h change
-            volume: ethData?.volume || 42000000000, // Web-researched volume
-            volatility: ethData?.volatility || 0.048 // Web-researched volatility
+            price: ethData?.price || 3875,
+            change: ethData?.change || 0.03,
+            volume: ethData?.volume || 42000000000,
+            volatility: ethData?.volatility || 0.048
           },
+          EURUSD: eurData ? {
+            price: eurData.price,
+            change: eurData.change || 0,
+            volume: eurData.volume || 0,
+            volatility: eurData.volatility || 0.001
+          } : null,
+          GBPUSD: gbpData ? {
+            price: gbpData.price,
+            change: gbpData.change || 0,
+            volume: gbpData.volume || 0,
+            volatility: gbpData.volatility || 0.001
+          } : null,
+          AUDUSD: audData ? {
+            price: audData.price,
+            change: audData.change || 0,
+            volume: audData.volume || 0,
+            volatility: audData.volatility || 0.001
+          } : null,
           regime: {
             current: currentRegime?.regime || 'Trending',
             strength: parseFloat(currentRegime?.volatility || '0.75'),
