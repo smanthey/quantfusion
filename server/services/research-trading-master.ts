@@ -578,7 +578,14 @@ export class ResearchTradingMaster {
    * Start trading (public API for UI)
    */
   async start(): Promise<void> {
-    return this.run();
+    try {
+      console.log('🔍 DEBUG: start() called, about to call run()');
+      return await this.run();
+    } catch (error) {
+      console.error('💥 SYNC ERROR in start():', error);
+      console.error('Stack:', error instanceof Error ? error.stack : 'No stack');
+      throw error;
+    }
   }
   
   /**
