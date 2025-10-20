@@ -208,9 +208,17 @@ export class WorkingTrader {
           const size = parseFloat(trade.size);
           const pnl = (currentPrice - entryPrice) * size * (trade.side === 'BUY' || trade.side === 'buy' ? 1 : -1);
           
+          // Calculate fees (0.1% of entry value + 0.1% of exit value = 0.2% total)
+          const entryValue = entryPrice * size;
+          const exitValue = currentPrice * size;
+          const totalFees = (entryValue + exitValue) * 0.001; // 0.1% each side
+          
           await storage.updateTrade(trade.id, {
             exitPrice: currentPrice.toString(),
             pnl: pnl.toString(),
+            profit: pnl > 0 ? pnl.toString() : '0',
+            loss: pnl < 0 ? Math.abs(pnl).toString() : '0',
+            fees: totalFees.toString(),
             status: 'closed',
             closedAt: new Date(),
             duration: Math.floor((Date.now() - new Date(trade.executedAt).getTime()) / 1000),
