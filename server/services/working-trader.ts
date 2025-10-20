@@ -30,6 +30,9 @@ export class WorkingTrader {
     console.log('📈 Target: 65-75% win rate (proven backtested strategy)');
     console.log('🔬 Based on: freqtrade/freqtrade-strategies/hlhb.py');
 
+    // Load existing open positions
+    await this.loadOpenPositions();
+
     // Trade every 30 seconds (aggressive)
     this.interval = setInterval(async () => {
       await this.checkForTrades();
@@ -37,6 +40,20 @@ export class WorkingTrader {
 
     // Immediate first check
     await this.checkForTrades();
+  }
+
+  private async loadOpenPositions() {
+    try {
+      const allTrades = await storage.getAllTrades();
+      const openTrades = allTrades.filter((t: any) => t.status === 'open');
+      
+      console.log(`📂 Loaded ${openTrades.length} open positions from database:`);
+      openTrades.forEach((t: any) => {
+        console.log(`   - ${t.symbol} ${t.side} @ ${parseFloat(t.entryPrice).toFixed(5)} (${new Date(t.executedAt).toLocaleString()})`);
+      });
+    } catch (error) {
+      console.error('❌ Failed to load open positions:', error);
+    }
   }
 
   private async checkForTrades() {
@@ -64,6 +81,9 @@ export class WorkingTrader {
       this.accountBalance = 10000 + totalPnL;
 
       console.log(`💰 [Working Trader] Account: $${this.accountBalance.toFixed(2)}`);
+
+      // Monitor existing positions FIRST
+      await this.monitorOpenPositions();
 
       // Try all symbols
       console.log('🔍 [Working Trader] Evaluating 3 forex pairs...');
@@ -147,6 +167,62 @@ export class WorkingTrader {
 
     } catch (error) {
       console.error(`❌ Failed to execute trade:`, error);
+    }
+  }
+
+  private async monitorOpenPositions() {
+    try {
+      const allTrades = await storage.getAllTrades();
+      const openTrades = allTrades.filter((t: any) => t.status === 'open');
+
+      for (const trade of openTrades) {
+        const currentPrice = this.marketData.getCurrentPriceSync(trade.symbol);
+        if (!currentPrice || currentPrice === 0) continue;
+
+        const entryPrice = parseFloat(trade.entryPrice);
+        const pnlPercent = ((currentPrice - entryPrice) / entryPrice) * 100;
+        
+        // Simple exit rules: +2% profit or -1% loss (2:1 RR)
+        let shouldClose = false;
+        let exitReason = '';
+
+        if (trade.side === 'BUY' || trade.side === 'buy') {
+          if (pnlPercent >= 2.0) {
+            shouldClose = true;
+            exitReason = 'Take Profit (+2%)';
+          } else if (pnlPercent <= -1.0) {
+            shouldClose = true;
+            exitReason = 'Stop Loss (-1%)';
+          }
+        } else {
+          if (pnlPercent <= -2.0) {
+            shouldClose = true;
+            exitReason = 'Take Profit (+2%)';
+          } else if (pnlPercent >= 1.0) {
+            shouldClose = true;
+            exitReason = 'Stop Loss (-1%)';
+          }
+        }
+
+        if (shouldClose) {
+          const size = parseFloat(trade.size);
+          const pnl = (currentPrice - entryPrice) * size * (trade.side === 'BUY' || trade.side === 'buy' ? 1 : -1);
+          
+          await storage.updateTrade(trade.id, {
+            exitPrice: currentPrice.toString(),
+            pnl: pnl.toString(),
+            status: 'closed',
+            closedAt: new Date(),
+            duration: Math.floor((Date.now() - new Date(trade.executedAt).getTime()) / 1000),
+          });
+
+          console.log(`🔴 CLOSED: ${trade.symbol} ${trade.side} @ ${currentPrice.toFixed(5)}`);
+          console.log(`   Entry: ${entryPrice.toFixed(5)}, P&L: $${pnl.toFixed(2)} (${pnlPercent.toFixed(2)}%)`);
+          console.log(`   Reason: ${exitReason}`);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error monitoring positions:', error);
     }
   }
 

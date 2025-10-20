@@ -55,6 +55,7 @@ export interface IStorage {
   getTradesSince(date: Date): Promise<Trade[]>;
   getTradesByStrategy(strategyId: string): Promise<Trade[]>;
   createTrade(trade: InsertTrade): Promise<Trade>;
+  updateTrade(id: string, updates: Partial<Trade>): Promise<Trade>;
   
   // Market regime
   getCurrentRegime(): Promise<MarketRegime | undefined>;
@@ -235,6 +236,15 @@ export class DatabaseStorage implements IStorage {
       .values(trade)
       .returning();
     return newTrade;
+  }
+
+  async updateTrade(id: string, updates: Partial<Trade>): Promise<Trade> {
+    const [updatedTrade] = await db
+      .update(trades)
+      .set(updates)
+      .where(eq(trades.id, id))
+      .returning();
+    return updatedTrade;
   }
 
   // Market regime
