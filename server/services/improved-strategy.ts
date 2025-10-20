@@ -224,22 +224,26 @@ export class ImprovedTradingStrategy {
 
     // Detect crossovers
     const emaCrossover = this.detectCrossover(candles, 5, 10);
+    
+    // MORE AGGRESSIVE: Trade when EMAs are in favorable position (not just crossovers)
+    const emaSpread = ((ema5 - ema10) / ema10) * 100;
 
-    // BUY SIGNAL: EMA5 crosses above EMA10 + RSI > 40 (in favorable zone)
-    // No need for simultaneous RSI crossover - just check RSI is favorable
-    if (emaCrossover === 'bullish' && rsi > 40 && rsi < 70) {
-      const stopLoss = currentPrice - (2 * atr); // 2 ATR stop loss
-      const takeProfit = currentPrice + (3 * atr); // 3 ATR take profit (1.5:1 R/R)
+    // BUY SIGNAL: EMA5 above EMA10 (bullish trend) OR recent bullish crossover + RSI favorable
+    if ((emaSpread > 0.01 || emaCrossover === 'bullish') && rsi > 30 && rsi < 80) {
+      const stopLoss = currentPrice * (1 - 0.003); // 0.3% stop loss (forex-realistic)
+      const takeProfit = currentPrice * (1 + 0.005); // 0.5% take profit (1.67:1 R/R)
       
       // Dynamic position sizing based on volatility
       const riskPerTrade = accountBalance * 0.01; // 1% risk per trade
       const riskAmount = currentPrice - stopLoss;
-      const positionSize = riskPerTrade / riskAmount;
+      const positionSize = Math.max(riskPerTrade / riskAmount, accountBalance * 0.10); // Min 10% position
       
       return {
         action: 'buy',
-        confidence: 0.75, // High confidence for crossover
-        reason: `EMA5 crossed above EMA10 (bullish), RSI=${rsi.toFixed(1)} (favorable momentum)`,
+        confidence: emaCrossover === 'bullish' ? 0.85 : 0.70,
+        reason: emaCrossover === 'bullish' 
+          ? `EMA5 crossed above EMA10 (bullish), RSI=${rsi.toFixed(1)}`
+          : `EMA5 above EMA10 (+${emaSpread.toFixed(2)}%), RSI=${rsi.toFixed(1)} (bullish trend)`,
         stopLoss,
         takeProfit,
         positionSize: Math.min(positionSize, accountBalance * 0.3), // Max 30% position
@@ -256,20 +260,22 @@ export class ImprovedTradingStrategy {
       };
     }
 
-    // SELL SIGNAL: EMA5 crosses below EMA10 + RSI < 60 (in favorable zone)
-    if (emaCrossover === 'bearish' && rsi < 60 && rsi > 30) {
-      const stopLoss = currentPrice + (2 * atr); // 2 ATR stop loss
-      const takeProfit = currentPrice - (3 * atr); // 3 ATR take profit (1.5:1 R/R)
+    // SELL SIGNAL: EMA5 below EMA10 (bearish trend) OR recent bearish crossover + RSI favorable
+    if ((emaSpread < -0.01 || emaCrossover === 'bearish') && rsi < 70 && rsi > 20) {
+      const stopLoss = currentPrice * (1 + 0.003); // 0.3% stop loss (forex-realistic)
+      const takeProfit = currentPrice * (1 - 0.005); // 0.5% take profit (1.67:1 R/R)
       
       // Dynamic position sizing
       const riskPerTrade = accountBalance * 0.01;
       const riskAmount = stopLoss - currentPrice;
-      const positionSize = riskPerTrade / riskAmount;
+      const positionSize = Math.max(riskPerTrade / riskAmount, accountBalance * 0.10); // Min 10% position
       
       return {
         action: 'sell',
-        confidence: 0.75,
-        reason: `EMA5 crossed below EMA10 (bearish), RSI=${rsi.toFixed(1)} (favorable for short)`,
+        confidence: emaCrossover === 'bearish' ? 0.85 : 0.70,
+        reason: emaCrossover === 'bearish'
+          ? `EMA5 crossed below EMA10 (bearish), RSI=${rsi.toFixed(1)}`
+          : `EMA5 below EMA10 (${emaSpread.toFixed(2)}%), RSI=${rsi.toFixed(1)} (bearish trend)`,
         stopLoss,
         takeProfit,
         positionSize: Math.min(positionSize, accountBalance * 0.3),

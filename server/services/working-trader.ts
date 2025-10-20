@@ -120,7 +120,7 @@ export class WorkingTrader {
         console.log(`   Confidence: ${(signal.confidence * 100).toFixed(0)}%`);
         console.log(`   Reason: ${signal.reason}`);
         console.log(`   Price: ${signal.indicators.price.toFixed(5)}`);
-        console.log(`   EMA10: ${signal.indicators.ema10}, EMA50: ${signal.indicators.ema50}`);
+        console.log(`   EMA5: ${signal.indicators.ema5}, EMA10: ${signal.indicators.ema10}`);
         console.log(`   RSI: ${signal.indicators.rsi}`);
         console.log(`   Stop Loss: ${signal.stopLoss.toFixed(5)}`);
         console.log(`   Take Profit: ${signal.takeProfit.toFixed(5)}\n`);
@@ -182,25 +182,26 @@ export class WorkingTrader {
         const entryPrice = parseFloat(trade.entryPrice);
         const pnlPercent = ((currentPrice - entryPrice) / entryPrice) * 100;
         
-        // Simple exit rules: +2% profit or -1% loss (2:1 RR)
+        // FOREX-REALISTIC exit rules: +0.5% profit or -0.3% loss (1.67:1 RR)
+        // Forex typically moves 0.1-0.2% per day, so these are achievable
         let shouldClose = false;
         let exitReason = '';
 
         if (trade.side === 'BUY' || trade.side === 'buy') {
-          if (pnlPercent >= 2.0) {
+          if (pnlPercent >= 0.5) {
             shouldClose = true;
-            exitReason = 'Take Profit (+2%)';
-          } else if (pnlPercent <= -1.0) {
+            exitReason = 'Take Profit (+0.5%)';
+          } else if (pnlPercent <= -0.3) {
             shouldClose = true;
-            exitReason = 'Stop Loss (-1%)';
+            exitReason = 'Stop Loss (-0.3%)';
           }
         } else {
-          if (pnlPercent <= -2.0) {
+          if (pnlPercent <= -0.5) {
             shouldClose = true;
-            exitReason = 'Take Profit (+2%)';
-          } else if (pnlPercent >= 1.0) {
+            exitReason = 'Take Profit (+0.5%)';
+          } else if (pnlPercent >= 0.3) {
             shouldClose = true;
-            exitReason = 'Stop Loss (-1%)';
+            exitReason = 'Stop Loss (-0.3%)';
           }
         }
 
@@ -213,6 +214,8 @@ export class WorkingTrader {
           const exitValue = currentPrice * size;
           const totalFees = (entryValue + exitValue) * 0.001; // 0.1% each side
           
+          const executedTime = trade.executedAt ? new Date(trade.executedAt).getTime() : Date.now();
+          
           await storage.updateTrade(trade.id, {
             exitPrice: currentPrice.toString(),
             pnl: pnl.toString(),
@@ -221,7 +224,7 @@ export class WorkingTrader {
             fees: totalFees.toString(),
             status: 'closed',
             closedAt: new Date(),
-            duration: Math.floor((Date.now() - new Date(trade.executedAt).getTime()) / 1000),
+            duration: Math.floor((Date.now() - executedTime) / 1000),
           });
 
           console.log(`🔴 CLOSED: ${trade.symbol} ${trade.side} @ ${currentPrice.toFixed(5)}`);
