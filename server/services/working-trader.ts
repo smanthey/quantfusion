@@ -90,9 +90,9 @@ export class WorkingTrader {
       // Monitor existing positions FIRST
       await this.monitorOpenPositions();
 
-      // Try all symbols
-      console.log('🔍 [Working Trader] Evaluating 3 forex pairs...');
-      for (const symbol of ['EURUSD', 'GBPUSD', 'AUDUSD']) {
+      // TEMPORARILY: Trade EURUSD only until profitable (testing phase)
+      console.log('🔍 [Working Trader] Evaluating EURUSD only (testing)...');
+      for (const symbol of ['EURUSD']) { // Was: ['EURUSD', 'GBPUSD', 'AUDUSD']
         await this.evaluateSymbol(symbol);
       }
       console.log('✅ [Working Trader] Evaluation cycle complete');
@@ -139,21 +139,43 @@ export class WorkingTrader {
   }
 
   private async executeTrade(symbol: string, signal: any) {
-    // STRICT DUPLICATE PREVENTION: One position per symbol per direction (BUY or SELL)
     const allTrades = await storage.getAllTrades();
-    const existingPosition = allTrades.find((t: any) => 
+    
+    // RISK MANAGEMENT CHECKS
+    const openTrades = allTrades.filter((t: any) => t.status === 'open');
+    
+    // 1. Strict duplicate prevention: One position per symbol per direction
+    const existingPosition = openTrades.find((t: any) => 
       t.symbol === symbol && 
-      t.status === 'open' &&
       t.side === (signal.action === 'buy' ? 'BUY' : 'SELL')
     );
-
     if (existingPosition) {
       console.log(`⏭️  SKIPPED: ${symbol} already has OPEN ${signal.action.toUpperCase()} position`);
       return;
     }
 
-    // Use strategy's calculated position size (not hardcoded 10%)
-    const positionSize = signal.positionSize || (this.accountBalance * 0.10);
+    // 2. Max concurrent positions (prevent overexposure)
+    if (openTrades.length >= 2) {
+      console.log(`⏭️  SKIPPED: Already have ${openTrades.length} open positions (max: 2)`);
+      return;
+    }
+
+    // 3. Total notional exposure limit (15% of account)
+    const totalExposure = openTrades.reduce((sum: number, t: any) => {
+      const size = parseFloat(t.size);
+      const price = parseFloat(t.entryPrice);
+      return sum + (size * price);
+    }, 0);
+    
+    const positionSize = signal.positionSize || (this.accountBalance * 0.05);
+    const newExposure = totalExposure + positionSize;
+    
+    if (newExposure > this.accountBalance * 0.15) {
+      console.log(`⏭️  SKIPPED: Total exposure would be ${((newExposure/this.accountBalance)*100).toFixed(1)}% (max: 15%)`);
+      return;
+    }
+
+    // 4. Daily loss limit check (already exists in working-trader)
 
     console.log(`🎯 EXECUTING ${signal.action.toUpperCase()}: ${symbol}`);
     console.log(`   Position Size: $${positionSize.toFixed(2)}`);

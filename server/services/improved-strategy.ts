@@ -230,13 +230,17 @@ export class ImprovedTradingStrategy {
 
     // BUY SIGNAL: EMA5 above EMA10 (even slightly) OR bullish crossover + RSI favorable
     if ((emaSpread > 0 || emaCrossover === 'bullish') && rsi > 30 && rsi < 80) {
-      const stopLoss = currentPrice * (1 - 0.002); // 0.2% stop loss (tight)
-      const takeProfit = currentPrice * (1 + 0.002); // 0.2% take profit (FAST exits, 1:1 R/R)
+      // ATR-based stops (better than fixed 0.2%)
+      const stopDistance = Math.max(atr * 1.5, currentPrice * 0.003); // 1.5×ATR or 0.3% minimum
+      const stopLoss = currentPrice - stopDistance;
+      const takeProfit = currentPrice + (stopDistance * 2.0); // 2:1 reward:risk
       
-      // Dynamic position sizing based on volatility
-      const riskPerTrade = accountBalance * 0.01; // 1% risk per trade
-      const riskAmount = currentPrice - stopLoss;
-      const positionSize = Math.max(riskPerTrade / riskAmount, accountBalance * 0.10); // Min 10% position
+      // FIXED POSITION SIZING: Risk 1% per trade, cap at 5% notional
+      const riskPerTrade = accountBalance * 0.01; // $100 risk on $10k account
+      const positionSizeUSD = Math.min(
+        (riskPerTrade / stopDistance) * currentPrice, // Risk-based sizing
+        accountBalance * 0.05 // MAX 5% notional ($500 on $10k)
+      );
       
       return {
         action: 'buy',
@@ -246,7 +250,7 @@ export class ImprovedTradingStrategy {
           : `EMA5 above EMA10 (+${emaSpread.toFixed(2)}%), RSI=${rsi.toFixed(1)} (bullish trend)`,
         stopLoss,
         takeProfit,
-        positionSize: Math.min(positionSize, accountBalance * 0.3), // Max 30% position
+        positionSize: positionSizeUSD, // Now in USD, properly capped
         indicators: {
           ema5: Number(ema5.toFixed(5)),
           ema10: Number(ema10.toFixed(5)),
@@ -262,13 +266,17 @@ export class ImprovedTradingStrategy {
 
     // SELL SIGNAL: EMA5 below EMA10 (even slightly) OR bearish crossover + RSI favorable
     if ((emaSpread < 0 || emaCrossover === 'bearish') && rsi < 70 && rsi > 20) {
-      const stopLoss = currentPrice * (1 + 0.002); // 0.2% stop loss (tight)
-      const takeProfit = currentPrice * (1 - 0.002); // 0.2% take profit (FAST exits, 1:1 R/R)
+      // ATR-based stops (better than fixed 0.2%)
+      const stopDistance = Math.max(atr * 1.5, currentPrice * 0.003); // 1.5×ATR or 0.3% minimum
+      const stopLoss = currentPrice + stopDistance;
+      const takeProfit = currentPrice - (stopDistance * 2.0); // 2:1 reward:risk
       
-      // Dynamic position sizing
-      const riskPerTrade = accountBalance * 0.01;
-      const riskAmount = stopLoss - currentPrice;
-      const positionSize = Math.max(riskPerTrade / riskAmount, accountBalance * 0.10); // Min 10% position
+      // FIXED POSITION SIZING: Risk 1% per trade, cap at 5% notional
+      const riskPerTrade = accountBalance * 0.01; // $100 risk on $10k account
+      const positionSizeUSD = Math.min(
+        (riskPerTrade / stopDistance) * currentPrice, // Risk-based sizing
+        accountBalance * 0.05 // MAX 5% notional ($500 on $10k)
+      );
       
       return {
         action: 'sell',
@@ -278,7 +286,7 @@ export class ImprovedTradingStrategy {
           : `EMA5 below EMA10 (${emaSpread.toFixed(2)}%), RSI=${rsi.toFixed(1)} (bearish trend)`,
         stopLoss,
         takeProfit,
-        positionSize: Math.min(positionSize, accountBalance * 0.3),
+        positionSize: positionSizeUSD, // Now in USD, properly capped
         indicators: {
           ema5: Number(ema5.toFixed(5)),
           ema10: Number(ema10.toFixed(5)),
