@@ -139,15 +139,16 @@ export class WorkingTrader {
   }
 
   private async executeTrade(symbol: string, signal: any) {
-    // RELAXED DUPLICATE PREVENTION: Allow up to 2 positions per symbol for high-frequency trading
+    // STRICT DUPLICATE PREVENTION: One position per symbol per direction (BUY or SELL)
     const allTrades = await storage.getAllTrades();
-    const openTrades = allTrades.filter((t: any) => 
+    const existingPosition = allTrades.find((t: any) => 
       t.symbol === symbol && 
-      t.status === 'open'
+      t.status === 'open' &&
+      t.side === (signal.action === 'buy' ? 'BUY' : 'SELL')
     );
 
-    if (openTrades.length >= 2) {
-      console.log(`⏭️  SKIPPED: ${symbol} already has ${openTrades.length} OPEN trades (max: 2)`);
+    if (existingPosition) {
+      console.log(`⏭️  SKIPPED: ${symbol} already has OPEN ${signal.action.toUpperCase()} position`);
       return;
     }
 
