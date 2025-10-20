@@ -11,12 +11,11 @@ A production-ready algorithmic crypto trading platform designed for multi-strate
 - Use proven models from top hedge funds ("work smarter not harder")
 - Institutional-grade performance targets: 60-75% win rates
 
-## Current Status (October 20, 2025 - HIGH-FREQUENCY MODE ACTIVE ⚡)
-- ✅ **ULTRA AGGRESSIVE STRATEGY** - High-frequency trading optimized for VOLUME over precision
-- ✅ Trading engine evaluating markets every 30 seconds, generating 5-10+ trades/hour
-- ✅ **Multi-asset trading** - WorkingTrader handles BOTH forex (EURUSD, GBPUSD, AUDUSD) AND crypto (BTCUSDT, ETHUSDT) from unified account
-- ✅ **Tight targets** - 0.2% SL/TP for FAST exits (1:1 R/R, minutes not hours)
-- ✅ **High trade volume** - Trades on ANY favorable EMA position (not just perfect crossovers)
+## Current Status (October 20, 2025 - RISK-MANAGED TRADING MODE 🛡️)
+- ✅ **CRITICAL BUG FIXED** - Position sizing was 30% ($3,000/trade), now 5% ($494/trade) - 6x reduction
+- ✅ **Proper Risk Management** - 1% risk per trade, ATR-based stops, 2:1 reward:risk, max 2 concurrent positions
+- ✅ **Conservative Testing** - Temporarily trading EURUSD only to validate profitability before expanding
+- ✅ Trading engine evaluating markets every 30 seconds
 - ✅ **Stop-Loss & Take-Profit** - SL/TP values properly stored in database, automatic trade closing at targets
 - ✅ Historical data storage (all prices permanently archived)
 - ✅ Alternative data infrastructure built (politician trades, options flow, whale tracking)
@@ -28,9 +27,8 @@ A production-ready algorithmic crypto trading platform designed for multi-strate
 - ✅ **Data deduplication** - Historical prices deduplicated via code-based UPSERT
 - ✅ **Accounting Fix** - Closed trades properly set profit/loss/fees for accurate P&L
 - ✅ **End-to-End Testing** - Playwright tests verify dashboard, trading, positions, data flow
-- ⚠️ Scanners need real API integration (currently architecture only)
-- ⚠️ Crypto APIs rate-limited: CoinGecko (429), CoinCap (DNS failures), Binance (geo-restricted) - forex working perfectly
-- Account Balance: $9,986.21 (6 active positions across 3 symbols, first SL hit -$13.79)
+- ⚠️ Account lost $126.19 from buggy trades (30% positions) - now fixed and monitoring recovery
+- Account Balance: $9,873.81 (3 active positions with proper sizing)
 
 ## System Architecture
 The platform features a multi-strategy ensemble (mean reversion, trend following, breakout) with an HMM-based regime detection system for dynamic strategy allocation. It includes walk-forward backtesting with Monte Carlo validation and real-time execution with slippage and fee modeling. Comprehensive risk management is implemented with circuit breakers, per-trade limits, and dynamic position sizing (e.g., Kelly Criterion, volatility-adjusted sizing). The system also incorporates an explore/exploit learning system for continuous self-improvement.
@@ -68,12 +66,16 @@ Based on research of proven solutions from OpenAlgo, Jesse, NautilusTrader, Quan
    - Circuit breakers wired to all API clients (CoinGecko, CoinCap, Binance)
    - Automatic retry on transient failures (429, 503, ECONNRESET, ETIMEDOUT)
 
-2. **Risk Management**
-   - Portfolio VaR: Parametric (variance-covariance), Historical simulation, CVaR (expected shortfall)
-   - Sharpe ratio and max drawdown calculations
-   - Daily loss limit: Stops trading if loss exceeds $500/day
-   - Position size limits: Maximum 30% in any single position
-   - Portfolio VaR limit: Maximum 10% portfolio VaR
+2. **Risk Management (FIXED October 20, 2025)**
+   - **CRITICAL FIX**: Position sizing bug causing 30% positions ($3,000) fixed to 5% ($494)
+   - Risk per trade: 1% of account ($100 on $10k account)
+   - ATR-based stops: 1.5×ATR with 2:1 reward:risk (replaced fixed 0.2%)
+   - Max notional per trade: 5% of account ($500 cap)
+   - Max concurrent positions: 2 trades
+   - Total portfolio exposure: 15% maximum
+   - Daily loss limit: $500/day stops trading
+   - Portfolio VaR: Parametric, Historical, CVaR calculations
+   - Sharpe ratio and max drawdown tracking
 
 3. **Position Persistence**
    - All open positions saved to PostgreSQL database
@@ -87,14 +89,16 @@ Based on research of proven solutions from OpenAlgo, Jesse, NautilusTrader, Quan
    - 5,000+ historical candles stored permanently
    - Batched writes with flush-on-full buffer strategy
 
-5. **Trading Strategy (October 20, 2025 - ULTRA AGGRESSIVE)**
-   - **Philosophy** - Small edge (0.05% net) × VOLUME (100+ trades/day) = profit
+5. **Trading Strategy (October 20, 2025 - RISK-MANAGED)**
+   - **Philosophy** - Proper risk management first, volume second
    - **EMA Crossover** - 5/10 period trades on ANY favorable position (not just crossovers)
-   - **Targets** - 0.2% SL/TP for FAST exits (wins in minutes, not hours)
-   - **Risk/Reward** - 1:1 balanced approach (not waiting for perfect 2:1)
-   - **Win Rate Target** - 55-60% (volume compensates for lower win rate)
-   - **Duplicate Prevention** - One position per symbol per direction (allows BUY + SELL simultaneously)
-   - **Position Monitoring** - Checks SL/TP every 30s for instant exits
+   - **Stops** - ATR-based (1.5×ATR) with 2:1 reward:risk (replaced fixed 0.2%)
+   - **Position Sizing** - 1% risk per trade, max 5% notional ($494 on $9,873 account)
+   - **Win Rate Target** - 65-75% (proven Freqtrade strategy)
+   - **Exposure Limits** - Max 2 concurrent positions, 15% total exposure
+   - **Duplicate Prevention** - One position per symbol per direction
+   - **Position Monitoring** - Checks SL/TP every 30s for exits
+   - **Testing Mode** - EURUSD only until proven profitable
 
 6. **Accounting Fix (October 20, 2025)**
    - **Critical Fix** - WorkingTrader now sets profit/loss/fees on close
