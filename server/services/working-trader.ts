@@ -211,28 +211,77 @@ export class WorkingTrader {
         if (!currentPrice || currentPrice === 0) continue;
 
         const entryPrice = parseFloat(trade.entryPrice);
-        const stopLoss = trade.stopLoss ? parseFloat(trade.stopLoss) : null;
+        let stopLoss = trade.stopLoss ? parseFloat(trade.stopLoss) : null;
         const takeProfit = trade.takeProfit ? parseFloat(trade.takeProfit) : null;
         
         let shouldClose = false;
         let exitReason = '';
+        let needsUpdate = false;
+
+        // Calculate risk (distance from entry to stop)
+        const initialRisk = stopLoss ? Math.abs(entryPrice - stopLoss) : 0;
 
         if (trade.side === 'BUY' || trade.side === 'buy') {
+          const profit = currentPrice - entryPrice;
+          
+          // BREAKEVEN: Move stop to entry once up +1R (1× initial risk)
+          if (stopLoss && profit >= initialRisk && stopLoss < entryPrice) {
+            stopLoss = entryPrice;
+            needsUpdate = true;
+            console.log(`🔒 BREAKEVEN: ${trade.symbol} - moved SL to entry ${entryPrice.toFixed(5)}`);
+          }
+          
+          // TRAILING STOP: Trail stop as price rises (1.5×ATR below current price)
+          if (stopLoss && profit > initialRisk * 1.5) {
+            const trailingStop = currentPrice - (initialRisk * 1.5);
+            if (trailingStop > stopLoss) {
+              stopLoss = trailingStop;
+              needsUpdate = true;
+              console.log(`📈 TRAILING: ${trade.symbol} - moved SL to ${stopLoss.toFixed(5)}`);
+            }
+          }
+          
           if (takeProfit && currentPrice >= takeProfit) {
             shouldClose = true;
             exitReason = `Take Profit hit (${takeProfit.toFixed(5)})`;
           } else if (stopLoss && currentPrice <= stopLoss) {
             shouldClose = true;
-            exitReason = `Stop Loss hit (${stopLoss.toFixed(5)})`;
+            exitReason = profit >= 0 ? `Breakeven/Trailing Stop (${stopLoss.toFixed(5)})` : `Stop Loss hit (${stopLoss.toFixed(5)})`;
           }
         } else {
+          const profit = entryPrice - currentPrice;
+          
+          // BREAKEVEN: Move stop to entry once up +1R
+          if (stopLoss && profit >= initialRisk && stopLoss > entryPrice) {
+            stopLoss = entryPrice;
+            needsUpdate = true;
+            console.log(`🔒 BREAKEVEN: ${trade.symbol} - moved SL to entry ${entryPrice.toFixed(5)}`);
+          }
+          
+          // TRAILING STOP: Trail stop as price falls
+          if (stopLoss && profit > initialRisk * 1.5) {
+            const trailingStop = currentPrice + (initialRisk * 1.5);
+            if (trailingStop < stopLoss) {
+              stopLoss = trailingStop;
+              needsUpdate = true;
+              console.log(`📈 TRAILING: ${trade.symbol} - moved SL to ${stopLoss.toFixed(5)}`);
+            }
+          }
+          
           if (takeProfit && currentPrice <= takeProfit) {
             shouldClose = true;
             exitReason = `Take Profit hit (${takeProfit.toFixed(5)})`;
           } else if (stopLoss && currentPrice >= stopLoss) {
             shouldClose = true;
-            exitReason = `Stop Loss hit (${stopLoss.toFixed(5)})`;
+            exitReason = profit >= 0 ? `Breakeven/Trailing Stop (${stopLoss.toFixed(5)})` : `Stop Loss hit (${stopLoss.toFixed(5)})`;
           }
+        }
+        
+        // Update stop-loss if it moved (breakeven or trailing)
+        if (needsUpdate && !shouldClose) {
+          await storage.updateTrade(trade.id, {
+            stopLoss: stopLoss!.toString()
+          });
         }
 
         if (shouldClose) {

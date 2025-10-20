@@ -222,18 +222,21 @@ export class ImprovedTradingStrategy {
     const atr = this.calculateATR(candles, 14);
     const volumeAvg = this.calculateVolumeAvg(candles, 20);
 
-    // Detect crossovers
+    // Detect crossovers (BOTH required for entry)
     const emaCrossover = this.detectCrossover(candles, 5, 10);
+    const rsiCrossover = this.detectRSICrossover(candles, 10);
     
-    // ULTRA AGGRESSIVE: Trade on ANY favorable EMA position (high-frequency approach)
-    const emaSpread = ((ema5 - ema10) / ema10) * 100;
-
-    // BUY SIGNAL: EMA5 above EMA10 (even slightly) OR bullish crossover + RSI favorable
-    if ((emaSpread > 0 || emaCrossover === 'bullish') && rsi > 30 && rsi < 80) {
-      // ATR-based stops (better than fixed 0.2%)
-      const stopDistance = Math.max(atr * 1.5, currentPrice * 0.003); // 1.5×ATR or 0.3% minimum
+    // STRICT ENTRY REQUIREMENTS: All three must align
+    // 1. EMA crossover (not just any position)
+    // 2. RSI 50-level crossover
+    // 3. ADX >= 25 (strong trend)
+    
+    // BUY SIGNAL: REQUIRE all confirmations
+    if (emaCrossover === 'bullish' && rsiCrossover === 'bullish' && adx >= 25) {
+      // Wider stops for better breathing room
+      const stopDistance = Math.max(atr * 2.0, currentPrice * 0.003); // 2.0×ATR or 0.3% minimum
       const stopLoss = currentPrice - stopDistance;
-      const takeProfit = currentPrice + (stopDistance * 2.0); // 2:1 reward:risk
+      const takeProfit = currentPrice + (stopDistance * 1.5); // 1.5:1 reward:risk (more achievable)
       
       // FIXED POSITION SIZING: Risk 1% per trade, cap at 5% notional
       const riskPerTrade = accountBalance * 0.01; // $100 risk on $10k account
@@ -244,10 +247,8 @@ export class ImprovedTradingStrategy {
       
       return {
         action: 'buy',
-        confidence: emaCrossover === 'bullish' ? 0.85 : 0.70,
-        reason: emaCrossover === 'bullish' 
-          ? `EMA5 crossed above EMA10 (bullish), RSI=${rsi.toFixed(1)}`
-          : `EMA5 above EMA10 (+${emaSpread.toFixed(2)}%), RSI=${rsi.toFixed(1)} (bullish trend)`,
+        confidence: 0.90, // High confidence - all 3 confirmations present
+        reason: `STRONG BUY: EMA cross + RSI>50 cross + ADX=${adx.toFixed(1)} (trending)`,
         stopLoss,
         takeProfit,
         positionSize: positionSizeUSD, // Now in USD, properly capped
@@ -264,12 +265,12 @@ export class ImprovedTradingStrategy {
       };
     }
 
-    // SELL SIGNAL: EMA5 below EMA10 (even slightly) OR bearish crossover + RSI favorable
-    if ((emaSpread < 0 || emaCrossover === 'bearish') && rsi < 70 && rsi > 20) {
-      // ATR-based stops (better than fixed 0.2%)
-      const stopDistance = Math.max(atr * 1.5, currentPrice * 0.003); // 1.5×ATR or 0.3% minimum
+    // SELL SIGNAL: REQUIRE all confirmations
+    if (emaCrossover === 'bearish' && rsiCrossover === 'bearish' && adx >= 25) {
+      // Wider stops for better breathing room
+      const stopDistance = Math.max(atr * 2.0, currentPrice * 0.003); // 2.0×ATR or 0.3% minimum
       const stopLoss = currentPrice + stopDistance;
-      const takeProfit = currentPrice - (stopDistance * 2.0); // 2:1 reward:risk
+      const takeProfit = currentPrice - (stopDistance * 1.5); // 1.5:1 reward:risk (more achievable)
       
       // FIXED POSITION SIZING: Risk 1% per trade, cap at 5% notional
       const riskPerTrade = accountBalance * 0.01; // $100 risk on $10k account
@@ -280,10 +281,8 @@ export class ImprovedTradingStrategy {
       
       return {
         action: 'sell',
-        confidence: emaCrossover === 'bearish' ? 0.85 : 0.70,
-        reason: emaCrossover === 'bearish'
-          ? `EMA5 crossed below EMA10 (bearish), RSI=${rsi.toFixed(1)}`
-          : `EMA5 below EMA10 (${emaSpread.toFixed(2)}%), RSI=${rsi.toFixed(1)} (bearish trend)`,
+        confidence: 0.90, // High confidence - all 3 confirmations present
+        reason: `STRONG SELL: EMA cross + RSI<50 cross + ADX=${adx.toFixed(1)} (trending)`,
         stopLoss,
         takeProfit,
         positionSize: positionSizeUSD, // Now in USD, properly capped
