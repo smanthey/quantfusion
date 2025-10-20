@@ -225,13 +225,13 @@ export class ImprovedTradingStrategy {
     // Detect crossovers
     const emaCrossover = this.detectCrossover(candles, 5, 10);
     
-    // MORE AGGRESSIVE: Trade when EMAs are in favorable position (not just crossovers)
+    // ULTRA AGGRESSIVE: Trade on ANY favorable EMA position (high-frequency approach)
     const emaSpread = ((ema5 - ema10) / ema10) * 100;
 
-    // BUY SIGNAL: EMA5 above EMA10 (bullish trend) OR recent bullish crossover + RSI favorable
-    if ((emaSpread > 0.01 || emaCrossover === 'bullish') && rsi > 30 && rsi < 80) {
-      const stopLoss = currentPrice * (1 - 0.003); // 0.3% stop loss (forex-realistic)
-      const takeProfit = currentPrice * (1 + 0.005); // 0.5% take profit (1.67:1 R/R)
+    // BUY SIGNAL: EMA5 above EMA10 (even slightly) OR bullish crossover + RSI favorable
+    if ((emaSpread > 0 || emaCrossover === 'bullish') && rsi > 30 && rsi < 80) {
+      const stopLoss = currentPrice * (1 - 0.002); // 0.2% stop loss (tight)
+      const takeProfit = currentPrice * (1 + 0.002); // 0.2% take profit (FAST exits, 1:1 R/R)
       
       // Dynamic position sizing based on volatility
       const riskPerTrade = accountBalance * 0.01; // 1% risk per trade
@@ -260,10 +260,10 @@ export class ImprovedTradingStrategy {
       };
     }
 
-    // SELL SIGNAL: EMA5 below EMA10 (bearish trend) OR recent bearish crossover + RSI favorable
-    if ((emaSpread < -0.01 || emaCrossover === 'bearish') && rsi < 70 && rsi > 20) {
-      const stopLoss = currentPrice * (1 + 0.003); // 0.3% stop loss (forex-realistic)
-      const takeProfit = currentPrice * (1 - 0.005); // 0.5% take profit (1.67:1 R/R)
+    // SELL SIGNAL: EMA5 below EMA10 (even slightly) OR bearish crossover + RSI favorable
+    if ((emaSpread < 0 || emaCrossover === 'bearish') && rsi < 70 && rsi > 20) {
+      const stopLoss = currentPrice * (1 + 0.002); // 0.2% stop loss (tight)
+      const takeProfit = currentPrice * (1 - 0.002); // 0.2% take profit (FAST exits, 1:1 R/R)
       
       // Dynamic position sizing
       const riskPerTrade = accountBalance * 0.01;

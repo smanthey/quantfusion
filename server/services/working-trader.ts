@@ -139,15 +139,15 @@ export class WorkingTrader {
   }
 
   private async executeTrade(symbol: string, signal: any) {
-    // DUPLICATE PREVENTION: Check if there's already an open trade for this symbol
+    // RELAXED DUPLICATE PREVENTION: Allow up to 2 positions per symbol for high-frequency trading
     const allTrades = await storage.getAllTrades();
-    const openTrade = allTrades.find((t: any) => 
+    const openTrades = allTrades.filter((t: any) => 
       t.symbol === symbol && 
-      t.status === 'open'  // Explicit status check (not nullable closedAt)
+      t.status === 'open'
     );
 
-    if (openTrade) {
-      console.log(`⏭️  SKIPPED: ${symbol} already has OPEN trade (ID: ${openTrade.id})`);
+    if (openTrades.length >= 2) {
+      console.log(`⏭️  SKIPPED: ${symbol} already has ${openTrades.length} OPEN trades (max: 2)`);
       return;
     }
 
