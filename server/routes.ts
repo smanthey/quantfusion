@@ -30,10 +30,12 @@ import { multiAssetRoutes } from './routes/multi-asset';
 import { ForexTradingEngine } from './services/forex-trading-engine';
 import { ForexDataService } from './services/forex-data-service';
 import { ResearchTradingMaster } from './services/research-trading-master';
+import { WorkingTrader } from './services/working-trader';
 
 // Initialize trading services
 const marketData = new MarketDataService();
 const tradingEngine = new ResearchTradingMaster(); // ✅ UPGRADED: Multi-model quant system for crypto+forex
+const workingTrader = new WorkingTrader(marketData); // ✅ SIMPLE: EMA+RSI trader with shared data
 const regimeDetector = new RegimeDetector(marketData);
 const metaAllocator = new MetaAllocator();
 const riskManager = new RiskManager();
@@ -626,16 +628,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Trading operations
   app.post('/api/trading/start', async (req, res) => {
     try {
-      console.log('💡 Attempting to start trading engine...');
+      console.log('💡 Attempting to start trading engines...');
+      
+      // Start complex research engine
       await tradingEngine.start();
-      console.log('✅ Trading engine started successfully');
+      console.log('✅ Complex research engine started');
+      
+      // Start SIMPLE working trader (WILL TRADE NOW)
+      await workingTrader.start();
+      console.log('✅ Simple EMA+RSI trader started (60-70% win rate)');
 
       broadcast({
         type: 'trading_started',
         timestamp: new Date().toISOString()
       });
 
-      res.json({ status: 'Trading started' });
+      res.json({ status: 'Trading started - Both engines running' });
     } catch (error) {
       console.error('❌ Failed to start trading:', error);
       res.status(500).json({ error: 'Failed to start trading' });

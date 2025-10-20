@@ -268,9 +268,22 @@ export class HistoricalDataService {
 
   getCandles(symbol: string, interval: '1m' | '5m' | '15m' | '1h' | '4h' | '1d', limit: number = 1000): Candle[] {
     const data = this.historicalData.get(symbol) || [];
-    const intervalMs = this.getIntervalMs(interval);
     
-    // Aggregate data into the requested interval
+    // For 1m interval, data is already in correct format - just convert and return
+    if (interval === '1m') {
+      const candles = data.slice(-limit).map(point => ({
+        timestamp: point.timestamp,
+        open: point.open,
+        high: point.high,
+        low: point.low,
+        close: point.close,
+        volume: point.volume
+      }));
+      return candles;
+    }
+    
+    // For other intervals, aggregate
+    const intervalMs = this.getIntervalMs(interval);
     const candles: Candle[] = [];
     let currentCandle: Partial<Candle> | null = null;
     

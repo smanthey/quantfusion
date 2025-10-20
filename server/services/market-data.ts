@@ -576,23 +576,19 @@ export class MarketDataService {
   }
 
   getCandles(symbol: string, limit = 100): Candle[] {
-    // First try to get live candles, then fall back to historical
+    // Get historical candles from database FIRST (gives us 365+ candles immediately)
+    const historicalCandles = historicalDataService.getCandles(symbol, '1m', limit);
+    
+    // Get live candles accumulated since startup
     const liveCandles = this.candles.get(symbol) || [];
 
-    if (liveCandles.length >= limit) {
-      return liveCandles.slice(-limit);
+    if (historicalCandles.length >= limit) {
+      // We have enough historical data - use it directly
+      return historicalCandles.slice(-limit);
     }
 
-    // Supplement with historical data for backtesting and analysis
-    const historicalCandles = historicalDataService.getCandles(symbol, '1m', limit);
-
-    // Combine historical and live data
-    const allCandles = [...historicalCandles];
-    if (liveCandles.length > 0) {
-      // Add recent live data
-      allCandles.push(...liveCandles.slice(-Math.min(50, liveCandles.length)));
-    }
-
+    // Not enough historical, combine with live
+    const allCandles = [...historicalCandles, ...liveCandles];
     return allCandles.slice(-limit);
   }
 
