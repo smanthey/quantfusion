@@ -85,23 +85,9 @@ app.use((req, res, next) => {
         console.log(`🌐 Server running on http://${host}:${port}`);
         console.log(`🔌 WebSocket server running on ws://${host}:${port}/ws`);
         
-        // Auto-start trading after 5 seconds (allow server to fully initialize)
-        setTimeout(async () => {
-          try {
-            console.log('🤖 AUTO-STARTING INSTITUTIONAL TRADING SYSTEM...');
-            const response = await fetch(`http://localhost:${port}/api/trading/start`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' }
-            });
-            if (response.ok) {
-              console.log('✅ TRADING SYSTEM AUTO-STARTED - EXECUTING CRYPTO + FOREX TRADES');
-            } else {
-              console.log('⚠️ Failed to auto-start trading, use dashboard to start manually');
-            }
-          } catch (error) {
-            console.log('⚠️ Auto-start error, use dashboard to start manually:', error);
-          }
-        }, 5000);
+        // ⏸️  AUTO-START DISABLED: Use dashboard to manually start trading
+        // This prevents creating trades before database cleanup
+        console.log('⏸️  Auto-start DISABLED - Use dashboard button to start trading manually');
       });
 
       return server;

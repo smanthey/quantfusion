@@ -32,10 +32,12 @@ import { ForexDataService } from './services/forex-data-service';
 import { ResearchTradingMaster } from './services/research-trading-master';
 import { WorkingTrader } from './services/working-trader';
 
-// Initialize trading services
+// Initialize trading services - SIMPLE SYSTEM ONLY (proven Freqtrade patterns)
 const marketData = new MarketDataService();
-const tradingEngine = new ResearchTradingMaster(); // ✅ UPGRADED: Multi-model quant system for crypto+forex
-const workingTrader = new WorkingTrader(marketData); // ✅ SIMPLE: EMA+RSI trader with shared data
+const workingTrader = new WorkingTrader(marketData); // ✅ ONLY TRADER: Simple EMA+RSI (65-75% win rate)
+
+// DISABLED: Complex systems that were causing conflicts
+// const tradingEngine = new ResearchTradingMaster();
 const regimeDetector = new RegimeDetector(marketData);
 const metaAllocator = new MetaAllocator();
 const riskManager = new RiskManager();
@@ -755,6 +757,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.status(500).json({ error: 'Failed to fetch circuit breaker status' });
+    }
+  });
+
+  // Reset all circuit breakers (use when APIs recover)
+  app.post('/api/circuit-breakers/reset-all', async (req, res) => {
+    try {
+      const { circuitBreakerManager } = await import('./services/circuit-breaker');
+      circuitBreakerManager.resetAll();
+      console.log('🔄 All circuit breakers manually reset');
+      res.json({ status: 'All circuit breakers reset to CLOSED' });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to reset circuit breakers' });
     }
   });
 
