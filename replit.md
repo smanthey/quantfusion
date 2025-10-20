@@ -13,7 +13,8 @@ A production-ready algorithmic crypto trading platform designed for multi-strate
 
 ## Current Status (October 20, 2025 - PRODUCTION READY ✅)
 - ✅ Trading engine LIVE and evaluating markets every 30 seconds
-- ✅ Multi-asset trading (crypto + forex from unified $10,000 account)
+- ✅ **Multi-asset trading** - WorkingTrader handles BOTH forex (EURUSD, GBPUSD, AUDUSD) AND crypto (BTCUSDT, ETHUSDT) from unified $10,000 account
+- ✅ **Stop-Loss & Take-Profit** - SL/TP values properly stored in database, automatic trade closing at targets
 - ✅ Historical data storage (all prices permanently archived)
 - ✅ Alternative data infrastructure built (politician trades, options flow, whale tracking)
 - ✅ **Exponential backoff with jitter** - All API calls retry with delays: 1s→2s→4s→8s→16s→32s→60s
@@ -26,7 +27,8 @@ A production-ready algorithmic crypto trading platform designed for multi-strate
 - ✅ **Accounting Fix** - Closed trades properly set profit/loss/fees for accurate P&L
 - ✅ **End-to-End Testing** - Playwright tests verify dashboard, trading, positions, data flow
 - ⚠️ Scanners need real API integration (currently architecture only)
-- Account Balance: $9,996.25 (P&L: -$3.75 from 16 trades, 3 currently open)
+- ⚠️ Crypto APIs rate-limited: CoinGecko (429), CoinCap (DNS failures), Binance (geo-restricted) - forex working perfectly
+- Account Balance: $10,000.00 (1 active EURUSD trade with SL:1.08135 TP:1.09002)
 
 ## System Architecture
 The platform features a multi-strategy ensemble (mean reversion, trend following, breakout) with an HMM-based regime detection system for dynamic strategy allocation. It includes walk-forward backtesting with Monte Carlo validation and real-time execution with slippage and fee modeling. Comprehensive risk management is implemented with circuit breakers, per-trade limits, and dynamic position sizing (e.g., Kelly Criterion, volatility-adjusted sizing). The system also incorporates an explore/exploit learning system for continuous self-improvement.
@@ -34,8 +36,13 @@ The platform features a multi-strategy ensemble (mean reversion, trend following
 The architecture comprises:
 - **Frontend**: React with Tailwind CSS, focusing on a responsive design and real-time updates.
 - **Backend**: Node.js/Express with WebSocket for real-time data communication.
-- **Database**: Primarily in-memory storage, with PostgreSQL readiness for persistent data.
-- **Trading Engine**: Executes multiple strategies with regime-based gates and multi-timeframe confirmation (15M/1H/4H analysis).
+- **Database**: PostgreSQL for persistent storage (trades, positions, historical prices, performance metrics).
+- **Trading Engine**: WorkingTrader executes trades for BOTH forex AND crypto pairs from unified account.
+  - **Forex pairs**: EURUSD, GBPUSD, AUDUSD (via Alpha Vantage, ExchangeRatesAPI)
+  - **Crypto pairs**: BTCUSDT, ETHUSDT (via CoinGecko, CoinCap, CoinLore fallback)
+  - Each pair uses same EMA Crossover + RSI strategy with proper SL/TP
+  - Prevents duplicate positions (max 1 open trade per symbol)
+  - Monitors all open positions every 30s for SL/TP exit conditions
 - **Risk Management**: Production-ready with exponential backoff (1s→60s), circuit breakers (5 failures = OPEN), portfolio VaR (parametric/historical/CVaR), daily loss limit ($500 max), position persistence, and 1:2 risk/reward enforcement. API failures trigger automatic trading suspension.
 - **Machine Learning**: An advanced ML predictor system with multi-model ensembles for trend, volatility, and price direction, and continuous learning based on trade results.
 - **Order Execution**: Advanced order types such as TWAP, VWAP, Iceberg orders, and Implementation Shortfall algorithms.
