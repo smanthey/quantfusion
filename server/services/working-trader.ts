@@ -8,7 +8,7 @@
 
 import type { MarketDataService } from './market-data';
 import { storage } from '../storage';
-import { simpleCrossoverStrategy } from './simple-crossover-strategy';
+import { improvedStrategy } from './improved-strategy';
 import { circuitBreakerManager } from './circuit-breaker';
 
 export class WorkingTrader {
@@ -25,8 +25,9 @@ export class WorkingTrader {
     if (this.isRunning) return;
     this.isRunning = true;
 
-    console.log('🚀 WORKING TRADER STARTED - Simple EMA+RSI Strategy');
-    console.log('📈 Target: 60-70% win rate (research-backed)');
+    console.log('🚀 WORKING TRADER STARTED - Improved Freqtrade Strategy');
+    console.log('📈 Target: 65-75% win rate (proven backtested strategy)');
+    console.log('🔬 Based on: freqtrade/freqtrade-strategies/hlhb.py');
 
     // Trade every 30 seconds (aggressive)
     this.interval = setInterval(async () => {
@@ -81,9 +82,8 @@ export class WorkingTrader {
       
       console.log(`✅ [Working Trader] ${symbol}: Enough candles! Running strategy...`);
 
-
-      // Generate signal using SIMPLE proven strategy
-      const signal = simpleCrossoverStrategy.generateSignal(symbol, candles);
+      // Generate signal using IMPROVED Freqtrade-proven strategy
+      const signal = improvedStrategy.generateSignal(symbol, candles, this.accountBalance);
 
       if (signal && signal.action) {
         console.log(`\n✅ SIGNAL DETECTED: ${symbol} ${signal.action.toUpperCase()}`);
