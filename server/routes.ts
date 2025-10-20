@@ -1737,5 +1737,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ✅ AUTO-START Working Trader (wait 3 seconds for initialization)
+  setTimeout(async () => {
+    try {
+      console.log('🚀 AUTO-STARTING Working Trader (new strict strategy)...');
+      await workingTrader.start();
+      console.log('✅ Working Trader auto-started successfully');
+    } catch (error: any) {
+      console.error('❌ Failed to auto-start Working Trader:', error?.message || error);
+    }
+  }, 3000);
+
   return httpServer;
 }
