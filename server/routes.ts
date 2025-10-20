@@ -637,22 +637,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Trading operations
   app.post('/api/trading/start', async (req, res) => {
     try {
-      console.log('💡 Attempting to start trading engines...');
+      console.log('💡 Starting WorkingTrader (EMA+RSI strategy)...');
       
-      // Start complex research engine
-      await tradingEngine.start();
-      console.log('✅ Complex research engine started');
+      // DISABLED: Old complex research engine (conflicts with WorkingTrader)
+      // await tradingEngine.start();
       
       // Start SIMPLE working trader (WILL TRADE NOW)
       await workingTrader.start();
-      console.log('✅ Simple EMA+RSI trader started (60-70% win rate)');
+      console.log('✅ Simple EMA+RSI trader started (60-75% win rate target)');
 
       broadcast({
         type: 'trading_started',
         timestamp: new Date().toISOString()
       });
 
-      res.json({ status: 'Trading started - Both engines running' });
+      res.json({ status: 'Trading started - WorkingTrader active' });
     } catch (error) {
       console.error('❌ Failed to start trading:', error);
       res.status(500).json({ error: 'Failed to start trading' });
@@ -661,7 +660,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/trading/stop', async (req, res) => {
     try {
-      await tradingEngine.stop();
+      workingTrader.stop();
+      // await tradingEngine.stop(); // Disabled
 
       broadcast({
         type: 'trading_stopped',
