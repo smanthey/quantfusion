@@ -142,7 +142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return aTime - bTime;
     });
 
-    // Calculate P&L using CORRECT method: profit - loss - fees (pnl field is corrupted)
+    // Calculate P&L using CORRECT method: profit - loss - fees (with fallback to pnl for old trades)
     for (const trade of sortedTrades) {
       const executedAt = trade.executedAt ? new Date(trade.executedAt) : new Date();
       
@@ -150,7 +150,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const profit = parseFloat(trade.profit || '0');
       const loss = parseFloat(trade.loss || '0');
       const fees = parseFloat(trade.fees || '0');
-      const tradePnl = profit - loss - fees;
+      
+      // For old trades without profit/loss data, fallback to raw pnl field
+      let tradePnl: number;
+      if (profit === 0 && loss === 0 && trade.pnl) {
+        // Old trade: use pnl field directly (already includes fees)
+        tradePnl = parseFloat(trade.pnl);
+      } else {
+        // New trade: calculate from profit/loss/fees
+        tradePnl = profit - loss - fees;
+      }
       
       totalPnl += tradePnl;
       runningEquity += tradePnl;
