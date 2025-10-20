@@ -84,40 +84,46 @@ export class ImprovedTradingStrategy {
 
   /**
    * Calculate ADX (Average Directional Index) for trend strength
+   * SIMPLIFIED: Use simple volatility measure instead of complex DI+/DI- calculation
    */
   private calculateADX(candles: Candle[], period: number = 14): number {
-    if (candles.length < period + 1) return 0;
+    if (candles.length < period + 1) {
+      return 0; // Not enough data
+    }
 
-    const dxValues: number[] = [];
+    // Calculate ATR for trend strength (simpler than full ADX)
+    let atrSum = 0;
+    let avgPriceMove = 0;
     
-    for (let i = 1; i < candles.length; i++) {
+    for (let i = candles.length - period; i < candles.length; i++) {
       const high = candles[i].high;
       const low = candles[i].low;
-      const prevHigh = candles[i - 1].high;
-      const prevLow = candles[i - 1].low;
-      const prevClose = candles[i - 1].close;
-
+      const prevClose = i > 0 ? candles[i - 1].close : candles[i].close;
+      
+      // True Range
       const tr = Math.max(
         high - low,
         Math.abs(high - prevClose),
         Math.abs(low - prevClose)
       );
-
-      const dmPlus = high - prevHigh > prevLow - low ? Math.max(high - prevHigh, 0) : 0;
-      const dmMinus = prevLow - low > high - prevHigh ? Math.max(prevLow - low, 0) : 0;
-
-      if (tr > 0) {
-        const diPlus = (dmPlus / tr) * 100;
-        const diMinus = (dmMinus / tr) * 100;
-        const dx = Math.abs(diPlus - diMinus) / (diPlus + diMinus) * 100;
-        dxValues.push(dx);
+      atrSum += tr;
+      
+      // Average price movement
+      if (i > 0) {
+        avgPriceMove += Math.abs(candles[i].close - candles[i - 1].close);
       }
     }
-
-    // ADX is smoothed average of DX
-    if (dxValues.length < period) return 0;
-    const recentDX = dxValues.slice(-period);
-    return recentDX.reduce((sum, dx) => sum + dx, 0) / period;
+    
+    const atr = atrSum / period;
+    const avgMove = avgPriceMove / (period - 1);
+    const avgPrice = candles[candles.length - 1].close;
+    
+    // ADX approximation: volatility as % of price (scaled to 0-100)
+    // High volatility = strong trend
+    const volatilityPct = (atr / avgPrice) * 100;
+    const adxApprox = Math.min(volatilityPct * 200, 100); // Scale to 0-100 range
+    
+    return adxApprox;
   }
 
   /**

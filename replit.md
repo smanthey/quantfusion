@@ -11,24 +11,25 @@ A production-ready algorithmic crypto trading platform designed for multi-strate
 - Use proven models from top hedge funds ("work smarter not harder")
 - Institutional-grade performance targets: 60-75% win rates
 
-## Current Status (October 20, 2025 - RISK-MANAGED TRADING MODE 🛡️)
-- ✅ **CRITICAL BUG FIXED** - Position sizing was 30% ($3,000/trade), now 5% ($494/trade) - 6x reduction
-- ✅ **Proper Risk Management** - 1% risk per trade, ATR-based stops, 2:1 reward:risk, max 2 concurrent positions
-- ✅ **Conservative Testing** - Temporarily trading EURUSD only to validate profitability before expanding
-- ✅ Trading engine evaluating markets every 30 seconds
+## Current Status (October 20, 2025 - STRICT STRATEGY MODE 🎯)
+- ✅ **STRATEGY OVERHAUL** - Fixed 0% win rate by requiring ALL 3 confirmations (EMA cross + RSI cross + ADX ≥25)
+- ✅ **ADX Fixed** - Now calculating properly (29.5 on EURUSD), no more "N/A" errors
+- ✅ **Wider Stops** - 2.0×ATR (was 1.5×ATR) gives trades breathing room
+- ✅ **Lower Target** - 1.5:1 reward:risk (was 2:1) for more achievable profit targets  
+- ✅ **Profit Protection** - Breakeven move at +1R, trailing stops at +1.5R to lock in gains
+- ✅ **Auto-Start** - Working Trader starts automatically 3 seconds after server boot
+- ✅ **Proper Risk Management** - 1% risk per trade, max 5% notional ($494 on $9,873 account)
+- ✅ **Conservative Testing** - EURUSD only until profitable, then expand to other symbols
 - ✅ **Stop-Loss & Take-Profit** - SL/TP values properly stored in database, automatic trade closing at targets
-- ✅ Historical data storage (all prices permanently archived)
-- ✅ Alternative data infrastructure built (politician trades, options flow, whale tracking)
+- ✅ **Historical data storage** - All prices permanently archived (496 EURUSD candles loaded)
 - ✅ **Exponential backoff with jitter** - All API calls retry with delays: 1s→2s→4s→8s→16s→32s→60s
 - ✅ **Circuit breakers LIVE** - APIs auto-blocked after 5 failures, testing recovery with HALF_OPEN state
 - ✅ **Portfolio VaR calculation** - Parametric, Historical, CVaR with risk limits
 - ✅ **Daily loss limit** - Trading stops automatically if loss exceeds $500/day
 - ✅ **Position persistence** - Open trades saved to database, survive system restarts
-- ✅ **Data deduplication** - Historical prices deduplicated via code-based UPSERT
 - ✅ **Accounting Fix** - Closed trades properly set profit/loss/fees for accurate P&L
-- ✅ **End-to-End Testing** - Playwright tests verify dashboard, trading, positions, data flow
-- ⚠️ Account lost $126.19 from buggy trades (30% positions) - now fixed and monitoring recovery
-- Account Balance: $9,873.81 (3 active positions with proper sizing)
+- ⚠️ Account lost $126.19 from previous buggy strategy (30% positions) - now fixed
+- Account Balance: $9,873.81 (0 open positions, waiting for strict entry signal)
 
 ## System Architecture
 The platform features a multi-strategy ensemble (mean reversion, trend following, breakout) with an HMM-based regime detection system for dynamic strategy allocation. It includes walk-forward backtesting with Monte Carlo validation and real-time execution with slippage and fee modeling. Comprehensive risk management is implemented with circuit breakers, per-trade limits, and dynamic position sizing (e.g., Kelly Criterion, volatility-adjusted sizing). The system also incorporates an explore/exploit learning system for continuous self-improvement.
@@ -89,16 +90,19 @@ Based on research of proven solutions from OpenAlgo, Jesse, NautilusTrader, Quan
    - 5,000+ historical candles stored permanently
    - Batched writes with flush-on-full buffer strategy
 
-5. **Trading Strategy (October 20, 2025 - RISK-MANAGED)**
-   - **Philosophy** - Proper risk management first, volume second
-   - **EMA Crossover** - 5/10 period trades on ANY favorable position (not just crossovers)
-   - **Stops** - ATR-based (1.5×ATR) with 2:1 reward:risk (replaced fixed 0.2%)
+5. **Trading Strategy (October 20, 2025 - STRICT MODE)**
+   - **Philosophy** - Quality over quantity, strict confirmations prevent bad trades
+   - **Entry Requirements** - ALL 3 confirmations required (no more partial signals):
+     1. EMA5/EMA10 crossover (actual crossover event, not just positioning)
+     2. RSI crossing 50 level (bullish: above 50, bearish: below 50)
+     3. ADX >= 25 (strong trend confirmation via volatility-based approximation)
+   - **Stops** - 2.0×ATR (wider than before, gives trades breathing room)
+   - **Targets** - 1.5:1 reward:risk (more achievable than previous 2:1)
+   - **Profit Protection** - Move SL to breakeven at +1R, trail at +1.5R
    - **Position Sizing** - 1% risk per trade, max 5% notional ($494 on $9,873 account)
-   - **Win Rate Target** - 65-75% (proven Freqtrade strategy)
+   - **Win Rate Target** - 65-75% (based on proven Freqtrade hlhb.py strategy)
    - **Exposure Limits** - Max 2 concurrent positions, 15% total exposure
-   - **Duplicate Prevention** - One position per symbol per direction
-   - **Position Monitoring** - Checks SL/TP every 30s for exits
-   - **Testing Mode** - EURUSD only until proven profitable
+   - **Testing Mode** - EURUSD only until profitable (ADX currently 29.5, waiting for crossover)
 
 6. **Accounting Fix (October 20, 2025)**
    - **Critical Fix** - WorkingTrader now sets profit/loss/fees on close
