@@ -42,6 +42,8 @@ export default function OrdersPage() {
       side: trade.side.toUpperCase(),
       amount: parseFloat(trade.size || '0') / 1000, // Convert to more readable units
       price: entryPrice,
+      stopLoss: trade.stopLoss ? parseFloat(trade.stopLoss) : null,
+      takeProfit: trade.takeProfit ? parseFloat(trade.takeProfit) : null,
       status: isProfitable ? 'FILLED' : Math.random() > 0.3 ? 'ACTIVE' : 'PENDING',
       timestamp: executedAt.toLocaleString()
     };
@@ -95,6 +97,8 @@ export default function OrdersPage() {
                   <TableHead>Side</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>Price</TableHead>
+                  <TableHead>Stop Loss</TableHead>
+                  <TableHead>Take Profit</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Time</TableHead>
                   <TableHead>Actions</TableHead>
@@ -102,9 +106,9 @@ export default function OrdersPage() {
               </TableHeader>
               <TableBody>
                 {orders.map((order: any) => (
-                  <TableRow key={order.id}>
-                    <TableCell className="font-medium">{order.id}</TableCell>
-                    <TableCell>{order.symbol}</TableCell>
+                  <TableRow key={order.id} data-testid={`row-order-${order.id}`}>
+                    <TableCell className="font-medium" data-testid={`text-order-id-${order.id}`}>{order.id}</TableCell>
+                    <TableCell data-testid={`text-symbol-${order.id}`}>{order.symbol}</TableCell>
                     <TableCell>{order.type}</TableCell>
                     <TableCell>
                       <Badge variant={order.side === "BUY" ? "default" : "secondary"}>
@@ -113,6 +117,12 @@ export default function OrdersPage() {
                     </TableCell>
                     <TableCell>{order.amount.toFixed(10)}</TableCell>
                     <TableCell>${order.price.toLocaleString()}</TableCell>
+                    <TableCell data-testid={`text-stoploss-${order.id}`}>
+                      {order.stopLoss ? `$${order.stopLoss.toFixed(5)}` : 'N/A'}
+                    </TableCell>
+                    <TableCell data-testid={`text-takeprofit-${order.id}`}>
+                      {order.takeProfit ? `$${order.takeProfit.toFixed(5)}` : 'N/A'}
+                    </TableCell>
                     <TableCell>
                       <Badge className={getStatusColor(order.status)}>
                         {order.status}
@@ -121,10 +131,10 @@ export default function OrdersPage() {
                     <TableCell>{order.timestamp}</TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm">
+                        <Button variant="outline" size="sm" data-testid={`button-edit-${order.id}`}>
                           <Edit className="w-3 h-3" />
                         </Button>
-                        <Button variant="outline" size="sm">
+                        <Button variant="outline" size="sm" data-testid={`button-delete-${order.id}`}>
                           <Trash2 className="w-3 h-3" />
                         </Button>
                       </div>

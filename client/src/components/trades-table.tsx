@@ -52,7 +52,8 @@ export function TradesTable({ trades, onExportTrades }: TradesTableProps) {
   };
 
   const getSideBadge = (side: string) => {
-    return side === 'buy' ? (
+    const normalizedSide = side.toUpperCase();
+    return normalizedSide === 'BUY' ? (
       <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
         <TrendingUp className="w-3 h-3 mr-1" />
         BUY
@@ -65,9 +66,23 @@ export function TradesTable({ trades, onExportTrades }: TradesTableProps) {
     );
   };
 
-  const totalPnL = trades.reduce((sum, trade) => sum + safeNumber(trade.pnl), 0);
+  // Calculate net P&L properly: profit - loss - fees (or use pnl if already net)
+  const totalPnL = trades.reduce((sum, trade) => {
+    // If pnl exists, use it (it should be net after server fix)
+    if (trade.pnl !== undefined && trade.pnl !== null) {
+      return sum + safeNumber(trade.pnl);
+    }
+    // Fallback to manual calculation
+    const profit = safeNumber(trade.profit);
+    const loss = safeNumber(trade.loss);
+    const fees = safeNumber(trade.fees);
+    return sum + (profit - loss - fees);
+  }, 0);
   const totalFees = trades.reduce((sum, trade) => sum + safeNumber(trade.fees), 0);
-  const winningTrades = trades.filter(trade => safeNumber(trade.pnl) > 0).length;
+  const winningTrades = trades.filter(trade => {
+    const netPnl = trade.pnl !== undefined ? safeNumber(trade.pnl) : (safeNumber(trade.profit) - safeNumber(trade.loss) - safeNumber(trade.fees));
+    return netPnl > 0;
+  }).length;
   const winRate = trades.length > 0 ? (winningTrades / trades.length) * 100 : 0;
 
   return (
@@ -129,14 +144,22 @@ export function TradesTable({ trades, onExportTrades }: TradesTableProps) {
                     <TableHead>Side</TableHead>
                     <TableHead>Size</TableHead>
                     <TableHead>Price</TableHead>
+                    <TableHead>Stop Loss</TableHead>
+                    <TableHead>Take Profit</TableHead>
                     <TableHead>P&L</TableHead>
                     <TableHead>Fees</TableHead>
                     <TableHead>Strategy</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {trades.map((trade) => (
-                    <TableRow key={trade.id}>
+                  {trades.map((trade) => {
+                    // Calculate net P&L properly
+                    const netPnl = trade.pnl !== undefined && trade.pnl !== null
+                      ? safeNumber(trade.pnl)
+                      : safeNumber(trade.profit) - safeNumber(trade.loss) - safeNumber(trade.fees);
+                    
+                    return (
+                    <TableRow key={trade.id} data-testid={`row-trade-${trade.id}`}>
                       <TableCell className="font-medium">
                         {formatTime(trade.timestamp)}
                       </TableCell>
@@ -152,12 +175,15 @@ export function TradesTable({ trades, onExportTrades }: TradesTableProps) {
                       <TableCell>
                         {formatCurrency(trade.entryPrice)}
                       </TableCell>
-                      <TableCell>
-                        <span className={getPnLColor(safeNumber(trade.pnl))}>
-                          {safeNumber(trade.pnl) !== 0 || trade.pnl !== undefined
-                            ? formatCurrency(trade.pnl)
-                            : '$0.00'
-                          }
+                      <TableCell className="text-xs" data-testid={`text-stoploss-${trade.id}`}>
+                        {trade.stopLoss ? formatCurrency(trade.stopLoss) : <span className="text-muted-foreground">--</span>}
+                      </TableCell>
+                      <TableCell className="text-xs" data-testid={`text-takeprofit-${trade.id}`}>
+                        {trade.takeProfit ? formatCurrency(trade.takeProfit) : <span className="text-muted-foreground">--</span>}
+                      </TableCell>
+                      <TableCell data-testid={`text-pnl-${trade.id}`}>
+                        <span className={getPnLColor(netPnl)}>
+                          {formatCurrency(netPnl)}
                         </span>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
@@ -169,7 +195,8 @@ export function TradesTable({ trades, onExportTrades }: TradesTableProps) {
                         </Badge>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </ScrollArea>

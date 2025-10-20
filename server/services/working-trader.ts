@@ -72,12 +72,17 @@ export class WorkingTrader {
         return;
       }
 
-      // Get account balance
+      // Get account balance using proper accounting (profit - loss - fees)
       const trades = await storage.getAllTrades();
-      const closedTrades = trades.filter((t: any) => t.status === 'closed' && t.pnl);
-      const totalPnL = closedTrades.reduce((sum: number, t: any) => 
-        sum + (parseFloat(t.pnl!) || 0), 0
-      );
+      const closedTrades = trades.filter((t: any) => t.status === 'closed');
+      const totalPnL = closedTrades.reduce((sum: number, t: any) => {
+        // Use unified performance: profit - loss - fees
+        const profit = parseFloat(t.profit || '0');
+        const loss = parseFloat(t.loss || '0');
+        const fees = parseFloat(t.fees || '0');
+        const netPnl = profit - loss - fees;
+        return sum + netPnl;
+      }, 0);
       this.accountBalance = 10000 + totalPnL;
 
       console.log(`💰 [Working Trader] Account: $${this.accountBalance.toFixed(2)}`);
@@ -209,20 +214,24 @@ export class WorkingTrader {
 
         if (shouldClose) {
           const size = parseFloat(trade.size);
-          const pnl = (currentPrice - entryPrice) * size * (trade.side === 'BUY' || trade.side === 'buy' ? 1 : -1);
+          const grossPnl = (currentPrice - entryPrice) * size * (trade.side === 'BUY' || trade.side === 'buy' ? 1 : -1);
           
           // Calculate fees (0.1% of entry value + 0.1% of exit value = 0.2% total)
           const entryValue = entryPrice * size;
           const exitValue = currentPrice * size;
           const totalFees = (entryValue + exitValue) * 0.001; // 0.1% each side
           
+          // Net P&L after fees
+          const netPnl = grossPnl - totalFees;
+          const pnlPercent = (netPnl / entryValue) * 100;
+          
           const executedTime = trade.executedAt ? new Date(trade.executedAt).getTime() : Date.now();
           
           await storage.updateTrade(trade.id, {
             exitPrice: currentPrice.toString(),
-            pnl: pnl.toString(),
-            profit: pnl > 0 ? pnl.toString() : '0',
-            loss: pnl < 0 ? Math.abs(pnl).toString() : '0',
+            pnl: netPnl.toString(), // Store NET P&L (after fees)
+            profit: grossPnl > 0 ? grossPnl.toString() : '0',
+            loss: grossPnl < 0 ? Math.abs(grossPnl).toString() : '0',
             fees: totalFees.toString(),
             status: 'closed',
             closedAt: new Date(),
@@ -230,7 +239,7 @@ export class WorkingTrader {
           });
 
           console.log(`🔴 CLOSED: ${trade.symbol} ${trade.side} @ ${currentPrice.toFixed(5)}`);
-          console.log(`   Entry: ${entryPrice.toFixed(5)}, P&L: $${pnl.toFixed(2)} (${pnlPercent.toFixed(2)}%)`);
+          console.log(`   Entry: ${entryPrice.toFixed(5)}, Gross P&L: $${grossPnl.toFixed(2)}, Fees: $${totalFees.toFixed(2)}, Net: $${netPnl.toFixed(2)} (${pnlPercent.toFixed(2)}%)`);
           console.log(`   Reason: ${exitReason}`);
         }
       }

@@ -43,7 +43,11 @@ export interface TradeData {
   entryPrice: number;
   exitPrice?: number;
   pnl?: number;
+  profit?: number;
+  loss?: number;
   fees: number;
+  stopLoss?: number;
+  takeProfit?: number;
   timestamp: number;
   strategy: string;
   executedAt?: string;
