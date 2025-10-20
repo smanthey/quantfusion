@@ -52,6 +52,8 @@ export const trades = pgTable("trades", {
   size: decimal("size", { precision: 18, scale: 8 }).notNull(),
   entryPrice: decimal("entry_price", { precision: 18, scale: 8 }).notNull(),
   exitPrice: decimal("exit_price", { precision: 18, scale: 8 }),
+  stopLoss: decimal("stop_loss", { precision: 18, scale: 8 }),
+  takeProfit: decimal("take_profit", { precision: 18, scale: 8 }),
   pnl: decimal("pnl", { precision: 18, scale: 8 }),
   profit: decimal("profit", { precision: 10, scale: 2 }).default('0'), // Separate profit field
   loss: decimal("loss", { precision: 10, scale: 2 }).default('0'), // Separate loss field

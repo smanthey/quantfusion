@@ -159,11 +159,14 @@ export class WorkingTrader {
         side: signal.action === 'buy' ? 'BUY' : 'SELL',
         size: (positionSize / signal.indicators.price).toString(), // Calculate position size in units
         entryPrice: signal.indicators.price.toString(),
+        stopLoss: signal.stopLoss.toString(),
+        takeProfit: signal.takeProfit.toString(),
         status: 'open' as const, // Explicitly set status
       };
 
       await storage.createTrade(trade);
       console.log(`✅ Trade executed: ${symbol} ${signal.action} @ ${signal.indicators.price.toFixed(5)}`);
+      console.log(`   Stop Loss: ${signal.stopLoss.toFixed(5)}, Take Profit: ${signal.takeProfit.toFixed(5)}`);
 
     } catch (error) {
       console.error(`❌ Failed to execute trade:`, error);
@@ -180,28 +183,27 @@ export class WorkingTrader {
         if (!currentPrice || currentPrice === 0) continue;
 
         const entryPrice = parseFloat(trade.entryPrice);
-        const pnlPercent = ((currentPrice - entryPrice) / entryPrice) * 100;
+        const stopLoss = trade.stopLoss ? parseFloat(trade.stopLoss) : null;
+        const takeProfit = trade.takeProfit ? parseFloat(trade.takeProfit) : null;
         
-        // FOREX-REALISTIC exit rules: +0.5% profit or -0.3% loss (1.67:1 RR)
-        // Forex typically moves 0.1-0.2% per day, so these are achievable
         let shouldClose = false;
         let exitReason = '';
 
         if (trade.side === 'BUY' || trade.side === 'buy') {
-          if (pnlPercent >= 0.5) {
+          if (takeProfit && currentPrice >= takeProfit) {
             shouldClose = true;
-            exitReason = 'Take Profit (+0.5%)';
-          } else if (pnlPercent <= -0.3) {
+            exitReason = `Take Profit hit (${takeProfit.toFixed(5)})`;
+          } else if (stopLoss && currentPrice <= stopLoss) {
             shouldClose = true;
-            exitReason = 'Stop Loss (-0.3%)';
+            exitReason = `Stop Loss hit (${stopLoss.toFixed(5)})`;
           }
         } else {
-          if (pnlPercent <= -0.5) {
+          if (takeProfit && currentPrice <= takeProfit) {
             shouldClose = true;
-            exitReason = 'Take Profit (+0.5%)';
-          } else if (pnlPercent >= 0.3) {
+            exitReason = `Take Profit hit (${takeProfit.toFixed(5)})`;
+          } else if (stopLoss && currentPrice >= stopLoss) {
             shouldClose = true;
-            exitReason = 'Stop Loss (-0.3%)';
+            exitReason = `Stop Loss hit (${stopLoss.toFixed(5)})`;
           }
         }
 
