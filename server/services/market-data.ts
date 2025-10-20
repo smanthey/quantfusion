@@ -251,7 +251,8 @@ export class MarketDataService {
       ).catch(err => console.error('Storage error:', err));
     });
     
-    // Start regular aggregated updates every 15 seconds for CRYPTO only
+    // Start regular aggregated updates every 60 seconds for CRYPTO only
+    // (Reduced frequency to minimize rate-limit errors while circuit breakers recover)
     setInterval(async () => {
       try {
         const updatedData = await multiApiClient.getAggregatedMarketData(cryptoSymbols);
@@ -269,9 +270,14 @@ export class MarketDataService {
           this.notifySubscribers(marketData);
         });
       } catch (error) {
-        console.error('Multi-API update failed:', error);
+        // Silently catch circuit breaker errors to reduce log noise
+        if (error instanceof Error && error.message.includes('Circuit breaker')) {
+          // Circuit breaker is doing its job - no need to log
+        } else {
+          console.error('Multi-API update failed:', error);
+        }
       }
-    }, 15000);
+    }, 60000);
   }
 
   // Dedicated forex data feed method - runs ALWAYS regardless of crypto source
