@@ -59,6 +59,7 @@ export const trades = pgTable("trades", {
   duration: integer("duration"), // in seconds
   executedAt: timestamp("executed_at").defaultNow(),
   closedAt: timestamp("closed_at"),
+  status: text("status").notNull().default('open'), // 'open', 'closed'
 });
 
 export const marketRegimes = pgTable("market_regimes", {

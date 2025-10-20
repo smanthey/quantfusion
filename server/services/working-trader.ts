@@ -16,6 +16,7 @@ export class WorkingTrader {
   private isRunning = false;
   private interval?: NodeJS.Timeout;
   private accountBalance = 10000;
+  private inCycle = false; // Reentrancy guard
 
   constructor(marketDataService: MarketDataService) {
     this.marketData = marketDataService;
@@ -39,6 +40,13 @@ export class WorkingTrader {
   }
 
   private async checkForTrades() {
+    // Reentrancy guard: Skip if already running
+    if (this.inCycle) {
+      console.log('⏭️  [Working Trader] Skipping cycle (already in progress)');
+      return;
+    }
+
+    this.inCycle = true;
     try {
       // Check circuit breakers
       const openBreakers = circuitBreakerManager.getOpenBreakers();
@@ -65,6 +73,8 @@ export class WorkingTrader {
       console.log('✅ [Working Trader] Evaluation cycle complete');
     } catch (error) {
       console.error('❌ [Working Trader] Error in checkForTrades:', error);
+    } finally {
+      this.inCycle = false;
     }
   }
 
@@ -104,7 +114,20 @@ export class WorkingTrader {
   }
 
   private async executeTrade(symbol: string, signal: any) {
-    const positionSize = this.accountBalance * 0.10; // 10% per trade
+    // DUPLICATE PREVENTION: Check if there's already an open trade for this symbol
+    const allTrades = await storage.getAllTrades();
+    const openTrade = allTrades.find((t: any) => 
+      t.symbol === symbol && 
+      t.status === 'open'  // Explicit status check (not nullable closedAt)
+    );
+
+    if (openTrade) {
+      console.log(`⏭️  SKIPPED: ${symbol} already has OPEN trade (ID: ${openTrade.id})`);
+      return;
+    }
+
+    // Use strategy's calculated position size (not hardcoded 10%)
+    const positionSize = signal.positionSize || (this.accountBalance * 0.10);
 
     console.log(`🎯 EXECUTING ${signal.action.toUpperCase()}: ${symbol}`);
     console.log(`   Position Size: $${positionSize.toFixed(2)}`);
@@ -116,6 +139,7 @@ export class WorkingTrader {
         side: signal.action === 'buy' ? 'BUY' : 'SELL',
         size: (positionSize / signal.indicators.price).toString(), // Calculate position size in units
         entryPrice: signal.indicators.price.toString(),
+        status: 'open' as const, // Explicitly set status
       };
 
       await storage.createTrade(trade);
