@@ -224,13 +224,10 @@ export class ImprovedTradingStrategy {
 
     // Detect crossovers
     const emaCrossover = this.detectCrossover(candles, 5, 10);
-    const rsiCrossover = this.detectRSICrossover(candles, 10);
 
-    // Volume confirmation: current volume should be above average
-    const volumeConfirmed = currentVolume > volumeAvg * 1.1; // 10% above average
-
-    // BUY SIGNAL: EMA5 crosses above EMA10 + RSI crosses above 50 + ADX > 25 + Volume confirmed
-    if (emaCrossover === 'bullish' && rsiCrossover === 'bullish' && adx > 25 && volumeConfirmed) {
+    // BUY SIGNAL: EMA5 crosses above EMA10 + RSI > 40 (in favorable zone)
+    // No need for simultaneous RSI crossover - just check RSI is favorable
+    if (emaCrossover === 'bullish' && rsi > 40 && rsi < 70) {
       const stopLoss = currentPrice - (2 * atr); // 2 ATR stop loss
       const takeProfit = currentPrice + (3 * atr); // 3 ATR take profit (1.5:1 R/R)
       
@@ -241,8 +238,8 @@ export class ImprovedTradingStrategy {
       
       return {
         action: 'buy',
-        confidence: 0.85, // High confidence with all confirmations
-        reason: `EMA5 crossed above EMA10, RSI crossed above 50 (${rsi.toFixed(1)}), ADX=${adx.toFixed(1)} (strong trend), Volume confirmed`,
+        confidence: 0.75, // High confidence for crossover
+        reason: `EMA5 crossed above EMA10 (bullish), RSI=${rsi.toFixed(1)} (favorable momentum)`,
         stopLoss,
         takeProfit,
         positionSize: Math.min(positionSize, accountBalance * 0.3), // Max 30% position
@@ -259,8 +256,8 @@ export class ImprovedTradingStrategy {
       };
     }
 
-    // SELL SIGNAL: EMA5 crosses below EMA10 + RSI crosses below 50 + ADX > 25 + Volume confirmed
-    if (emaCrossover === 'bearish' && rsiCrossover === 'bearish' && adx > 25 && volumeConfirmed) {
+    // SELL SIGNAL: EMA5 crosses below EMA10 + RSI < 60 (in favorable zone)
+    if (emaCrossover === 'bearish' && rsi < 60 && rsi > 30) {
       const stopLoss = currentPrice + (2 * atr); // 2 ATR stop loss
       const takeProfit = currentPrice - (3 * atr); // 3 ATR take profit (1.5:1 R/R)
       
@@ -271,8 +268,8 @@ export class ImprovedTradingStrategy {
       
       return {
         action: 'sell',
-        confidence: 0.85,
-        reason: `EMA5 crossed below EMA10, RSI crossed below 50 (${rsi.toFixed(1)}), ADX=${adx.toFixed(1)} (strong trend), Volume confirmed`,
+        confidence: 0.75,
+        reason: `EMA5 crossed below EMA10 (bearish), RSI=${rsi.toFixed(1)} (favorable for short)`,
         stopLoss,
         takeProfit,
         positionSize: Math.min(positionSize, accountBalance * 0.3),
@@ -293,8 +290,10 @@ export class ImprovedTradingStrategy {
     const emaDiff = ((ema5 - ema10) / ema10 * 100).toFixed(4);
     const isClose = Math.abs(ema5 - ema10) / ema10 < 0.001; // Within 0.1%
     
-    if (isClose) {
-      console.log(`📊 [${symbol}] CLOSE TO SIGNAL: EMA5=${ema5.toFixed(5)} EMA10=${ema10.toFixed(5)} (diff:${emaDiff}%) RSI=${rsi.toFixed(1)} ADX=${adx.toFixed(1)} Vol=${volumeConfirmed ? '✅' : '❌'}`);
+    if (isClose || emaCrossover) {
+      const adxStatus = isNaN(adx) ? 'N/A' : adx.toFixed(1);
+      console.log(`📊 [${symbol}] DIAGNOSTIC: EMA5=${ema5.toFixed(5)} EMA10=${ema10.toFixed(5)} (diff:${emaDiff}%)`);
+      console.log(`   RSI=${rsi.toFixed(1)} ADX=${adxStatus} EMACross=${emaCrossover || 'none'}`);
     }
 
     return null; // No clear signal

@@ -111,18 +111,11 @@ export class WorkingTrader {
 
     try {
       const trade = {
+        strategyId: 'research_master', // Use proven research strategy ID
         symbol,
         side: signal.action === 'buy' ? 'BUY' : 'SELL',
-        type: 'LIMIT',
-        quantity: positionSize.toString(),
-        price: signal.indicators.price.toString(),
-        stopLoss: signal.stopLoss.toString(),
-        takeProfit: signal.takeProfit.toString(),
-        status: 'open' as const,
-        strategy: 'EMA_RSI_CROSSOVER',
-        confidence: signal.confidence,
-        timeframe: '1h',
-        reasoning: signal.reason
+        size: (positionSize / signal.indicators.price).toString(), // Calculate position size in units
+        entryPrice: signal.indicators.price.toString(),
       };
 
       await storage.createTrade(trade);
