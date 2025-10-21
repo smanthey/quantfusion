@@ -323,11 +323,7 @@ export function EnhancedTradingDashboard() {
           <motion.div variants={itemVariants} className="flex flex-wrap gap-2">
             {[
               { href: "/", label: "Dashboard" },
-              { href: "/orders", label: "Orders" },
-              { href: "/portfolio", label: "Portfolio" },
-              { href: "/strategies", label: "Strategies" },
-              { href: "/analytics", label: "Analytics" },
-              { href: "/learning", label: "Learning", icon: Brain },
+              { href: "/orders", label: "Trade History" },
             ].map((item, i) => (
               <motion.div
                 key={item.href}

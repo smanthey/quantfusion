@@ -237,28 +237,7 @@ export function TradingDashboard() {
               <Link href="/">Dashboard</Link>
             </Button>
             <Button asChild variant="outline" size="sm" className="text-xs">
-              <Link href="/orders">Orders</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" className="text-xs">
-              <Link href="/portfolio">Portfolio</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" className="text-xs">
-              <Link href="/strategies">Strategies</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" className="text-xs">
-              <Link href="/analytics">Analytics</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" className="text-xs flex items-center gap-1">
-              <Link href="/learning">
-                <Brain className="w-3 h-3" />
-                Learning
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" className="text-xs">
-              <Link href="/comparison">💱 Comparison</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" className="text-xs">
-              <Link href="/settings">Settings</Link>
+              <Link href="/orders">Trade History</Link>
             </Button>
           </div>
         </div>

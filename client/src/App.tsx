@@ -7,11 +7,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Dashboard from "@/pages/dashboard";
 import OrdersPage from "@/pages/orders";
-import StrategiesPage from "@/pages/strategies";
-import PortfolioPage from "@/pages/portfolio";
-import AnalyticsPage from "@/pages/analytics";
-import LearningPage from "@/pages/learning";
-import SettingsPage from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -20,16 +15,7 @@ function Router() {
       <Switch>
         <Route path="/" component={Dashboard} />
         <Route path="/orders" component={OrdersPage} />
-        <Route path="/manage-orders" component={OrdersPage} />
-        <Route path="/strategies" component={StrategiesPage} />
-        <Route path="/portfolio" component={PortfolioPage} />
-        <Route path="/analytics" component={AnalyticsPage} />
-        <Route path="/learning" component={LearningPage} />
-        <Route path="/comparison" component={() => {
-          const ComparisonPage = React.lazy(() => import("./pages/comparison").then(m => ({ default: m.ComparisonPage })));
-          return <React.Suspense fallback={<div>Loading...</div>}><ComparisonPage /></React.Suspense>;
-        }} />
-        <Route path="/settings" component={SettingsPage} />
+        <Route path="/trade-history" component={OrdersPage} />
         <Route component={NotFound} />
       </Switch>
     );
