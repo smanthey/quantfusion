@@ -203,11 +203,13 @@ export class DatabaseStorage implements IStorage {
 
   // Trade management
   async getAllTrades(): Promise<Trade[]> {
-    return await db
+    const result = await db
       .select()
       .from(trades)
       .where(eq(trades.archived, false))
       .orderBy(desc(trades.executedAt));
+    console.log(`📊 getAllTrades() returned ${result.length} trades (filtered archived=false)`);
+    return result;
   }
 
   async getRecentTrades(limit: number): Promise<Trade[]> {

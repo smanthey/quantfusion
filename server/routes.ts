@@ -482,12 +482,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Use unified performance calculation for consistency
       const performance = await calculateUnifiedPerformance(allTrades);
-      const totalProfits = performance.totalProfits;
-      const totalLosses = performance.totalLosses;
-      const totalFees = performance.totalFees;
-      const totalPnL = performance.totalPnl;
-      const winCount = performance.winningTrades;
-      const lossCount = performance.losingTrades;
+      const totalProfits = performance.totalProfits || 0;
+      const totalLosses = performance.totalLosses || 0;
+      const totalFees = performance.totalFees || 0;
+      const totalPnL = performance.totalPnl || 0;
+      const winCount = performance.winningTrades || 0;
+      const lossCount = performance.losingTrades || 0;
 
       // Starting capital: $10,000  
       const startingCapital = 10000;
