@@ -62,6 +62,8 @@ export const trades = pgTable("trades", {
   executedAt: timestamp("executed_at").defaultNow(),
   closedAt: timestamp("closed_at"),
   status: text("status").notNull().default('open'), // 'open', 'closed'
+  archived: boolean("archived").default(false).notNull(), // Filter out old buggy trades
+  strategy: text("strategy"), // Track which strategy made this trade
 });
 
 export const marketRegimes = pgTable("market_regimes", {
