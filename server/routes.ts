@@ -482,12 +482,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Use unified performance calculation for consistency
       const performance = await calculateUnifiedPerformance(allTrades);
-      const totalProfits = performance.totalProfits || 0;
-      const totalLosses = performance.totalLosses || 0;
-      const totalFees = performance.totalFees || 0;
-      const totalPnL = performance.totalPnl || 0;
-      const winCount = performance.winningTrades || 0;
-      const lossCount = performance.losingTrades || 0;
+      const totalProfits = performance?.totalProfits || 0;
+      const totalLosses = performance?.totalLosses || 0;
+      const totalFees = performance?.totalFees || 0;
+      const totalPnL = performance?.totalPnl || 0;
+      const winCount = performance?.winningTrades || 0;
+      const lossCount = performance?.losingTrades || 0;
 
       // Starting capital: $10,000  
       const startingCapital = 10000;
@@ -496,27 +496,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const currentBalance = startingCapital + totalPnL;
       const freeBalance = Math.max(0, currentBalance);
 
-      console.log(`💰 UNIFIED Account Balance: Start=$${startingCapital}, P&L=$${totalPnL.toFixed(2)}, Fees=$${totalFees.toFixed(2)}, Current=$${currentBalance.toFixed(2)}`);
+      console.log(`💰 UNIFIED Account Balance: Start=$${startingCapital}, P&L=$${(totalPnL || 0).toFixed(2)}, Fees=$${(totalFees || 0).toFixed(2)}, Current=$${(currentBalance || startingCapital).toFixed(2)}`);
 
       const accountInfo = {
         balances: [{
           asset: 'USDT',
-          free: freeBalance.toFixed(2),
+          free: (freeBalance || startingCapital).toFixed(2),
           locked: '0.00'
         }],
-        totalValue: currentBalance,
-        tradingEnabled: currentBalance > 100,
+        totalValue: currentBalance || startingCapital,
+        tradingEnabled: (currentBalance || startingCapital) > 100,
         accountType: 'testnet',
         feeDiscountRate: 0.1,
-        totalPnL: totalPnL, // Net P&L from profit/loss fields
-        totalWins: totalProfits, // Total profits
-        totalLosses: -totalLosses, // Total losses (negative)
-        totalFees: totalFees,
+        totalPnL: totalPnL || 0, // Net P&L from profit/loss fields
+        totalWins: totalProfits || 0, // Total profits
+        totalLosses: -(totalLosses || 0), // Total losses (negative)
+        totalFees: totalFees || 0,
         startingCapital: startingCapital,
-        tradesCount: allTrades.length,
-        winRate: allTrades.length > 0 ? winCount / allTrades.length : 0,
-        winningTrades: winCount,
-        losingTrades: lossCount
+        tradesCount: allTrades?.length || 0,
+        winRate: (allTrades?.length || 0) > 0 ? (winCount || 0) / allTrades.length : 0,
+        winningTrades: winCount || 0,
+        losingTrades: lossCount || 0
       };
 
       res.json(accountInfo);
