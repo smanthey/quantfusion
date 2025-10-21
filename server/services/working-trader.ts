@@ -90,9 +90,9 @@ export class WorkingTrader {
       // Monitor existing positions FIRST
       await this.monitorOpenPositions();
 
-      // TEMPORARILY: Trade EURUSD only until profitable (testing phase)
-      console.log('🔍 [Working Trader] Evaluating EURUSD only (testing)...');
-      for (const symbol of ['EURUSD']) { // Was: ['EURUSD', 'GBPUSD', 'AUDUSD']
+      // Multi-pair trading for more opportunities
+      console.log('🔍 [Working Trader] Evaluating 5 pairs for signals...');
+      for (const symbol of ['EURUSD', 'GBPUSD', 'AUDUSD', 'BTCUSDT', 'ETHUSDT']) {
         await this.evaluateSymbol(symbol);
       }
       console.log('✅ [Working Trader] Evaluation cycle complete');
