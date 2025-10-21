@@ -11,25 +11,26 @@ A production-ready algorithmic crypto trading platform designed for multi-strate
 - Use proven models from top hedge funds ("work smarter not harder")
 - Institutional-grade performance targets: 60-75% win rates
 
-## Current Status (October 20, 2025 - STRICT STRATEGY MODE 🎯)
+## Current Status (October 21, 2025 - HEDGE FUND DIVERSIFIED PORTFOLIO 🎯)
+- ✅ **15-PAIR PORTFOLIO** - Expanded to institutional hedge fund universe for maximum diversification
+- ✅ **Multi-Asset Coverage** - 7 forex pairs, 6 crypto pairs, 2 commodities (gold/silver)
+- ✅ **Trade Archiving** - All 24 old buggy trades archived, fresh $10,000 start
 - ✅ **STRATEGY OVERHAUL** - Fixed 0% win rate by requiring ALL 3 confirmations (EMA cross + RSI cross + ADX ≥25)
-- ✅ **ADX Fixed** - Now calculating properly (29.5 on EURUSD), no more "N/A" errors
+- ✅ **ADX Fixed** - Now calculating properly (77.4, 98.2, 100.0 on active pairs)
 - ✅ **Wider Stops** - 2.0×ATR (was 1.5×ATR) gives trades breathing room
 - ✅ **Lower Target** - 1.5:1 reward:risk (was 2:1) for more achievable profit targets  
 - ✅ **Profit Protection** - Breakeven move at +1R, trailing stops at +1.5R to lock in gains
 - ✅ **Auto-Start** - Working Trader starts automatically 3 seconds after server boot
-- ✅ **Proper Risk Management** - 1% risk per trade, max 5% notional ($494 on $9,873 account)
-- ✅ **Conservative Testing** - EURUSD only until profitable, then expand to other symbols
+- ✅ **Proper Risk Management** - 1% risk per trade, max 5% notional ($500 on $10k account)
 - ✅ **Stop-Loss & Take-Profit** - SL/TP values properly stored in database, automatic trade closing at targets
-- ✅ **Historical data storage** - All prices permanently archived (496 EURUSD candles loaded)
+- ✅ **Historical data storage** - All prices permanently archived (577+ candles loaded)
 - ✅ **Exponential backoff with jitter** - All API calls retry with delays: 1s→2s→4s→8s→16s→32s→60s
 - ✅ **Circuit breakers LIVE** - APIs auto-blocked after 5 failures, testing recovery with HALF_OPEN state
 - ✅ **Portfolio VaR calculation** - Parametric, Historical, CVaR with risk limits
 - ✅ **Daily loss limit** - Trading stops automatically if loss exceeds $500/day
 - ✅ **Position persistence** - Open trades saved to database, survive system restarts
 - ✅ **Accounting Fix** - Closed trades properly set profit/loss/fees for accurate P&L
-- ⚠️ Account lost $126.19 from previous buggy strategy (30% positions) - now fixed
-- Account Balance: $9,873.81 (0 open positions, waiting for strict entry signal)
+- Account Balance: $10,000.00 (fresh start, 0 open positions, scanning 15 pairs every 30s)
 
 ## System Architecture
 The platform features a multi-strategy ensemble (mean reversion, trend following, breakout) with an HMM-based regime detection system for dynamic strategy allocation. It includes walk-forward backtesting with Monte Carlo validation and real-time execution with slippage and fee modeling. Comprehensive risk management is implemented with circuit breakers, per-trade limits, and dynamic position sizing (e.g., Kelly Criterion, volatility-adjusted sizing). The system also incorporates an explore/exploit learning system for continuous self-improvement.

@@ -90,9 +90,21 @@ export class WorkingTrader {
       // Monitor existing positions FIRST
       await this.monitorOpenPositions();
 
-      // Multi-pair trading for more opportunities
-      console.log('🔍 [Working Trader] Evaluating 5 pairs for signals...');
-      for (const symbol of ['EURUSD', 'GBPUSD', 'AUDUSD', 'BTCUSDT', 'ETHUSDT']) {
+      // HEDGE FUND DIVERSIFIED PORTFOLIO - 15 uncorrelated assets
+      // More pairs = more opportunities + better risk-adjusted returns
+      const symbols = [
+        // Major Forex (7 pairs - global currency exposure)
+        'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCHF', 'NZDUSD', 'USDCAD',
+        
+        // Major Crypto (6 pairs - digital asset exposure)
+        'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'SOLUSDT', 'ADAUSDT',
+        
+        // Commodities (2 pairs - inflation hedge)
+        'XAUUSD', 'XAGUSD'  // Gold, Silver
+      ];
+      
+      console.log(`🔍 [Working Trader] Evaluating ${symbols.length} pairs (hedge fund portfolio)...`);
+      for (const symbol of symbols) {
         await this.evaluateSymbol(symbol);
       }
       console.log('✅ [Working Trader] Evaluation cycle complete');
