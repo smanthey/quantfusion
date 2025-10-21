@@ -203,13 +203,18 @@ export class DatabaseStorage implements IStorage {
 
   // Trade management
   async getAllTrades(): Promise<Trade[]> {
-    return await db.select().from(trades).orderBy(desc(trades.executedAt));
+    return await db
+      .select()
+      .from(trades)
+      .where(eq(trades.archived, false))
+      .orderBy(desc(trades.executedAt));
   }
 
   async getRecentTrades(limit: number): Promise<Trade[]> {
     return await db
       .select()
       .from(trades)
+      .where(eq(trades.archived, false))
       .orderBy(desc(trades.executedAt))
       .limit(limit);
   }
@@ -218,7 +223,7 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(trades)
-      .where(gte(trades.executedAt, date))
+      .where(eq(trades.archived, false))
       .orderBy(desc(trades.executedAt));
   }
 
@@ -226,7 +231,7 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(trades)
-      .where(eq(trades.strategyId, strategyId))
+      .where(eq(trades.archived, false))
       .orderBy(desc(trades.executedAt));
   }
 
