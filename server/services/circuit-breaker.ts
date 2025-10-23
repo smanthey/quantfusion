@@ -173,9 +173,13 @@ export class CircuitBreakerManager {
   }
 
   getOpenBreakers(): string[] {
-    return Array.from(this.breakers.entries())
-      .filter(([_, breaker]) => breaker.isOpen())
-      .map(([name, _]) => name);
+    const openBreakers: string[] = [];
+    for (const [name, breaker] of this.breakers.entries()) {
+      if (breaker.isOpen()) {
+        openBreakers.push(name);
+      }
+    }
+    return openBreakers;
   }
   
   /**
@@ -187,7 +191,8 @@ export class CircuitBreakerManager {
     if (breakers.length === 0) return 1.0;
     
     // Take the most conservative (smallest) multiplier
-    return Math.min(...breakers.map(b => b.getPositionSizeMultiplier()));
+    const multipliers = breakers.map(b => b.getPositionSizeMultiplier());
+    return Math.min(...multipliers);
   }
 
   resetAll(): void {
