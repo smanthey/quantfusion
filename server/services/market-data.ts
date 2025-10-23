@@ -51,7 +51,7 @@ export class MarketDataService {
   }
 
   private async initializeService() {
-    console.log('💰 Initializing market data service with LIVE API data');
+    // console.log('💰 Initializing market data service with LIVE API data');
     
     // Initialize with fallback prices (will be replaced by live data immediately)
     this.data.set('BTCUSDT', {
@@ -91,24 +91,24 @@ export class MarketDataService {
         });
       }
     }
-    console.log(`💱 Initialized ${forexPairs.length} forex pairs alongside crypto`);
+    // console.log(`💱 Initialized ${forexPairs.length} forex pairs alongside crypto`);
     
     // Try to start live Binance data feeds first
     try {
-      console.log('🚀 Attempting to connect to Binance live data feeds...');
+      // console.log('🚀 Attempting to connect to Binance live data feeds...');
       await this.startLiveDataFeeds();
-      console.log('✅ Successfully connected to Binance live data!');
+      // console.log('✅ Successfully connected to Binance live data!');
       this.useLiveData = true;
     } catch (error) {
-      console.warn('⚠️ Binance connection failed, trying multi-API aggregation...', error);
+      // console.warn('⚠️ Binance connection failed, trying multi-API aggregation...', error);
       
       // Fallback to multi-API aggregated data
       try {
         await this.startMultiApiDataFeeds();
-        console.log('✅ Using multi-API aggregated real-time data');
+        // console.log('✅ Using multi-API aggregated real-time data');
         this.useLiveData = true;
       } catch (apiError) {
-        console.warn('⚠️ Multi-API failed, using simulation as last resort', apiError);
+        // console.warn('⚠️ Multi-API failed, using simulation as last resort', apiError);
         this.startRealisticMarketSimulation();
         this.useLiveData = false;
       }
@@ -171,10 +171,10 @@ export class MarketDataService {
       } catch (error: any) {
         // Check if this is a geo-restriction or auth error (4xx errors)
         if (error.message && (error.message.includes('451') || error.message.includes('403'))) {
-          console.error(`❌ Binance geo-restricted or authentication failed for ${symbol}`);
+          // console.error(`❌ Binance geo-restricted or authentication failed for ${symbol}`);
           throw new Error(`Binance API unavailable: ${error.message}`);
         }
-        console.error(`Failed to set up live data for ${symbol}:`, error);
+        // console.error(`Failed to set up live data for ${symbol}:`, error);
         throw error;
       }
     }
@@ -203,11 +203,11 @@ export class MarketDataService {
               new Date(marketData.timestamp),
               'binance',
               '1m'
-            ).catch(err => console.error('Storage error:', err));
+            ).catch(err => // console.error('Storage error:', err));
           });
           this.unsubscribeFunctions.push(unsubscribeTicker);
         } catch (error) {
-          console.warn(`WebSocket failed for ${symbol}, will use REST only`);
+          // console.warn(`WebSocket failed for ${symbol}, will use REST only`);
         }
       }
     }
@@ -216,7 +216,7 @@ export class MarketDataService {
   // Multi-API data feed methods
   
   private async startMultiApiDataFeeds() {
-    console.log('🎯 Starting MULTI-API AGGREGATED data feeds...');
+    // console.log('🎯 Starting MULTI-API AGGREGATED data feeds...');
     
     // Separate crypto and forex symbols
     const cryptoSymbols = this.symbols.filter(s => s.endsWith('USDT'));
@@ -238,7 +238,7 @@ export class MarketDataService {
       
       this.data.set(symbol, marketData);
       this.notifySubscribers(marketData);
-      console.log(`🎯 ${symbol}: $${data.price.toFixed(2)} (${Math.round(data.confidence * 100)}% confidence from ${data.sources.join(', ')})`);
+      // console.log(`🎯 ${symbol}: $${data.price.toFixed(2)} (${Math.round(data.confidence * 100)}% confidence from ${data.sources.join(', ')})`);
       
       // 💾 Store to database for permanent history
       historicalPriceStorage.storePriceUpdate(
@@ -248,7 +248,7 @@ export class MarketDataService {
         new Date(marketData.timestamp),
         data.sources.join(','),
         '1m'
-      ).catch(err => console.error('Storage error:', err));
+      ).catch(err => // console.error('Storage error:', err));
     });
     
     // Start regular aggregated updates every 60 seconds for CRYPTO only
@@ -274,7 +274,7 @@ export class MarketDataService {
         if (error instanceof Error && error.message.includes('Circuit breaker')) {
           // Circuit breaker is doing its job - no need to log
         } else {
-          console.error('Multi-API update failed:', error);
+          // console.error('Multi-API update failed:', error);
         }
       }
     }, 60000);
@@ -282,7 +282,7 @@ export class MarketDataService {
 
   // Dedicated forex data feed method - runs ALWAYS regardless of crypto source
   private startForexDataFeeds() {
-    console.log('💱 Starting FOREX live data feeds...');
+    // console.log('💱 Starting FOREX live data feeds...');
     
     const forexPairs = ['EURUSD', 'GBPUSD', 'AUDUSD'];
     
@@ -302,7 +302,7 @@ export class MarketDataService {
             };
             this.data.set(pair, marketData);
             this.notifySubscribers(marketData);
-            console.log(`💱 ${pair}: $${forexRate.price.toFixed(5)} (spread: ${forexRate.spread.toFixed(5)}, vol: ${((forexRate.volatility ?? 0.001) * 100).toFixed(2)}%)`);
+            // console.log(`💱 ${pair}: $${forexRate.price.toFixed(5)} (spread: ${forexRate.spread.toFixed(5)}, vol: ${((forexRate.volatility ?? 0.001) * 100).toFixed(2)}%)`);
             
             // 💾 Store to database for permanent history
             historicalPriceStorage.storePriceUpdate(
@@ -312,19 +312,19 @@ export class MarketDataService {
               new Date(forexRate.timestamp),
               'forex',
               '1m'
-            ).catch(err => console.error('Storage error:', err));
+            ).catch(err => // console.error('Storage error:', err));
           }
         }
       } catch (error) {
-        console.error('Forex update failed:', error);
+        // console.error('Forex update failed:', error);
       }
     }, 15000);
     
-    console.log(`✅ Forex feeds started for ${forexPairs.length} pairs`);
+    // console.log(`✅ Forex feeds started for ${forexPairs.length} pairs`);
   }
 
   private async startCoinLoreDataFeeds() {
-    console.log('💰 Starting CoinLore real-time data feeds (FREE - No Registration)...');
+    // console.log('💰 Starting CoinLore real-time data feeds (FREE - No Registration)...');
     
     // Initial data load
     const marketData = await coinLoreClient.getMultipleTickers(this.symbols);
@@ -332,7 +332,7 @@ export class MarketDataService {
     marketData.forEach((data, symbol) => {
       this.data.set(symbol, data);
       this.notifySubscribers(data);
-      console.log(`📊 CoinLore: ${symbol} @ $${data.price.toFixed(2)} (24h: ${data.priceChangePercent24h?.toFixed(2)}%)`);
+      // console.log(`📊 CoinLore: ${symbol} @ $${data.price.toFixed(2)} (24h: ${data.priceChangePercent24h?.toFixed(2)}%)`);
     });
     
     // Start regular updates every 10 seconds (CoinLore has generous limits)
@@ -344,13 +344,13 @@ export class MarketDataService {
           this.notifySubscribers(data);
         });
       } catch (error) {
-        console.error('CoinLore update failed:', error);
+        // console.error('CoinLore update failed:', error);
       }
     }, 10000);
   }
 
   private async startCoinCapDataFeeds() {
-    console.log('🚀 Starting CoinCap real-time data feeds (FREE - No Registration)...');
+    // console.log('🚀 Starting CoinCap real-time data feeds (FREE - No Registration)...');
     
     // Initial data load
     const marketData = await coinCapClient.getMultipleAssets(this.symbols);
@@ -358,7 +358,7 @@ export class MarketDataService {
     marketData.forEach((data, symbol) => {
       this.data.set(symbol, data);
       this.notifySubscribers(data);
-      console.log(`📊 CoinCap: ${symbol} @ $${data.price.toFixed(2)} (24h: ${data.priceChangePercent24h?.toFixed(2)}%)`);
+      // console.log(`📊 CoinCap: ${symbol} @ $${data.price.toFixed(2)} (24h: ${data.priceChangePercent24h?.toFixed(2)}%)`);
     });
     
     // Start regular updates every 5 seconds
@@ -370,7 +370,7 @@ export class MarketDataService {
           this.notifySubscribers(data);
         });
       } catch (error) {
-        console.error('CoinCap update failed:', error);
+        // console.error('CoinCap update failed:', error);
       }
     }, 5000);
   }
@@ -386,9 +386,9 @@ export class MarketDataService {
       const interval = setInterval(async () => {
         try {
           const price = await this.getCurrentPrice(symbol);
-          console.log(`📊 Multi-API: ${symbol} @ $${price.toFixed(2)} (Aggregated from multiple sources)`);
+          // console.log(`📊 Multi-API: ${symbol} @ $${price.toFixed(2)} (Aggregated from multiple sources)`);
         } catch (error) {
-          console.error(`Failed to poll aggregated price for ${symbol}:`, error);
+          // console.error(`Failed to poll aggregated price for ${symbol}:`, error);
         }
       }, 30000);
       
@@ -419,7 +419,7 @@ export class MarketDataService {
           this.notifySubscribers(marketData);
         }
       } catch (error) {
-        console.error(`Failed to poll price for ${symbol}:`, error);
+        // console.error(`Failed to poll price for ${symbol}:`, error);
       }
     }, 5000);
 
@@ -561,7 +561,7 @@ export class MarketDataService {
       // Use multi-API aggregated pricing for best accuracy
       return await multiApiClient.getAggregatedPrice(symbol);
     } catch (error) {
-      console.error(`Failed to get aggregated price for ${symbol}:`, error);
+      // console.error(`Failed to get aggregated price for ${symbol}:`, error);
       
       // Fallback to stored data if available
       const cachedData = this.data.get(symbol);

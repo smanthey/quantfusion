@@ -60,7 +60,7 @@ export class BinanceTradingService {
         { asset: 'ETH', free: '0.00', locked: '0.00' }
       ];
     } catch (error) {
-      console.error('Error calculating account balance:', error);
+      // console.error('Error calculating account balance:', error);
       // Fallback to starting balance only if calculation fails
       return [
         { asset: 'USDT', free: '10000.00', locked: '0.00' },
@@ -108,7 +108,7 @@ export class BinanceTradingService {
 
       return trade;
     } catch (error) {
-      console.error(`Failed to create market order for ${symbol}:`, error);
+      // console.error(`Failed to create market order for ${symbol}:`, error);
       return null;
     }
   }
@@ -150,7 +150,7 @@ export class BinanceTradingService {
       
       return Math.max(minQty, Math.min(maxQty, quantity));
     } catch (error) {
-      console.error('Error calculating order quantity:', error);
+      // console.error('Error calculating order quantity:', error);
       // Fallback to conservative amount
       const baseQuantities = {
         'BTCUSDT': 0.001,
@@ -188,7 +188,7 @@ export class BinanceTradingService {
 
       return positions;
     } catch (error) {
-      console.error('Failed to get open positions:', error);
+      // console.error('Failed to get open positions:', error);
       return [];
     }
   }
@@ -205,14 +205,14 @@ export class BinanceTradingService {
   async closePosition(positionId: string): Promise<boolean> {
     try {
       if (this.options.testMode) {
-        console.log(`Simulated closing position ${positionId}`);
+        // console.log(`Simulated closing position ${positionId}`);
         return true;
       }
 
       // Find the position and create opposite order
       const position = this.positions.get(positionId);
       if (!position) {
-        console.error(`Position ${positionId} not found`);
+        // console.error(`Position ${positionId} not found`);
         return false;
       }
 
@@ -226,7 +226,7 @@ export class BinanceTradingService {
 
       return order.status === 'FILLED';
     } catch (error) {
-      console.error(`Failed to close position ${positionId}:`, error);
+      // console.error(`Failed to close position ${positionId}:`, error);
       return false;
     }
   }
@@ -237,7 +237,7 @@ export class BinanceTradingService {
       // For now, return simulated recent trades
       return [];
     } catch (error) {
-      console.error('Failed to get trade history:', error);
+      // console.error('Failed to get trade history:', error);
       return [];
     }
   }

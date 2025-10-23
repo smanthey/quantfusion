@@ -39,7 +39,7 @@ export interface ProfitabilityAnalysis {
 
 export class LearningAnalyticsEngine {
   async performComprehensiveAnalysis(trades: any[]) {
-    console.log(`🔍 Starting comprehensive learning analysis on ${trades.length} trades`);
+    // console.log(`🔍 Starting comprehensive learning analysis on ${trades.length} trades`);
     
     try {
       // Analyze time-based patterns
@@ -54,7 +54,7 @@ export class LearningAnalyticsEngine {
       // Generate recommendations
       const recommendations = this.generateBasicRecommendations(insights);
       
-      console.log(`📊 Analysis complete: Found ${timePatterns.length} patterns and ${insights.length} insights`);
+      // console.log(`📊 Analysis complete: Found ${timePatterns.length} patterns and ${insights.length} insights`);
       
       return {
         patterns: timePatterns,
@@ -63,7 +63,7 @@ export class LearningAnalyticsEngine {
         recommendations
       };
     } catch (error) {
-      console.error('Learning analytics error:', error);
+      // console.error('Learning analytics error:', error);
       return {
         patterns: [],
         insights: [],

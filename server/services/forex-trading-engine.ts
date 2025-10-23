@@ -65,14 +65,14 @@ export class ForexTradingEngine {
 
   constructor() {
     this.forexData = new ForexDataService();
-    console.log('💱 Dedicated Forex Trading Engine initialized - $10K separate account');
+    // console.log('💱 Dedicated Forex Trading Engine initialized - $10K separate account');
   }
 
   async start(): Promise<void> {
     if (this.isRunning) return;
     
     this.isRunning = true;
-    console.log('🌍 FOREX CLONE ACTIVATED - Running separate forex trading system');
+    // console.log('🌍 FOREX CLONE ACTIVATED - Running separate forex trading system');
     
     // EMERGENCY LOSS PROTECTION: Dramatically slow down forex trading 
     // Changed from 2 seconds to 30 seconds to reduce losses
@@ -80,22 +80,22 @@ export class ForexTradingEngine {
       try {
         // Check for excessive losses before trading
         if (this.forexAccount.totalPnL < -50) {
-          console.log(`🛑 FOREX HALTED: Total loss $${Math.abs(this.forexAccount.totalPnL).toFixed(2)} exceeds $50 limit`);
+          // console.log(`🛑 FOREX HALTED: Total loss $${Math.abs(this.forexAccount.totalPnL).toFixed(2)} exceeds $50 limit`);
           return;
         }
         await this.runForexTradingCycle();
       } catch (error) {
-        console.error('❌ Forex trading cycle error:', error);
+        // console.error('❌ Forex trading cycle error:', error);
       }
     }, 30000); // Reduced frequency from 2s to 30s
     
     // AGGRESSIVE START - Force multiple immediate executions
-    console.log('💱 FOREX STARTING: Forcing immediate forex trades...');
+    // console.log('💱 FOREX STARTING: Forcing immediate forex trades...');
     
     // Execute immediately and repeatedly - SUPER AGGRESSIVE
     for (let i = 0; i < 20; i++) {
       setTimeout(() => {
-        console.log(`💱 FOREX EXECUTION ${i + 1}/20`);
+        // console.log(`💱 FOREX EXECUTION ${i + 1}/20`);
         this.runForexTradingCycle();
       }, i * 500); // Every 500ms for first 10 seconds
     }
@@ -106,7 +106,7 @@ export class ForexTradingEngine {
     if (this.intervalId) {
       clearInterval(this.intervalId);
     }
-    console.log('💱 Forex trading engine stopped');
+    // console.log('💱 Forex trading engine stopped');
   }
 
   /**
@@ -118,19 +118,19 @@ export class ForexTradingEngine {
     }
     
     // Always trade for comparison (ignore market hours for demo)
-    console.log('💱 FOREX CYCLE: Running forex trading cycle...');
+    // console.log('💱 FOREX CYCLE: Running forex trading cycle...');
 
     try {
       // Get all forex rates
       const forexRates = this.forexData.getAllForexRates();
-      console.log(`💱 FOREX: Processing ${forexRates.length} currency pairs...`);
+      // console.log(`💱 FOREX: Processing ${forexRates.length} currency pairs...`);
       
       // OPTIMIZED: Only trade profitable pairs based on learning data
       const profitablePairs = ['EURUSD', 'GBPUSD']; // DISABLED USDJPY: -$2,284.62 P&L
       for (const pair of profitablePairs) {
         const rate = forexRates.find(r => r.symbol === pair);
         if (rate) {
-          console.log(`💱 FOREX: Processing ${pair} at rate ${rate.price}`);
+          // console.log(`💱 FOREX: Processing ${pair} at rate ${rate.price}`);
           await this.processForexPair(rate.symbol, rate);
         }
       }
@@ -138,10 +138,10 @@ export class ForexTradingEngine {
       // Update account metrics
       await this.updateForexAccount();
       
-      console.log(`💱 FOREX COMPLETE: Balance=$${this.forexAccount.balance.toFixed(2)}, P&L=$${this.forexAccount.totalPnL.toFixed(2)}, Trades=${this.forexTrades.length}`);
+      // console.log(`💱 FOREX COMPLETE: Balance=$${this.forexAccount.balance.toFixed(2)}, P&L=$${this.forexAccount.totalPnL.toFixed(2)}, Trades=${this.forexTrades.length}`);
       
     } catch (error) {
-      console.error('❌ Forex trading cycle error:', error);
+      // console.error('❌ Forex trading cycle error:', error);
     }
   }
 
@@ -154,7 +154,7 @@ export class ForexTradingEngine {
     const signal = await this.generateForexSignal(pair, rateData, strategy);
     
     if (signal) {
-      console.log(`💱 FOREX SIGNAL: ${signal.action} ${signal.pair} at ${signal.rate} (${strategy})`);
+      // console.log(`💱 FOREX SIGNAL: ${signal.action} ${signal.pair} at ${signal.rate} (${strategy})`);
       await this.executeForexTrade(signal, strategy);
     }
   }
@@ -193,7 +193,7 @@ export class ForexTradingEngine {
   private async generateForexSignal(pair: string, rateData: any, strategy: string): Promise<any> {
     const currentRate = parseFloat(rateData.price);
     
-    console.log(`💱 GENERATING SIGNAL for ${pair} at ${currentRate}`);
+    // console.log(`💱 GENERATING SIGNAL for ${pair} at ${currentRate}`);
     
     // Generate signals based on strategy type
     let signal = null;
@@ -231,7 +231,7 @@ export class ForexTradingEngine {
     }
     
     if (signal) {
-      console.log(`💱 FOREX SIGNAL CREATED: ${signal.action} ${pair} size: ${signal.size}`);
+      // console.log(`💱 FOREX SIGNAL CREATED: ${signal.action} ${pair} size: ${signal.size}`);
     }
     return signal;
   }
@@ -429,7 +429,7 @@ export class ForexTradingEngine {
       const marginRequired = signal.size * signal.rate * 0.02; // 2% margin for forex
       
       if (this.forexAccount.freeMargin < marginRequired) {
-        console.log(`💱 Insufficient margin for ${signal.pair} trade - Required: $${marginRequired.toFixed(2)}, Available: $${this.forexAccount.freeMargin.toFixed(2)}`);
+        // console.log(`💱 Insufficient margin for ${signal.pair} trade - Required: $${marginRequired.toFixed(2)}, Available: $${this.forexAccount.freeMargin.toFixed(2)}`);
         return;
       }
       
@@ -514,10 +514,10 @@ export class ForexTradingEngine {
         const { storage } = await import('../storage');
         await storage.createTrade(tradeData);
         
-        console.log(`💱 FOREX EXECUTED: ${signal.action.toUpperCase()} ${signal.size} ${signal.pair} at ${signal.rate} - Saved to DB`);
+        // console.log(`💱 FOREX EXECUTED: ${signal.action.toUpperCase()} ${signal.size} ${signal.pair} at ${signal.rate} - Saved to DB`);
         
       } catch (error) {
-        console.log('⚠️ Forex trade database save failed:', error);
+        // console.log('⚠️ Forex trade database save failed:', error);
       }
       
       // Update account with realistic margin
@@ -525,7 +525,7 @@ export class ForexTradingEngine {
       this.forexAccount.freeMargin = this.forexAccount.balance - this.forexAccount.margin;
       this.forexAccount.openPositions += 1;
       
-      console.log(`💱✅ FOREX TRADE: ${signal.action.toUpperCase()} ${signal.size} ${signal.pair} at ${signal.rate} (${strategy})`);
+      // console.log(`💱✅ FOREX TRADE: ${signal.action.toUpperCase()} ${signal.size} ${signal.pair} at ${signal.rate} (${strategy})`);
       
       // Simulate trade closure after some time (in production, would use stops/targets)
       setTimeout(() => {
@@ -540,7 +540,7 @@ export class ForexTradingEngine {
       }
       
     } catch (error) {
-      console.error('❌ Forex trade execution error:', error);
+      // console.error('❌ Forex trade execution error:', error);
     }
   }
 
@@ -576,7 +576,7 @@ export class ForexTradingEngine {
     this.forexAccount.freeMargin = this.forexAccount.balance - this.forexAccount.margin;
     this.forexAccount.openPositions -= 1;
     
-    console.log(`💱📈 FOREX CLOSED: ${trade.side.toUpperCase()} ${trade.pair} | Pips: ${pips.toFixed(1)} | P&L: $${trade.pnl.toFixed(2)}`);
+    // console.log(`💱📈 FOREX CLOSED: ${trade.side.toUpperCase()} ${trade.pair} | Pips: ${pips.toFixed(1)} | P&L: $${trade.pnl.toFixed(2)}`);
   }
 
   /**

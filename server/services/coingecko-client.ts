@@ -112,7 +112,7 @@ export class CoinGeckoClient {
       
       return data[geckoId]?.usd || 0;
     } catch (error) {
-      console.error(`Failed to get price for ${symbol}:`, error);
+      // console.error(`Failed to get price for ${symbol}:`, error);
       return 0;
     }
   }
@@ -152,7 +152,7 @@ export class CoinGeckoClient {
       
       return null;
     } catch (error) {
-      console.error(`Failed to get 24hr ticker for ${symbol}:`, error);
+      // console.error(`Failed to get 24hr ticker for ${symbol}:`, error);
       return null;
     }
   }
@@ -177,7 +177,7 @@ export class CoinGeckoClient {
       
       return [];
     } catch (error) {
-      console.error(`Failed to get OHLC for ${symbol}:`, error);
+      // console.error(`Failed to get OHLC for ${symbol}:`, error);
       return [];
     }
   }
@@ -216,7 +216,7 @@ export class CoinGeckoClient {
         });
       }
     } catch (error) {
-      console.error('Failed to get market data:', error);
+      // console.error('Failed to get market data:', error);
     }
     
     return marketData;

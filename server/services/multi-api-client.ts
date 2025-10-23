@@ -89,7 +89,7 @@ export class MultiApiClient {
         this.failureCount.set('CoinLore', 0); // Reset failure count on success
       }
     } catch (error) {
-      console.warn('CoinLore failed for', symbol, ':', error.message);
+      // console.warn('CoinLore failed for', symbol, ':', error.message);
       this.failureCount.set('CoinLore', (this.failureCount.get('CoinLore') || 0) + 1);
     }
 
@@ -104,7 +104,7 @@ export class MultiApiClient {
         this.failureCount.set('Binance', 0); // Reset failure count on success
       }
     } catch (error) {
-      console.warn('Binance failed for', symbol, ':', error.message);
+      // console.warn('Binance failed for', symbol, ':', error.message);
       this.failureCount.set('Binance', (this.failureCount.get('Binance') || 0) + 1);
     }
 
@@ -115,7 +115,7 @@ export class MultiApiClient {
       // Use fallback price if available
       const fallbackPrice = fallbackPrices[symbol as keyof typeof fallbackPrices];
       if (fallbackPrice) {
-        console.log(`⚠️ Using fallback price for ${symbol}: $${fallbackPrice}`);
+        // console.log(`⚠️ Using fallback price for ${symbol}: $${fallbackPrice}`);
         this.setCachedData(cacheKey, fallbackPrice);
         return fallbackPrice;
       }
@@ -134,7 +134,7 @@ export class MultiApiClient {
 
 
     this.setCachedData(cacheKey, weightedPrice);
-    console.log(`📊 Aggregated ${symbol}: $${weightedPrice.toFixed(2)} from ${sources.join(', ')}`);
+    // console.log(`📊 Aggregated ${symbol}: $${weightedPrice.toFixed(2)} from ${sources.join(', ')}`);
 
     return weightedPrice;
   }
@@ -169,7 +169,7 @@ export class MultiApiClient {
       } catch (error) {
         const failures = this.failureCount.get(api.name) || 0;
         this.failureCount.set(api.name, failures + 1);
-        console.warn(`${api.name} bulk data failed:`, error.message);
+        // console.warn(`${api.name} bulk data failed:`, error.message);
       }
     }
 
@@ -238,7 +238,7 @@ export class MultiApiClient {
         };
 
         results.set(symbol, aggregatedData);
-        console.log(`🎯 ${symbol}: $${aggregatedData.price.toFixed(2)} (${Math.round(confidence * 100)}% confidence from ${sources.join(', ')})`);
+        // console.log(`🎯 ${symbol}: $${aggregatedData.price.toFixed(2)} (${Math.round(confidence * 100)}% confidence from ${sources.join(', ')})`);
       }
     }
 
@@ -271,7 +271,7 @@ export class MultiApiClient {
         });
       }
     } catch (error) {
-      console.warn('CoinGecko historical data failed:', error.message);
+      // console.warn('CoinGecko historical data failed:', error.message);
     }
 
     // If no historical data from CoinGecko, create fallback data points
@@ -297,7 +297,7 @@ export class MultiApiClient {
           }
         }
       } catch (error) {
-        console.warn('Failed to generate historical approximation:', error.message);
+        // console.warn('Failed to generate historical approximation:', error.message);
       }
     }
 

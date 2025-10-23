@@ -97,7 +97,7 @@ export class CoinCapClient {
       
       return parseFloat(response.data.priceUsd) || 0;
     } catch (error) {
-      console.error(`Failed to get price for ${symbol}:`, error);
+      // console.error(`Failed to get price for ${symbol}:`, error);
       return 0;
     }
   }
@@ -109,7 +109,7 @@ export class CoinCapClient {
       
       return response.data;
     } catch (error) {
-      console.error(`Failed to get asset for ${symbol}:`, error);
+      // console.error(`Failed to get asset for ${symbol}:`, error);
       return null;
     }
   }
@@ -142,7 +142,7 @@ export class CoinCapClient {
         });
       }
     } catch (error) {
-      console.error('Failed to get multiple assets:', error);
+      // console.error('Failed to get multiple assets:', error);
     }
     
     return marketData;
@@ -158,7 +158,7 @@ export class CoinCapClient {
       
       return [];
     } catch (error) {
-      console.error('Failed to get top assets:', error);
+      // console.error('Failed to get top assets:', error);
       return [];
     }
   }
@@ -168,7 +168,7 @@ export class CoinCapClient {
       const response = await this.makeRequest('/assets/bitcoin');
       return response && response.data && response.data.id === 'bitcoin';
     } catch (error) {
-      console.warn('CoinCap ping failed, but continuing with other APIs:', error.message);
+      // console.warn('CoinCap ping failed, but continuing with other APIs:', error.message);
       return false;
     }
   }

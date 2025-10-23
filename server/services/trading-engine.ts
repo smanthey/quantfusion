@@ -58,9 +58,9 @@ export class TradingEngine {
     try {
       const { AdaptiveLearningEngine } = await import('./adaptive-learning');
       this.adaptiveLearning = new AdaptiveLearningEngine(this.storage);
-      console.log('🧠 Adaptive learning engine initialized');
+      // console.log('🧠 Adaptive learning engine initialized');
     } catch (error) {
-      console.error('❌ Failed to initialize adaptive learning:', error);
+      // console.error('❌ Failed to initialize adaptive learning:', error);
     }
   }
 
@@ -70,10 +70,10 @@ export class TradingEngine {
     }
 
     this.isRunning = true;
-    console.log("🚀 FULL AUTOMATION ACTIVATED - Auto-Trading, Auto-Learning, and Data Collection Started");
+    // console.log("🚀 FULL AUTOMATION ACTIVATED - Auto-Trading, Auto-Learning, and Data Collection Started");
 
     // Start historical data collection for ML training
-    console.log("🏛️ Starting 5-year historical data collection...");
+    // console.log("🏛️ Starting 5-year historical data collection...");
     setTimeout(() => {
       historicalDataCollector.startHistoricalCollection();
     }, 10000); // Start after 10 seconds
@@ -85,9 +85,9 @@ export class TradingEngine {
     setTimeout(async () => {
       try {
         await this.forexEngine.start();
-        console.log('🌍 DEDICATED FOREX CLONE STARTED - Running parallel to crypto for comparison');
+        // console.log('🌍 DEDICATED FOREX CLONE STARTED - Running parallel to crypto for comparison');
       } catch (error) {
-        console.error('❌ Failed to start forex clone:', error);
+        // console.error('❌ Failed to start forex clone:', error);
       }
     }, 2000);
 
@@ -95,24 +95,24 @@ export class TradingEngine {
     setTimeout(async () => {
       try {
         await this.multiAssetEngine.start();
-        console.log('🌍 Multi-asset integrated engine activated');
+        // console.log('🌍 Multi-asset integrated engine activated');
       } catch (error) {
-        console.error('❌ Failed to start multi-asset engine:', error);
+        // console.error('❌ Failed to start multi-asset engine:', error);
       }
     }, 4000);
 
     // ===  RESEARCH-BASED TRADING MASTER (NEW PROFITABLE SYSTEM) ===
     setTimeout(async () => {
       try {
-        console.log('\n🧠 ACTIVATING RESEARCH TRADING MASTER - Profitable AI System');
-        console.log('✅ Regime Detection: Skip crisis periods');
-        console.log('✅ Multi-Timeframe: 60-75% win rate');
-        console.log('✅ Kelly Sizing: Optimal position sizing');
-        console.log('✅ 1:2 Min R/R: Profit at 33% win rate\n');
+        // console.log('\n🧠 ACTIVATING RESEARCH TRADING MASTER - Profitable AI System');
+        // console.log('✅ Regime Detection: Skip crisis periods');
+        // console.log('✅ Multi-Timeframe: 60-75% win rate');
+        // console.log('✅ Kelly Sizing: Optimal position sizing');
+        // console.log('✅ 1:2 Min R/R: Profit at 33% win rate\n');
         
         await this.researchMaster.run();
       } catch (error) {
-        console.error('❌ Research Master failed to start:', error);
+        // console.error('❌ Research Master failed to start:', error);
       }
     }, 3000); // Start after 3 seconds
     
@@ -121,7 +121,7 @@ export class TradingEngine {
       try {
         await this.tradingLoop();
       } catch (error) {
-        console.error("Trading loop error:", error);
+        // console.error("Trading loop error:", error);
         await this.createAlert("error", "Trading Loop Error", error instanceof Error ? error.message : String(error));
       }
     }, 5000); // Run every 5 seconds for active trading
@@ -131,7 +131,7 @@ export class TradingEngine {
       try {
         await this.continuousLearningLoop();
       } catch (error) {
-        console.error("Learning loop error:", error);
+        // console.error("Learning loop error:", error);
       }
     }, 15000); // Update ML models every 15 seconds (DOUBLED FREQUENCY)
 
@@ -140,7 +140,7 @@ export class TradingEngine {
       try {
         await this.collectAndStoreMarketData();
       } catch (error) {
-        console.error("Data collection error:", error);
+        // console.error("Data collection error:", error);
       }
     }, 10000); // Collect market data every 10 seconds
   }
@@ -156,7 +156,7 @@ export class TradingEngine {
     if (this.dataCollectionId) {
       clearInterval(this.dataCollectionId);
     }
-    console.log("Trading engine stopped - All automations terminated");
+    // console.log("Trading engine stopped - All automations terminated");
   }
 
   async emergencyStop(): Promise<void> {
@@ -171,11 +171,11 @@ export class TradingEngine {
       clearInterval(this.intervalId);
       this.intervalId = undefined;
     }
-    console.log("Trading engine force stopped");
+    // console.log("Trading engine force stopped");
   }
 
   private async tradingLoop(): Promise<void> {
-    console.log('🔄 Trading loop executing...');
+    // console.log('🔄 Trading loop executing...');
     
     try {
       // Simple conservative risk check - use actual account balance
@@ -190,18 +190,18 @@ export class TradingEngine {
         const currentBalance = 10000 + totalPnL;
         const totalLoss = Math.max(0, 10000 - currentBalance);
         
-        console.log(`💰 Balance check: Current=$${currentBalance.toFixed(2)}, Loss=$${totalLoss.toFixed(2)}`);
+        // console.log(`💰 Balance check: Current=$${currentBalance.toFixed(2)}, Loss=$${totalLoss.toFixed(2)}`);
         
         // REMOVED LOSS LIMIT TO ENABLE RECOVERY MODE - Focus on profitable patterns from learning data
       } catch (error) {
-        console.log('⚠️ Balance check failed, proceeding cautiously');
+        // console.log('⚠️ Balance check failed, proceeding cautiously');
       }
       // 2. Get active strategies - create default ones if none exist
       let strategies = await storage.getActiveStrategies();
-      console.log(`📋 Found ${strategies?.length || 0} active strategies`);
+      // console.log(`📋 Found ${strategies?.length || 0} active strategies`);
       
       if (strategies.length === 0) {
-        console.log('🔨 Creating default trading strategies...');
+        // console.log('🔨 Creating default trading strategies...');
         try {
           // Create default trading strategies only if they don't already exist
           const existingStrategies = await storage.getStrategies();
@@ -238,20 +238,20 @@ export class TradingEngine {
               await storage.updateStrategyStatus(strategy.id, 'active');
             }
           }
-          console.log(`✅ Using ${strategies.length} strategies for trading`);
+          // console.log(`✅ Using ${strategies.length} strategies for trading`);
         } catch (error) {
-          console.error('❌ Error setting up strategies:', error);
+          // console.error('❌ Error setting up strategies:', error);
           return;
         }
       }
 
       // 3. Process each strategy
       for (const strategy of strategies) {
-        console.log(`🎯 Processing strategy: ${strategy.name} (Active: ${strategy.status})`);
+        // console.log(`🎯 Processing strategy: ${strategy.name} (Active: ${strategy.status})`);
         try {
           await this.processStrategy(strategy);
         } catch (error) {
-          console.error(`❌ Strategy ${strategy.name} failed:`, error);
+          // console.error(`❌ Strategy ${strategy.name} failed:`, error);
         }
       }
 
@@ -261,9 +261,9 @@ export class TradingEngine {
       // 5. Record A/B test results
       await this.recordABTestResults();
       
-      console.log('✅ Trading loop completed successfully');
+      // console.log('✅ Trading loop completed successfully');
     } catch (error) {
-      console.error('❌ Trading loop error:', error);
+      // console.error('❌ Trading loop error:', error);
     }
   }
 
@@ -276,7 +276,7 @@ export class TradingEngine {
         // Get current market price with validation
         const marketPrice = await this.marketData.getCurrentPrice(symbol);
         if (!marketPrice || marketPrice <= 0) {
-          console.log(`⚠️ Invalid price for ${symbol}: ${marketPrice}, skipping`);
+          // console.log(`⚠️ Invalid price for ${symbol}: ${marketPrice}, skipping`);
           continue;
         }
 
@@ -287,7 +287,7 @@ export class TradingEngine {
           volatility: this.marketData.getMarketData(symbol)?.volatility || 0.02
         };
 
-        console.log(`📊 Processing ${symbol} for strategy ${strategy.name}: Price=$${marketPrice}`);
+        // console.log(`📊 Processing ${symbol} for strategy ${strategy.name}: Price=$${marketPrice}`);
 
         // Create ML prediction object for compatibility - MOVED TO TOP TO AVOID SCOPE ISSUES
         const mlPrediction = {
@@ -298,7 +298,7 @@ export class TradingEngine {
         // PRIORITIZE ETHUSDT WINNER STRATEGY based on learning data
         let signal = null;
         if (symbol === 'ETHUSDT') {
-          console.log('🎯 Using ETHUSDT Winner Strategy - top performer from learning data');
+          // console.log('🎯 Using ETHUSDT Winner Strategy - top performer from learning data');
           signal = await this.ethWinnerStrategy.generateSignal(marketPrice, marketData);
         }
         
@@ -313,18 +313,18 @@ export class TradingEngine {
         }
         
         if (!signal) {
-          console.log(`🚫 No signal generated for ${symbol} - conditions not met or learning system rejected`);
+          // console.log(`🚫 No signal generated for ${symbol} - conditions not met or learning system rejected`);
           continue;
         }
         
-        console.log(`📊 Signal: ${signal.action} ${symbol} at $${signal.price}`);
+        // console.log(`📊 Signal: ${signal.action} ${symbol} at $${signal.price}`);
 
         // Execute the trade with validated price
-        console.log(`🔄 Executing ${signal.action} trade for ${symbol} at $${signal.price}`);
+        // console.log(`🔄 Executing ${signal.action} trade for ${symbol} at $${signal.price}`);
         const position = await this.executeTrade(signal);
 
         if (position) {
-          console.log(`✅ Trade executed and saved: ${position.side} ${position.size} ${position.symbol} at $${position.entryPrice}`);
+          // console.log(`✅ Trade executed and saved: ${position.side} ${position.size} ${position.symbol} at $${position.entryPrice}`);
 
           await this.createAlert("success", "Real Trade Executed", 
             `${position.side.toUpperCase()} ${position.size} ${position.symbol} at $${position.entryPrice} (Strategy: ${strategy.name})`);
@@ -339,28 +339,28 @@ export class TradingEngine {
               id: position.id || 'unknown',
               strategyId: position.strategyId || (signal as any).strategyId
             });
-            console.log(`🧠 Trade feedback processed for learning system`);
+            // console.log(`🧠 Trade feedback processed for learning system`);
           }
 
           // Create historical record for learning
           await this.storeMarketDataPoint(symbol, marketData, signal.action, position.id);
         }
       } catch (error) {
-        console.error(`❌ Trade execution error for ${symbol}:`, error instanceof Error ? error.message : 'Unknown error');
+        // console.error(`❌ Trade execution error for ${symbol}:`, error instanceof Error ? error.message : 'Unknown error');
       }
     }
   }
 
   private async executeTrade(signal: any): Promise<any> {
-    console.log(`🔧 executeTrade called with signal:`, JSON.stringify(signal, null, 2));
+    // console.log(`🔧 executeTrade called with signal:`, JSON.stringify(signal, null, 2));
     
     if (!signal || !signal.symbol) {
-      console.error('❌ Invalid signal provided to executeTrade');
+      // console.error('❌ Invalid signal provided to executeTrade');
       return null;
     }
 
     let price = signal.price;
-    console.log(`💰 Initial price: ${price}`);
+    // console.log(`💰 Initial price: ${price}`);
 
     if (!price || price <= 0) {
       const marketPrice = await this.marketData.getCurrentPrice(signal.symbol);
@@ -375,7 +375,7 @@ export class TradingEngine {
 
     // Ensure we have a valid number and round to avoid floating point precision issues
     if (!price || price <= 0 || isNaN(price)) {
-      console.error(`Invalid price received for ${signal.symbol}: ${price}`);
+      // console.error(`Invalid price received for ${signal.symbol}: ${price}`);
       return null;
     }
 
@@ -384,15 +384,15 @@ export class TradingEngine {
     price = Number(price.toFixed(decimals));
 
     try {
-      console.log(`🧮 About to calculate position size for ${signal.symbol} at price ${price}`);
+      // console.log(`🧮 About to calculate position size for ${signal.symbol} at price ${price}`);
       
       // Calculate position size based on signal strength and risk limits
       const positionSize = this.calculatePositionSize(signal, price);
       
-      console.log(`📏 Position size calculated: ${positionSize}`);
+      // console.log(`📏 Position size calculated: ${positionSize}`);
 
       if (!positionSize || positionSize <= 0) {
-        console.error(`❌ Invalid position size calculated for ${signal.symbol}: ${positionSize}`);
+        // console.error(`❌ Invalid position size calculated for ${signal.symbol}: ${positionSize}`);
         return null;
       }
 
@@ -442,14 +442,14 @@ export class TradingEngine {
         positionId: null
       };
 
-      console.log(`💾 Saving trade data:`, JSON.stringify(tradeData, null, 2));
+      // console.log(`💾 Saving trade data:`, JSON.stringify(tradeData, null, 2));
       
       // Save trade to database
       const savedTrade = await storage.createTrade(tradeData);
 
       // Create or update position in database
       const existingPosition = await storage.getPositionBySymbol(signal.symbol);
-      console.log(`🔍 Checking existing position for ${signal.symbol}:`, existingPosition ? `Found: ${existingPosition.id}` : 'None found');
+      // console.log(`🔍 Checking existing position for ${signal.symbol}:`, existingPosition ? `Found: ${existingPosition.id}` : 'None found');
       
       let positionId = null;
       
@@ -458,7 +458,7 @@ export class TradingEngine {
         const newQuantity = Number(existingPosition.size) + (signal.action === 'buy' ? positionSize : -positionSize);
         await storage.updatePositionPnL(existingPosition.id, price.toString(), '0');
         positionId = existingPosition.id;
-        console.log(`📊 Updated existing position: ${existingPosition.id}`);
+        // console.log(`📊 Updated existing position: ${existingPosition.id}`);
       } else {
         // Create new position
         const positionData = {
@@ -473,13 +473,13 @@ export class TradingEngine {
           status: 'open' as const
         };
         
-        console.log(`🏗️ Creating new position:`, JSON.stringify(positionData, null, 2));
+        // console.log(`🏗️ Creating new position:`, JSON.stringify(positionData, null, 2));
         try {
           const newPosition = await storage.createPosition(positionData);
           positionId = newPosition.id;
-          console.log(`✅ Created new position: ${newPosition.id}`);
+          // console.log(`✅ Created new position: ${newPosition.id}`);
         } catch (posError) {
-          console.error(`❌ Position creation failed:`, posError);
+          // console.error(`❌ Position creation failed:`, posError);
           throw posError;
         }
       }
@@ -504,7 +504,7 @@ export class TradingEngine {
         realizedPnL: 0
       });
 
-      console.log(`✅ Trade saved to database: ${savedTrade.id}, Position: ${positionId}`);
+      // console.log(`✅ Trade saved to database: ${savedTrade.id}, Position: ${positionId}`);
       
       // Return position data for backwards compatibility
       return {
@@ -516,7 +516,7 @@ export class TradingEngine {
         positionId: positionId
       };
     } catch (error) {
-      console.error(`Trade execution failed for ${signal.symbol}:`, error instanceof Error ? error.message : 'Unknown error');
+      // console.error(`Trade execution failed for ${signal.symbol}:`, error instanceof Error ? error.message : 'Unknown error');
       return null;
     }
   }
@@ -575,9 +575,9 @@ export class TradingEngine {
         timestamp: new Date()
       };
 
-      console.log(`📝 Recorded trading decision: ${signal.action} ${signal.symbol} (ML: ${mlPrediction.priceDirection})`);
+      // console.log(`📝 Recorded trading decision: ${signal.action} ${signal.symbol} (ML: ${mlPrediction.priceDirection})`);
     } catch (error) {
-      console.error('Error recording trading decision:', error);
+      // console.error('Error recording trading decision:', error);
     }
   }
 
@@ -601,11 +601,11 @@ export class TradingEngine {
       const usdAmount = 100; // Increased to $100 per trade to cover fees and be profitable
       const cryptoUnits = usdAmount / price; // Convert USD to crypto units
       
-      console.log(`💰 Profitable sizing: $${usdAmount} = ${cryptoUnits.toFixed(6)} ${signal.symbol || 'units'}`);
+      // console.log(`💰 Profitable sizing: $${usdAmount} = ${cryptoUnits.toFixed(6)} ${signal.symbol || 'units'}`);
       
       return Math.max(cryptoUnits, 0.001); // Ensure minimum size
     } catch (error) {
-      console.error('Position size calculation error:', error);
+      // console.error('Position size calculation error:', error);
       return 50 / price; // Profitable fallback: $50 worth
     }
   }
@@ -678,7 +678,7 @@ export class TradingEngine {
     }
 
     if (!price || price <= 0 || isNaN(price)) {
-      console.error(`Invalid price in marketData for ${symbol}: ${price}`);
+      // console.error(`Invalid price in marketData for ${symbol}: ${price}`);
       return null;
     }
 
@@ -686,7 +686,7 @@ export class TradingEngine {
 
     let signal = null;
 
-    console.log(`🔍 ML Prediction for ${symbol}: ${mlPrediction.priceDirection} (confidence: ${mlPrediction.confidence})`);
+    // console.log(`🔍 ML Prediction for ${symbol}: ${mlPrediction.priceDirection} (confidence: ${mlPrediction.confidence})`);
     
     if (strategy.type === 'mean_reversion') {
       // Mean reversion: Balanced confidence threshold 
@@ -701,7 +701,7 @@ export class TradingEngine {
           type: 'mean_reversion',
           strategyId: strategy.id
         };
-        console.log(`📈 Mean reversion signal: ${signal.action} ${symbol} (ML: ${mlPrediction.priceDirection})`);
+        // console.log(`📈 Mean reversion signal: ${signal.action} ${symbol} (ML: ${mlPrediction.priceDirection})`);
       }
     } else if (strategy.type === 'trend_following') {
       // Trend following: Balanced confidence threshold
@@ -716,7 +716,7 @@ export class TradingEngine {
           type: 'trend_following',
           strategyId: strategy.id
         };
-        console.log(`📊 Trend following signal: ${signal.action} ${symbol} (ML: ${mlPrediction.priceDirection})`);
+        // console.log(`📊 Trend following signal: ${signal.action} ${symbol} (ML: ${mlPrediction.priceDirection})`);
       }
     }
 
@@ -772,13 +772,13 @@ export class TradingEngine {
         duration
       });
 
-      console.log(`📊 Trade closed: ${position.side} ${position.symbol} - PnL: $${finalPnl.toFixed(2)} (${finalPnl > 0 ? '+' : ''}${((finalPnl/size)*100).toFixed(2)}%)`);
+      // console.log(`📊 Trade closed: ${position.side} ${position.symbol} - PnL: $${finalPnl.toFixed(2)} (${finalPnl > 0 ? '+' : ''}${((finalPnl/size)*100).toFixed(2)}%)`);
 
       // Update strategy performance metrics
       await this.updateStrategyPerformance(strategy.id);
 
     } catch (error) {
-      console.error('Error simulating trade outcome:', error);
+      // console.error('Error simulating trade outcome:', error);
     }
   }
 
@@ -799,10 +799,10 @@ export class TradingEngine {
       const maxDrawdown = this.calculateMaxDrawdown(completedTrades);
 
       // Store performance data (this would update the strategy record)
-      console.log(`📈 Strategy Performance Update: ${totalTrades} trades, ${(winRate*100).toFixed(1)}% win rate, $${totalPnl.toFixed(2)} total PnL`);
+      // console.log(`📈 Strategy Performance Update: ${totalTrades} trades, ${(winRate*100).toFixed(1)}% win rate, $${totalPnl.toFixed(2)} total PnL`);
 
     } catch (error) {
-      console.error('Error updating strategy performance:', error);
+      // console.error('Error updating strategy performance:', error);
     }
   }
 
@@ -841,9 +841,9 @@ export class TradingEngine {
         timestamp: new Date()
       };
 
-      console.log(`💾 Stored market data: ${symbol} @ $${marketData.price} (${action})`);
+      // console.log(`💾 Stored market data: ${symbol} @ $${marketData.price} (${action})`);
     } catch (error) {
-      console.error('Error storing market data:', error);
+      // console.error('Error storing market data:', error);
     }
   }
 
@@ -857,7 +857,7 @@ export class TradingEngine {
         let priceAsNumber = currentPrice;
         
         if (isNaN(priceAsNumber)) {
-            console.error(`Invalid current price received for ${position.symbol}: ${currentPrice}`);
+            // console.error(`Invalid current price received for ${position.symbol}: ${currentPrice}`);
             continue;
         }
 
@@ -871,7 +871,7 @@ export class TradingEngine {
           await this.closePosition(position, priceAsNumber);
         }
       } catch (error) {
-        console.error(`Error updating position ${position.id}:`, error);
+        // console.error(`Error updating position ${position.id}:`, error);
       }
     }
   }
@@ -882,7 +882,7 @@ export class TradingEngine {
     const size = parseFloat(position.size);
 
     if (isNaN(current) || isNaN(entry) || isNaN(size)) {
-      console.error(`Invalid values for PnL calculation for position ${position.id}`);
+      // console.error(`Invalid values for PnL calculation for position ${position.id}`);
       return 0;
     }
 
@@ -899,7 +899,7 @@ export class TradingEngine {
     const stop = parseFloat(position.stopPrice || '0');
 
     if (isNaN(current) || isNaN(entry)) {
-        console.error(`Invalid values for closing check for position ${position.id}`);
+        // console.error(`Invalid values for closing check for position ${position.id}`);
         return false;
     }
 
@@ -914,15 +914,15 @@ export class TradingEngine {
       const timeBasedClose = this.shouldTimeBasedClose(position);
       
       if (profitTarget) {
-        console.log(`📈 PROFIT CLOSE: Long ${position.symbol} +${(priceChange * 100).toFixed(2)}%`);
+        // console.log(`📈 PROFIT CLOSE: Long ${position.symbol} +${(priceChange * 100).toFixed(2)}%`);
         return true;
       }
       if (stopLoss) {
-        console.log(`📉 STOP LOSS: Long ${position.symbol} ${(priceChange * 100).toFixed(2)}%`);
+        // console.log(`📉 STOP LOSS: Long ${position.symbol} ${(priceChange * 100).toFixed(2)}%`);
         return true;
       }
       if (timeBasedClose) {
-        console.log(`⏰ TIME CLOSE: Long ${position.symbol} after holding period`);
+        // console.log(`⏰ TIME CLOSE: Long ${position.symbol} after holding period`);
         return true;
       }
     } else {
@@ -932,15 +932,15 @@ export class TradingEngine {
       const timeBasedClose = this.shouldTimeBasedClose(position);
       
       if (profitTarget) {
-        console.log(`📈 PROFIT CLOSE: Short ${position.symbol} +${(-priceChange * 100).toFixed(2)}%`);
+        // console.log(`📈 PROFIT CLOSE: Short ${position.symbol} +${(-priceChange * 100).toFixed(2)}%`);
         return true;
       }
       if (stopLoss) {
-        console.log(`📉 STOP LOSS: Short ${position.symbol} ${(-priceChange * 100).toFixed(2)}%`);
+        // console.log(`📉 STOP LOSS: Short ${position.symbol} ${(-priceChange * 100).toFixed(2)}%`);
         return true;
       }
       if (timeBasedClose) {
-        console.log(`⏰ TIME CLOSE: Short ${position.symbol} after holding period`);
+        // console.log(`⏰ TIME CLOSE: Short ${position.symbol} after holding period`);
         return true;
       }
     }
@@ -1008,7 +1008,7 @@ export class TradingEngine {
         }
         
         if (shouldClose) {
-          console.log(closeReason);
+          // console.log(closeReason);
           await this.closePosition(position, currentPrice);
           
           // Record A/B test result
@@ -1017,7 +1017,7 @@ export class TradingEngine {
           }
         }
       } catch (error) {
-        console.error(`Error updating position ${position.id}:`, error);
+        // console.error(`Error updating position ${position.id}:`, error);
       }
     }
   }
@@ -1038,7 +1038,7 @@ export class TradingEngine {
       
       await abTesting.recordTestResult('stop-loss-v1', variant.id, metrics);
     } catch (error) {
-      console.error('Error recording A/B test result:', error);
+      // console.error('Error recording A/B test result:', error);
     }
   }
 
@@ -1076,7 +1076,7 @@ export class TradingEngine {
         }
       }
     } catch (error) {
-      console.error('Error recording A/B test results:', error);
+      // console.error('Error recording A/B test results:', error);
     }
   }
 
@@ -1106,10 +1106,10 @@ export class TradingEngine {
         duration
       });
       
-      console.log(`💰 POSITION CLOSED: ${position.side} ${position.symbol} - PnL: $${finalPnl.toFixed(2)}`);
+      // console.log(`💰 POSITION CLOSED: ${position.side} ${position.symbol} - PnL: $${finalPnl.toFixed(2)}`);
       
     } catch (error) {
-      console.error('Error closing position:', error);
+      // console.error('Error closing position:', error);
     }
   }
 
@@ -1129,11 +1129,11 @@ export class TradingEngine {
     try {
       const existingStrategies = await storage.getActiveStrategies();
       if (existingStrategies.length > 0) {
-        console.log(`Found ${existingStrategies.length} existing strategies - continuing with automation`);
+        // console.log(`Found ${existingStrategies.length} existing strategies - continuing with automation`);
         return;
       }
 
-      console.log("🤖 AUTO-CREATING TRADING STRATEGIES...");
+      // console.log("🤖 AUTO-CREATING TRADING STRATEGIES...");
 
       // Create Mean Reversion Strategy for BTC
       const meanReversionStrategy = await storage.createStrategy({
@@ -1161,25 +1161,25 @@ export class TradingEngine {
         status: 'active'
       });
 
-      console.log(`✅ AUTO-CREATED 2 TRADING STRATEGIES - System is now actively trading`);
+      // console.log(`✅ AUTO-CREATED 2 TRADING STRATEGIES - System is now actively trading`);
       await this.createAlert("info", "Auto-Strategies Created", "System automatically created 2 active trading strategies and began automated trading");
 
     } catch (error) {
-      console.error("Error initializing strategies:", error);
+      // console.error("Error initializing strategies:", error);
     }
   }
 
   // CONTINUOUS LEARNING LOOP - ML Model Self-Improvement
   private async continuousLearningLoop(): Promise<void> {
     try {
-      console.log('🧠 LEARNING LOOP: Updating ML models and analyzing performance...');
+      // console.log('🧠 LEARNING LOOP: Updating ML models and analyzing performance...');
       
       // Get recent trading results
       const recentTrades = await this.storage.getAllTrades();
       const performanceTrades = recentTrades.slice(-100); // Last 100 trades
       
       if (performanceTrades.length < 10) {
-        console.log('📚 Not enough trades for learning analysis yet');
+        // console.log('📚 Not enough trades for learning analysis yet');
         return;
       }
 
@@ -1188,29 +1188,29 @@ export class TradingEngine {
         const learningMetrics = await this.adaptiveLearning.getLearningMetrics();
         const failurePatterns = await this.adaptiveLearning.analyzeFailurePatterns();
         
-        console.log(`📈 LEARNING IMPACT: Win Rate=${(learningMetrics.recentWinRate * 100).toFixed(1)}%, Active Rules=${learningMetrics.adaptationRulesCount}, Learning Velocity=${(learningMetrics.learningVelocity * 100).toFixed(2)}%`);
+        // console.log(`📈 LEARNING IMPACT: Win Rate=${(learningMetrics.recentWinRate * 100).toFixed(1)}%, Active Rules=${learningMetrics.adaptationRulesCount}, Learning Velocity=${(learningMetrics.learningVelocity * 100).toFixed(2)}%`);
         
         // Show concrete learning actions
         const topRules = learningMetrics.topPerformingRules.slice(0, 2);
         if (topRules.length > 0) {
-          console.log(`🎯 TOP LEARNED PATTERNS:`);
+          // console.log(`🎯 TOP LEARNED PATTERNS:`);
           topRules.forEach((rule: any) => {
-            console.log(`  - ${rule.condition}: ${rule.action} (${(rule.successRate * 100).toFixed(1)}% success over ${rule.timesApplied} applications)`);
+            // console.log(`  - ${rule.condition}: ${rule.action} (${(rule.successRate * 100).toFixed(1)}% success over ${rule.timesApplied} applications)`);
           });
         }
         
         if (failurePatterns.recommendations.length > 0) {
-          console.log(`🚨 ACTIVE LEARNING ACTIONS: ${failurePatterns.recommendations[0]}`);
+          // console.log(`🚨 ACTIVE LEARNING ACTIONS: ${failurePatterns.recommendations[0]}`);
           await this.createAlert("info", "Learning Action", failurePatterns.recommendations[0]);
         }
         
         // Show concrete performance changes
         if (learningMetrics.learningVelocity > 0.03) {
-          console.log(`🚀 LEARNING SUCCESS: Performance improving by ${(learningMetrics.learningVelocity * 100).toFixed(2)}% with ${learningMetrics.adaptationRulesCount} active rules`);
+          // console.log(`🚀 LEARNING SUCCESS: Performance improving by ${(learningMetrics.learningVelocity * 100).toFixed(2)}% with ${learningMetrics.adaptationRulesCount} active rules`);
           await this.createAlert("success", "AI Learning Working", 
             `System performance improved ${(learningMetrics.learningVelocity * 100).toFixed(2)}% through learned patterns. ${learningMetrics.adaptationRulesCount} rules actively filtering trades.`);
         } else if (learningMetrics.learningVelocity < -0.03) {
-          console.log(`⚠️ LEARNING RESPONSE: Adapting to performance decline with ${failurePatterns.commonFailureConditions.length} identified issues`);
+          // console.log(`⚠️ LEARNING RESPONSE: Adapting to performance decline with ${failurePatterns.commonFailureConditions.length} identified issues`);
           await this.createAlert("warning", "AI Learning Adapting", 
             `Learning system identified ${failurePatterns.commonFailureConditions.length} failure patterns and is adapting strategy. Some trades may be blocked.`);
         }
@@ -1220,13 +1220,13 @@ export class TradingEngine {
       const symbols = ["BTCUSDT", "ETHUSDT"];
       for (const symbol of symbols) {
         const basePrediction = await mlPredictor.predict(symbol, '1h');
-        console.log(`🔮 ML Prediction: ${symbol} - ${basePrediction.priceDirection} (${(basePrediction.confidence * 100).toFixed(1)}% confidence)`);
+        // console.log(`🔮 ML Prediction: ${symbol} - ${basePrediction.priceDirection} (${(basePrediction.confidence * 100).toFixed(1)}% confidence)`);
       }
 
 
 
     } catch (error) {
-      console.error("Continuous learning error:", error);
+      // console.error("Continuous learning error:", error);
     }
   }
 
@@ -1241,7 +1241,7 @@ export class TradingEngine {
           const marketData = this.marketData.getMarketData(symbol);
 
           if (marketData && marketData.volume !== undefined && Math.random() < 0.2) { // Log 20% of data points
-            console.log(`📊 Data: ${symbol} @ ${currentPrice} (Vol: ${marketData.volume.toFixed(0)}, Volatility: ${(marketData.volatility * 100).toFixed(2)}%)`);
+            // console.log(`📊 Data: ${symbol} @ ${currentPrice} (Vol: ${marketData.volume.toFixed(0)}, Volatility: ${(marketData.volatility * 100).toFixed(2)}%)`);
           }
 
         } catch (error) {
@@ -1250,7 +1250,7 @@ export class TradingEngine {
       }
 
     } catch (error) {
-      console.error("Data collection error:", error);
+      // console.error("Data collection error:", error);
     }
   }
 }

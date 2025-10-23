@@ -79,7 +79,7 @@ export class HistoricalPriceStorage {
         await this.flushBatch(key);
       }
     } catch (error) {
-      console.error(`❌ Failed to store price update for ${symbol}:`, error);
+      // console.error(`❌ Failed to store price update for ${symbol}:`, error);
     }
   }
 
@@ -115,7 +115,7 @@ export class HistoricalPriceStorage {
       await storage.storeHistoricalPrice(candle);
       this.totalStored++;
     } catch (error) {
-      console.error(`❌ Failed to store candle for ${symbol}:`, error);
+      // console.error(`❌ Failed to store candle for ${symbol}:`, error);
     }
   }
 
@@ -128,9 +128,9 @@ export class HistoricalPriceStorage {
     try {
       await storage.storeHistoricalPrices(candles);
       this.totalStored += candles.length;
-      console.log(`💾 Stored ${candles.length} historical candles (Total: ${this.totalStored})`);
+      // console.log(`💾 Stored ${candles.length} historical candles (Total: ${this.totalStored})`);
     } catch (error) {
-      console.error('❌ Failed to store candle batch:', error);
+      // console.error('❌ Failed to store candle batch:', error);
     }
   }
 
@@ -163,10 +163,10 @@ export class HistoricalPriceStorage {
     try {
       await storage.storeHistoricalPrices(batch);
       this.totalStored += batch.length;
-      console.log(`💾 Flushed ${batch.length} prices for ${key} (Total stored: ${this.totalStored})`);
+      // console.log(`💾 Flushed ${batch.length} prices for ${key} (Total stored: ${this.totalStored})`);
       this.batchBuffer.set(key, []); // Clear the batch
     } catch (error) {
-      console.error(`❌ Failed to flush batch for ${key}:`, error);
+      // console.error(`❌ Failed to flush batch for ${key}:`, error);
     }
   }
 

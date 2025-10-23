@@ -41,10 +41,10 @@ export class PositionPersistence {
         entryPrice: position.entryPrice.toString()
       }).returning();
       
-      console.log(`💾 Position saved to database: ${position.symbol} ${position.side} @ ${position.entryPrice}`);
+      // console.log(`💾 Position saved to database: ${position.symbol} ${position.side} @ ${position.entryPrice}`);
       return trade.id;
     } catch (error) {
-      console.error('Failed to save position:', error);
+      // console.error('Failed to save position:', error);
       throw error;
     }
   }
@@ -72,12 +72,12 @@ export class PositionPersistence {
       }));
       
       if (positions.length > 0) {
-        console.log(`📂 Loaded ${positions.length} open positions from database`);
+        // console.log(`📂 Loaded ${positions.length} open positions from database`);
       }
       
       return positions;
     } catch (error) {
-      console.error('Failed to load open positions:', error);
+      // console.error('Failed to load open positions:', error);
       return [];
     }
   }
@@ -92,9 +92,9 @@ export class PositionPersistence {
     try {
       // Note: trades table doesn't have stopLoss/takeProfit fields
       // This is a placeholder for future enhancement
-      console.log(`💾 Position update requested: ${id} (not implemented in schema)`);
+      // console.log(`💾 Position update requested: ${id} (not implemented in schema)`);
     } catch (error) {
-      console.error('Failed to update position:', error);
+      // console.error('Failed to update position:', error);
     }
   }
 
@@ -110,9 +110,9 @@ export class PositionPersistence {
         })
         .where(eq(trades.id, id));
       
-      console.log(`💾 Position closed in database: ${id} P&L: $${pnl.toFixed(2)}`);
+      // console.log(`💾 Position closed in database: ${id} P&L: $${pnl.toFixed(2)}`);
     } catch (error) {
-      console.error('Failed to close position:', error);
+      // console.error('Failed to close position:', error);
     }
   }
 
@@ -122,9 +122,9 @@ export class PositionPersistence {
   async deletePosition(id: string): Promise<void> {
     try {
       await db.delete(trades).where(eq(trades.id, id));
-      console.log(`🗑️ Position deleted from database: ${id}`);
+      // console.log(`🗑️ Position deleted from database: ${id}`);
     } catch (error) {
-      console.error('Failed to delete position:', error);
+      // console.error('Failed to delete position:', error);
     }
   }
 }

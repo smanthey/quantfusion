@@ -29,7 +29,7 @@ export class BacktestEngine {
 
   async run(config: BacktestConfig): Promise<InsertBacktestResult> {
     try {
-      console.log(`Starting backtest for strategy ${config.strategyId}`);
+      // console.log(`Starting backtest for strategy ${config.strategyId}`);
       
       // Get historical market data
       const candles = historicalDataService.getHistoricalData(
@@ -62,7 +62,7 @@ export class BacktestEngine {
       };
       
     } catch (error) {
-      console.error('Backtest error:', error);
+      // console.error('Backtest error:', error);
       throw new Error(`Backtest failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }

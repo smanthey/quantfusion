@@ -59,7 +59,7 @@ export class ForexQuantTrader {
   generateForexSignal(symbol: string): ForexSignal | null {
     const marketDataPoint = this.marketData.getMarketData(symbol);
     if (!marketDataPoint) {
-      console.log(`🛑 ${symbol}: No market data available`);
+      // console.log(`🛑 ${symbol}: No market data available`);
       return null;
     }
     
@@ -69,7 +69,7 @@ export class ForexQuantTrader {
     // Get historical candles for technical analysis
     const candles = this.marketData.getCandles(symbol, 100);
     if (candles.length < 20) {
-      console.log(`🛑 ${symbol}: Insufficient candle data (need 20+)`);
+      // console.log(`🛑 ${symbol}: Insufficient candle data (need 20+)`);
       return null;
     }
     
@@ -108,7 +108,7 @@ export class ForexQuantTrader {
     
     // Require at least 3/4 models to agree
     if (buyVotes < 3 && sellVotes < 3) {
-      console.log(`🛑 ${symbol}: No consensus - Buy:${buyVotes} Sell:${sellVotes}`);
+      // console.log(`🛑 ${symbol}: No consensus - Buy:${buyVotes} Sell:${sellVotes}`);
       return null;
     }
     
@@ -116,11 +116,11 @@ export class ForexQuantTrader {
     
     // === RSI FILTER: Only take signals in favorable RSI zones ===
     if (action === 'buy' && rsi > 60) {
-      console.log(`🛑 ${symbol}: Buy signal but RSI too high (${rsi.toFixed(1)})`);
+      // console.log(`🛑 ${symbol}: Buy signal but RSI too high (${rsi.toFixed(1)})`);
       return null;
     }
     if (action === 'sell' && rsi < 40) {
-      console.log(`🛑 ${symbol}: Sell signal but RSI too low (${rsi.toFixed(1)})`);
+      // console.log(`🛑 ${symbol}: Sell signal but RSI too low (${rsi.toFixed(1)})`);
       return null;
     }
     

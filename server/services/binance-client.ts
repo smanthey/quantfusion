@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import WebSocket from 'ws';
 import { ExponentialBackoff, AdaptiveRateLimiter, isRetryableError } from './exponential-backoff';
 import { circuitBreakerManager } from './circuit-breaker';
+import { log } from '../utils/logger';
 
 export interface BinanceTickerData {
   symbol: string;
@@ -96,7 +97,7 @@ export class BinanceClient {
     // Use public API if credentials not available
     // Note: API key warnings are expected when using public endpoints only
     if (!this.apiKey || !this.apiSecret) {
-      console.warn('⚠️ Binance API credentials not found, using public endpoints only');
+      log.warn('⚠️ Binance API credentials not found, using public endpoints only');
     }
 
     // Use testnet API which was working before geo-restrictions
@@ -148,7 +149,7 @@ export class BinanceClient {
 
       return await response.json();
     } catch (error) {
-      console.error('Binance API request failed:', error);
+      log.error('Binance API request failed', { error });
       throw error;
     }
   }
@@ -183,7 +184,7 @@ export class BinanceClient {
 
       return await response.json();
     } catch (error) {
-      console.error('Binance API request failed:', error);
+      log.error('Binance API request failed', { error });
       throw error;
     }
   }
@@ -195,7 +196,7 @@ export class BinanceClient {
       const response = await this.makePublicRequest('/v3/ticker/24hr', params);
       return response;
     } catch (error) {
-      console.error('Failed to get ticker data:', error);
+      log.error('Failed to get ticker data', { error });
       throw error;
     }
   }
@@ -327,7 +328,7 @@ export class BinanceClient {
     const ws = new WebSocket(`${this.wsUrl}/${stream}`);
 
     ws.on('open', () => {
-      console.log(`Connected to Binance stream: ${stream}`);
+      log.info(`Connected to Binance stream: ${stream}`);
     });
 
     ws.on('message', (data) => {
@@ -338,26 +339,26 @@ export class BinanceClient {
           subscribers.forEach(callback => callback(parsedData));
         }
       } catch (error) {
-        console.error('Error parsing WebSocket message:', error);
+        log.error('Error parsing WebSocket message', { error });
       }
     });
 
     ws.on('error', (error) => {
-      console.error(`WebSocket error for ${stream}:`, error);
+      log.error(`WebSocket error for ${stream}`, { error });
       // If geo-blocked (451), start REST fallback immediately
       if (error.message.includes('451')) {
-        console.log(`🔄 WebSocket geo-blocked. Switching to REST polling for ${stream}`);
+        log.info(`🔄 WebSocket geo-blocked. Switching to REST polling for ${stream}`);
         this.startRestPolling(stream);
       }
     });
 
     ws.on('close', () => {
-      console.log(`Disconnected from Binance stream: ${stream}`);
+      log.info(`Disconnected from Binance stream: ${stream}`);
       this.connections.delete(stream);
 
       // Start REST polling as fallback instead of reconnecting WebSocket
       if (this.subscribers.has(stream) && this.subscribers.get(stream)!.size > 0) {
-        console.log(`🔄 Starting REST polling fallback for ${stream}`);
+        log.info(`🔄 Starting REST polling fallback for ${stream}`);
         this.startRestPolling(stream);
       }
     });
@@ -379,12 +380,12 @@ export class BinanceClient {
     try {
       const response = await fetch(`${this.baseUrl}/v3/ping`);
       if (response.status === 451) {
-        console.warn('Binance API is geo-restricted in this region');
+        log.warn('Binance API is geo-restricted in this region');
         return false;
       }
       return response.ok;
     } catch (error) {
-      console.warn('Binance connectivity test failed:', error);
+      log.warn('Binance connectivity test failed', { error });
       return false;
     }
   }
@@ -403,7 +404,7 @@ export class BinanceClient {
     }
 
     const [symbol, type] = stream.split('@');
-    console.log(`📊 Starting REST API polling for ${symbol.toUpperCase()} (${type})`);
+    log.info(`📊 Starting REST API polling for ${symbol.toUpperCase()} (${type})`);
     
     const pollInterval = setInterval(async () => {
       try {
@@ -455,7 +456,7 @@ export class BinanceClient {
           }
         }
       } catch (error) {
-        console.error(`REST polling error for ${stream}:`, error);
+        log.error(`REST polling error for ${stream}`, { error });
       }
     }, 5000); // Poll every 5 seconds
 

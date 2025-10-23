@@ -133,7 +133,7 @@ export class MLPredictor {
 
       return mlPrediction;
     } catch (error) {
-      console.error(`Error generating ML prediction for ${symbol}:`, error);
+      // console.error(`Error generating ML prediction for ${symbol}:`, error);
       return this.createFallbackPrediction(symbol, timeHorizon);
     }
   }
@@ -269,7 +269,7 @@ export class MLPredictor {
       );
       
       if (!prediction) {
-        console.warn(`Prediction ${predictionId} not found for learning`);
+        // console.warn(`Prediction ${predictionId} not found for learning`);
         return;
       }
 
@@ -295,9 +295,9 @@ export class MLPredictor {
         profitLoss
       );
 
-      console.log(`✅ Learned from trade: ${prediction.symbol} ${prediction.priceDirection} -> ${actualOutcome} (P/L: ${profitLoss.toFixed(2)})`);
+      // console.log(`✅ Learned from trade: ${prediction.symbol} ${prediction.priceDirection} -> ${actualOutcome} (P/L: ${profitLoss.toFixed(2)})`);
     } catch (error) {
-      console.error('Error learning from trade:', error);
+      // console.error('Error learning from trade:', error);
     }
   }
 

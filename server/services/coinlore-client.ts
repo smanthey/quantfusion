@@ -56,7 +56,7 @@ export class CoinLoreClient {
       
       return await response.json();
     } catch (error) {
-      console.error('CoinLore API request failed:', error);
+      // console.error('CoinLore API request failed:', error);
       throw error;
     }
   }
@@ -76,7 +76,7 @@ export class CoinLoreClient {
       
       return 0;
     } catch (error) {
-      console.error(`Failed to get price for ${symbol}:`, error);
+      // console.error(`Failed to get price for ${symbol}:`, error);
       return 0;
     }
   }
@@ -92,7 +92,7 @@ export class CoinLoreClient {
       
       return null;
     } catch (error) {
-      console.error(`Failed to get ticker for ${symbol}:`, error);
+      // console.error(`Failed to get ticker for ${symbol}:`, error);
       return null;
     }
   }
@@ -123,7 +123,7 @@ export class CoinLoreClient {
         });
       }
     } catch (error) {
-      console.error('Failed to get multiple tickers:', error);
+      // console.error('Failed to get multiple tickers:', error);
     }
     
     return marketData;
@@ -139,7 +139,7 @@ export class CoinLoreClient {
       
       return [];
     } catch (error) {
-      console.error('Failed to get all tickers:', error);
+      // console.error('Failed to get all tickers:', error);
       return [];
     }
   }

@@ -176,7 +176,7 @@ export class ABTestingService {
     this.activeTests.set(mlConfidenceTest.id, mlConfidenceTest);
     this.activeTests.set(strategyMixTest.id, strategyMixTest);
 
-    console.log('🧪 A/B Testing initialized with 4 active tests');
+    // console.log('🧪 A/B Testing initialized with 4 active tests');
   }
 
   public getVariantForStrategy(strategyId: string, testId: string): ABTestVariant | null {
@@ -273,7 +273,7 @@ export class ABTestingService {
 
     if (isSignificant) {
       const winner = p1 > p2 ? variant1 : variant2;
-      console.log(`🏆 A/B Test Winner: ${testId} - Variant ${winner.variantId} (${(confidence * 100).toFixed(1)}% confidence)`);
+      // console.log(`🏆 A/B Test Winner: ${testId} - Variant ${winner.variantId} (${(confidence * 100).toFixed(1)}% confidence)`);
     }
   }
 
@@ -314,7 +314,7 @@ export class ABTestingService {
     const test = this.activeTests.get(testId);
     if (test) {
       test.status = 'paused';
-      console.log(`⏸️ A/B Test paused: ${testId}`);
+      // console.log(`⏸️ A/B Test paused: ${testId}`);
     }
   }
 
@@ -322,7 +322,7 @@ export class ABTestingService {
     const test = this.activeTests.get(testId);
     if (test) {
       test.status = 'running';
-      console.log(`▶️ A/B Test resumed: ${testId}`);
+      // console.log(`▶️ A/B Test resumed: ${testId}`);
     }
   }
 

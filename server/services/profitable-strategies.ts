@@ -116,7 +116,7 @@ export class ProfitableStrategies {
     
     return Math.min(volatilityAdjustedSize, maxSize);
     } catch (error) {
-      console.error('Error calculating volatility-adjusted size:', error);
+      // console.error('Error calculating volatility-adjusted size:', error);
       return baseAmount * 0.5; // Safe fallback
     }
   }
@@ -135,7 +135,7 @@ export class ProfitableStrategies {
     }
     
     if (this.dailyLossTracker >= this.maxDailyLoss) {
-      console.log(`🚨 CIRCUIT BREAKER ACTIVATED: Daily loss limit $${this.maxDailyLoss} reached`);
+      // console.log(`🚨 CIRCUIT BREAKER ACTIVATED: Daily loss limit $${this.maxDailyLoss} reached`);
       return false; // Stop trading
     }
     

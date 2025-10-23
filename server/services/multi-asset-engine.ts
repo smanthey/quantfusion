@@ -71,7 +71,7 @@ export class MultiAssetEngine {
       });
     });
 
-    console.log(`📊 Initialized ${cryptoAssets.length} crypto + ${forexAssets.length} forex assets`);
+    // console.log(`📊 Initialized ${cryptoAssets.length} crypto + ${forexAssets.length} forex assets`);
   }
 
   /**
@@ -289,14 +289,14 @@ export class MultiAssetEngine {
     if (this.isRunning) return;
     
     this.isRunning = true;
-    console.log('🚀 Multi-Asset Trading Engine Started - Crypto + Forex');
+    // console.log('🚀 Multi-Asset Trading Engine Started - Crypto + Forex');
     
     // Run multi-asset trading loop
     setInterval(async () => {
       try {
         await this.runTradingCycle();
       } catch (error) {
-        console.error('❌ Multi-asset trading cycle error:', error);
+        // console.error('❌ Multi-asset trading cycle error:', error);
       }
     }, 30000); // Every 30 seconds
     
@@ -307,12 +307,12 @@ export class MultiAssetEngine {
         const correlations = await this.analyzeCorrelations();
         const arbitrage = await this.detectArbitrageOpportunities();
         
-        console.log('📊 Portfolio Risk:', risk);
+        // console.log('📊 Portfolio Risk:', risk);
         if (arbitrage.length > 0) {
-          console.log('💰 Arbitrage Opportunities:', arbitrage.length);
+          // console.log('💰 Arbitrage Opportunities:', arbitrage.length);
         }
       } catch (error) {
-        console.error('❌ Cross-asset analysis error:', error);
+        // console.error('❌ Cross-asset analysis error:', error);
       }
     }, 300000);
   }
@@ -330,18 +330,18 @@ export class MultiAssetEngine {
       try {
         const strategy = await this.getOptimalStrategy(symbol, accountBalance);
         if (strategy) {
-          console.log(`🎯 ${config.type.toUpperCase()} Strategy: ${strategy.reasoning}`);
+          // console.log(`🎯 ${config.type.toUpperCase()} Strategy: ${strategy.reasoning}`);
           // Execute trade through trading engine
           // await this.executeTrade(strategy);
         }
       } catch (error) {
-        console.error(`❌ Error processing ${symbol}:`, error);
+        // console.error(`❌ Error processing ${symbol}:`, error);
       }
     }
   }
 
   stop(): void {
     this.isRunning = false;
-    console.log('⏹️ Multi-Asset Trading Engine Stopped');
+    // console.log('⏹️ Multi-Asset Trading Engine Stopped');
   }
 }

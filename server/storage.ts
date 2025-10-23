@@ -28,6 +28,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, gte, and } from "drizzle-orm";
+import { log } from './utils/logger';
 
 export interface IStorage {
   // User management
@@ -208,7 +209,7 @@ export class DatabaseStorage implements IStorage {
       .from(trades)
       .where(eq(trades.archived, false))
       .orderBy(desc(trades.executedAt));
-    console.log(`📊 getAllTrades() returned ${result.length} trades (filtered archived=false)`);
+    log.debug(`📊 getAllTrades() returned ${result.length} trades (filtered archived=false)`);
     return result;
   }
 

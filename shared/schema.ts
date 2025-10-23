@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, decimal, integer, timestamp, boolean, jsonb, uuid, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, decimal, integer, timestamp, boolean, jsonb, uuid, unique, index } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -64,7 +64,13 @@ export const trades = pgTable("trades", {
   status: text("status").notNull().default('open'), // 'open', 'closed'
   archived: boolean("archived").default(false).notNull(), // Filter out old buggy trades
   strategy: text("strategy"), // Track which strategy made this trade
-});
+}, (t) => ({
+  // Indices for performance optimization
+  idxSymbolStatus: index("trades_symbol_status_idx").on(t.symbol, t.status),
+  idxExecutedAt: index("trades_executed_at_idx").on(t.executedAt),
+  idxStrategyId: index("trades_strategy_id_idx").on(t.strategyId),
+  idxArchivedStatus: index("trades_archived_status_idx").on(t.archived, t.status),
+}));
 
 export const marketRegimes = pgTable("market_regimes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -121,7 +127,11 @@ export const historicalPrices = pgTable("historical_prices", {
   trades: integer("trades"), // Number of trades in this candle
   interval: text("interval").notNull(), // '1m', '5m', '15m', '1h', '4h', '1d'
   source: text("source").notNull(), // 'binance', 'coingecko', 'coinlore', 'forex', etc.
-});
+}, (t) => ({
+  // Indices for efficient historical data queries
+  idxSymbolTimestamp: index("historical_prices_symbol_timestamp_idx").on(t.symbol, t.timestamp),
+  idxSymbolInterval: index("historical_prices_symbol_interval_idx").on(t.symbol, t.interval),
+}));
 
 // Alternative Data Sources - Politicians' Trades, Options Flow, Whale Tracking
 export const politicianTrades = pgTable("politician_trades", {

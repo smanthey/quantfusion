@@ -110,7 +110,7 @@ export class ABTestingEngine {
     variant.performance.profit += profit;
     variant.performance.winRate = (variant.performance.winRate * (variant.performance.trades - 1) + (isWin ? 1 : 0)) / variant.performance.trades;
 
-    console.log(`🧪 A/B UPDATE: ${variant.name} | Trades: ${variant.performance.trades} | Win Rate: ${(variant.performance.winRate * 100).toFixed(1)}% | Profit: ${variant.performance.profit > 0 ? '+' : ''}${variant.performance.profit.toFixed(2)}`);
+    // console.log(`🧪 A/B UPDATE: ${variant.name} | Trades: ${variant.performance.trades} | Win Rate: ${(variant.performance.winRate * 100).toFixed(1)}% | Profit: ${variant.performance.profit > 0 ? '+' : ''}${variant.performance.profit.toFixed(2)}`);
   }
 
   public getPerformanceComparison(): { variant: string; performance: string; trades: number; profit: number }[] {

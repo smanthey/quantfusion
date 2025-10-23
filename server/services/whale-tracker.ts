@@ -50,11 +50,11 @@ export class WhaleTracker {
   private readonly LOOKBACK_HOURS = 24;
   
   constructor() {
-    console.log('🐋 Whale Tracker initialized');
+    // console.log('🐋 Whale Tracker initialized');
   }
 
   async start(): Promise<void> {
-    console.log('🐋 Starting Whale Tracker...');
+    // console.log('🐋 Starting Whale Tracker...');
     
     await this.scan();
     
@@ -62,7 +62,7 @@ export class WhaleTracker {
       await this.scan();
     }, this.SCAN_INTERVAL_MS);
     
-    console.log(`✅ Whale tracker started (checking every ${this.SCAN_INTERVAL_MS/1000} seconds)`);
+    // console.log(`✅ Whale tracker started (checking every ${this.SCAN_INTERVAL_MS/1000} seconds)`);
   }
 
   stop(): void {
@@ -70,12 +70,12 @@ export class WhaleTracker {
       clearInterval(this.scanInterval);
       this.scanInterval = null;
     }
-    console.log('⏸️  Whale Tracker stopped');
+    // console.log('⏸️  Whale Tracker stopped');
   }
 
   private async scan(): Promise<void> {
     try {
-      console.log('🔍 Scanning for whale transactions...');
+      // console.log('🔍 Scanning for whale transactions...');
       
       // TODO: Integrate with Whale Alert API, Etherscan, etc.
       const transactions = await this.fetchWhaleTransactions();
@@ -99,14 +99,14 @@ export class WhaleTracker {
       // Generate signals
       const signals = this.generateSignals();
       
-      console.log(`📋 Found ${largeTransactions.length} whale txs, generated ${signals.length} signals`);
+      // console.log(`📋 Found ${largeTransactions.length} whale txs, generated ${signals.length} signals`);
       
       for (const signal of signals.filter(s => s.confidence >= 0.6)) {
-        console.log(`🎯 WHALE SIGNAL: ${signal.direction} ${signal.symbol} (${(signal.confidence*100).toFixed(0)}% confidence, $${(signal.totalValueUSD/1000000).toFixed(1)}M moved)`);
+        // console.log(`🎯 WHALE SIGNAL: ${signal.direction} ${signal.symbol} (${(signal.confidence*100).toFixed(0)}% confidence, $${(signal.totalValueUSD/1000000).toFixed(1)}M moved)`);
       }
       
     } catch (error) {
-      console.error('❌ Whale tracking scan failed:', error);
+      // console.error('❌ Whale tracking scan failed:', error);
     }
   }
 

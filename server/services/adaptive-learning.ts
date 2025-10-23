@@ -151,7 +151,7 @@ export class AdaptiveLearningEngine {
           { expectedOutcome: existing.successRate > 0.5 ? 'improve' : 'maintain' },
           { actualOutcome: update.performance > 0 ? 'success' : 'failure' },
           existing.successRate
-        ).catch(err => console.error('Meta-learning feedback error:', err));
+        ).catch(err => // console.error('Meta-learning feedback error:', err));
       }
     } else {
       // Create new rule
@@ -166,14 +166,14 @@ export class AdaptiveLearningEngine {
       };
       this.adaptationRules.set(ruleId, newRule);
       
-      console.log(`🧠 META-LEARNING: Created new learning rule - ${update.condition}`);
+      // console.log(`🧠 META-LEARNING: Created new learning rule - ${update.condition}`);
     }
   }
 
   async getAdaptedPrediction(symbol: string, basePrediction: any): Promise<any> {
     // TEMPORARY BYPASS: Allow trades with improved logic to collect new data
     if (basePrediction.confidence >= 0.55) {
-      console.log(`🔄 BYPASS MODE: Allowing trade to test improved logic (confidence: ${basePrediction.confidence})`);
+      // console.log(`🔄 BYPASS MODE: Allowing trade to test improved logic (confidence: ${basePrediction.confidence})`);
       return {
         ...basePrediction,
         adaptationApplied: true,

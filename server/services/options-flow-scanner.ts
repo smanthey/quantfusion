@@ -51,11 +51,11 @@ export class OptionsFlowScanner {
   private readonly LARGE_PREMIUM_THRESHOLD = 100000; // $100k+
   
   constructor() {
-    console.log('📊 Options Flow Scanner initialized');
+    // console.log('📊 Options Flow Scanner initialized');
   }
 
   async start(): Promise<void> {
-    console.log('📈 Starting Options Flow Scanner...');
+    // console.log('📈 Starting Options Flow Scanner...');
     
     await this.scan();
     
@@ -63,7 +63,7 @@ export class OptionsFlowScanner {
       await this.scan();
     }, this.SCAN_INTERVAL_MS);
     
-    console.log(`✅ Options scanner started (checking every ${this.SCAN_INTERVAL_MS/1000/60} minutes)`);
+    // console.log(`✅ Options scanner started (checking every ${this.SCAN_INTERVAL_MS/1000/60} minutes)`);
   }
 
   stop(): void {
@@ -71,12 +71,12 @@ export class OptionsFlowScanner {
       clearInterval(this.scanInterval);
       this.scanInterval = null;
     }
-    console.log('⏸️  Options Flow Scanner stopped');
+    // console.log('⏸️  Options Flow Scanner stopped');
   }
 
   private async scan(): Promise<void> {
     try {
-      console.log('🔍 Scanning for unusual options activity...');
+      // console.log('🔍 Scanning for unusual options activity...');
       
       // TODO: Integrate with actual options data API
       // For now, placeholder for demonstration
@@ -96,14 +96,14 @@ export class OptionsFlowScanner {
       // Generate signals
       const signals = this.generateSignals();
       
-      console.log(`📋 Found ${unusualFlow.length} unusual options, generated ${signals.length} signals`);
+      // console.log(`📋 Found ${unusualFlow.length} unusual options, generated ${signals.length} signals`);
       
       for (const signal of signals.filter(s => s.confidence >= 0.7)) {
-        console.log(`🎯 OPTIONS SIGNAL: ${signal.direction} ${signal.symbol} (${(signal.confidence*100).toFixed(0)}% confidence, $${(signal.totalPremium/1000).toFixed(0)}k premium)`);
+        // console.log(`🎯 OPTIONS SIGNAL: ${signal.direction} ${signal.symbol} (${(signal.confidence*100).toFixed(0)}% confidence, $${(signal.totalPremium/1000).toFixed(0)}k premium)`);
       }
       
     } catch (error) {
-      console.error('❌ Options flow scan failed:', error);
+      // console.error('❌ Options flow scan failed:', error);
     }
   }
 

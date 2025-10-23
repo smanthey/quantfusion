@@ -39,9 +39,9 @@ export class DatabaseMetaLearning implements MetaLearningService {
         ruleEffectiveness: null
       });
       
-      console.log(`📝 META-LEARNING: Recorded rule application - ${ruleId} applied to trade ${tradeId}`);
+      // console.log(`📝 META-LEARNING: Recorded rule application - ${ruleId} applied to trade ${tradeId}`);
     } catch (error) {
-      console.error('Failed to record rule application:', error);
+      // console.error('Failed to record rule application:', error);
     }
   }
   
@@ -55,9 +55,9 @@ export class DatabaseMetaLearning implements MetaLearningService {
         })
         .where(eq(learningRuleApplications.id, applicationId));
       
-      console.log(`🔄 META-LEARNING: Updated rule outcome - ${actualOutcome} with effectiveness ${effectiveness}`);
+      // console.log(`🔄 META-LEARNING: Updated rule outcome - ${actualOutcome} with effectiveness ${effectiveness}`);
     } catch (error) {
-      console.error('Failed to update rule outcome:', error);
+      // console.error('Failed to update rule outcome:', error);
     }
   }
   
@@ -77,10 +77,10 @@ export class DatabaseMetaLearning implements MetaLearningService {
         metadata
       }).returning();
       
-      console.log(`💡 META-LEARNING: Created insight - "${title}" based on ${basedOnTrades} trades`);
+      // console.log(`💡 META-LEARNING: Created insight - "${title}" based on ${basedOnTrades} trades`);
       return insight.id;
     } catch (error) {
-      console.error('Failed to create insight:', error);
+      // console.error('Failed to create insight:', error);
       throw error;
     }
   }
@@ -99,9 +99,9 @@ export class DatabaseMetaLearning implements MetaLearningService {
         })
         .where(eq(learningInsights.id, insightId));
       
-      console.log(`✅ META-LEARNING: Validated insight ${insightId} - accuracy: ${(accuracy*100).toFixed(1)}%, status: ${status}`);
+      // console.log(`✅ META-LEARNING: Validated insight ${insightId} - accuracy: ${(accuracy*100).toFixed(1)}%, status: ${status}`);
     } catch (error) {
-      console.error('Failed to validate insight:', error);
+      // console.error('Failed to validate insight:', error);
     }
   }
   
@@ -118,9 +118,9 @@ export class DatabaseMetaLearning implements MetaLearningService {
         learningAdjustment: null // To be filled based on how we adjust our learning
       });
       
-      console.log(`🧠 META-LEARNING: Recorded feedback on ${subjectType} ${subjectId} - performance: ${(performance*100).toFixed(1)}%`);
+      // console.log(`🧠 META-LEARNING: Recorded feedback on ${subjectType} ${subjectId} - performance: ${(performance*100).toFixed(1)}%`);
     } catch (error) {
-      console.error('Failed to record learning feedback:', error);
+      // console.error('Failed to record learning feedback:', error);
     }
   }
   
@@ -181,7 +181,7 @@ export class DatabaseMetaLearning implements MetaLearningService {
         }))
       };
     } catch (error) {
-      console.error('Meta-learning analysis error:', error);
+      // console.error('Meta-learning analysis error:', error);
       return {
         metaLearningStats: {
           totalRuleApplications: 0,
@@ -223,7 +223,7 @@ export class DatabaseMetaLearning implements MetaLearningService {
           : 0
       };
     } catch (error) {
-      console.error('Learning effectiveness error:', error);
+      // console.error('Learning effectiveness error:', error);
       return {
         totalApplications: 0,
         winningApplications: 0,

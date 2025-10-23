@@ -32,26 +32,26 @@ export class HistoricalDataService {
   private async initializeHistoricalData() {
     try {
       // FIRST: Load all stored historical data from database
-      console.log('📊 Loading historical data from database...');
+      // console.log('📊 Loading historical data from database...');
       await this.loadFromDatabase();
       
       // Log what we loaded
       for (const [symbol, data] of Array.from(this.historicalData.entries())) {
-        console.log(`✅ Loaded ${data.length} candles for ${symbol} from database`);
+        // console.log(`✅ Loaded ${data.length} candles for ${symbol} from database`);
       }
       
       // THEN: Try to supplement with fresh Binance data if available
       try {
-        console.log('📊 Fetching fresh data from Binance...');
+        // console.log('📊 Fetching fresh data from Binance...');
         await this.fetchRealHistoricalData();
         this.usingRealData = true;
-        console.log('✅ Supplemented with fresh Binance data');
+        // console.log('✅ Supplemented with fresh Binance data');
       } catch (error) {
-        console.log('⚠️ Binance unavailable, using database data only');
+        // console.log('⚠️ Binance unavailable, using database data only');
         this.usingRealData = this.historicalData.size > 0;
       }
     } catch (error) {
-      console.warn('⚠️ Failed to load historical data, using synthetic data:', error);
+      // console.warn('⚠️ Failed to load historical data, using synthetic data:', error);
       this.generateHistoricalData();
       this.usingRealData = false;
     }
@@ -89,7 +89,7 @@ export class HistoricalDataService {
           this.historicalData.set(symbol, uniqueData);
         }
       } catch (error) {
-        console.error(`Failed to load database data for ${symbol}:`, error);
+        // console.error(`Failed to load database data for ${symbol}:`, error);
       }
     }
   }
@@ -129,9 +129,9 @@ export class HistoricalDataService {
         }));
         
         this.historicalData.set(symbol, data);
-        console.log(`✅ Loaded ${data.length} candles for ${symbol} from Binance`);
+        // console.log(`✅ Loaded ${data.length} candles for ${symbol} from Binance`);
       } catch (error) {
-        console.error(`Failed to fetch historical data for ${symbol}:`, error);
+        // console.error(`Failed to fetch historical data for ${symbol}:`, error);
         throw error;
       }
     }
@@ -196,7 +196,7 @@ export class HistoricalDataService {
         const validLow = Math.min(low, open, currentPrice);
         
         if (isNaN(validHigh) || isNaN(validLow) || isNaN(open) || isNaN(currentPrice)) {
-          console.error(`Invalid OHLC data generated for ${symbol} at ${timestamp}`);
+          // console.error(`Invalid OHLC data generated for ${symbol} at ${timestamp}`);
           continue;
         }
         

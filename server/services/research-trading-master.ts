@@ -69,9 +69,9 @@ export class ResearchTradingMaster {
     this.alphaModel = new QuantAlphaModel(this.marketData);
     this.forexTrader = new ForexQuantTrader(this.marketData);
     
-    console.log('🧠 INSTITUTIONAL MULTI-ASSET QUANT SYSTEM');
-    console.log('💱 CRYPTO: Cycle + Multi-Factor Alpha + Volatility + Pairs Trading');
-    console.log('💱 FOREX: Carry Trade + PPP + Momentum + Trend + Risk Parity');
+    // console.log('🧠 INSTITUTIONAL MULTI-ASSET QUANT SYSTEM');
+    // console.log('💱 CRYPTO: Cycle + Multi-Factor Alpha + Volatility + Pairs Trading');
+    // console.log('💱 FOREX: Carry Trade + PPP + Momentum + Trend + Risk Parity');
   }
   
   /**
@@ -110,13 +110,13 @@ export class ResearchTradingMaster {
     const sizeUSD = accountBalance * sizePct;
     const size = sizeUSD / price; // Number of units
     
-    console.log(`\n✅ FOREX QUANT: ${action.toUpperCase()} ${symbol}`);
-    console.log(`📊 ${reasoning}`);
-    console.log(`💰 Entry: $${price.toFixed(5)}`);
-    console.log(`🛡️ Stop: $${stopLoss.toFixed(5)}`);
-    console.log(`🎯 Target: $${takeProfit.toFixed(5)}`);
-    console.log(`📈 Confidence: ${(confidence*100).toFixed(1)}%`);
-    console.log(`💵 Size: $${sizeUSD.toFixed(2)} (${(sizePct*100).toFixed(1)}%)`);
+    // console.log(`\n✅ FOREX QUANT: ${action.toUpperCase()} ${symbol}`);
+    // console.log(`📊 ${reasoning}`);
+    // console.log(`💰 Entry: $${price.toFixed(5)}`);
+    // console.log(`🛡️ Stop: $${stopLoss.toFixed(5)}`);
+    // console.log(`🎯 Target: $${takeProfit.toFixed(5)}`);
+    // console.log(`📈 Confidence: ${(confidence*100).toFixed(1)}%`);
+    // console.log(`💵 Size: $${sizeUSD.toFixed(2)} (${(sizePct*100).toFixed(1)}%)`);
     
     return {
       action,
@@ -138,7 +138,7 @@ export class ResearchTradingMaster {
     if (this.tradePerformance.totalTrades >= 20) {
       const winRate = this.tradePerformance.wins / this.tradePerformance.totalTrades;
       if (winRate < 0.55) {
-        console.log(`🛑 AUTO-DISABLED: Win rate ${(winRate*100).toFixed(1)}% < 55% (${this.tradePerformance.wins}W/${this.tradePerformance.losses}L)`);
+        // console.log(`🛑 AUTO-DISABLED: Win rate ${(winRate*100).toFixed(1)}% < 55% (${this.tradePerformance.wins}W/${this.tradePerformance.losses}L)`);
         this.isRunning = false;
         return null;
       }
@@ -156,7 +156,7 @@ export class ResearchTradingMaster {
     });
     
     if (hasOpenPosition) {
-      console.log(`🛑 ${symbol}: Already have open position - skipping`);
+      // console.log(`🛑 ${symbol}: Already have open position - skipping`);
       return null;
     }
     
@@ -166,7 +166,7 @@ export class ResearchTradingMaster {
     
     // 🛑 GATE #2: Data quality - require reasonable confidence (50%+)
     if (marketData.confidence && marketData.confidence < 0.50) {
-      console.log(`🛑 ${symbol}: Low confidence ${(marketData.confidence*100).toFixed(0)}% (need 50%+)`);
+      // console.log(`🛑 ${symbol}: Low confidence ${(marketData.confidence*100).toFixed(0)}% (need 50%+)`);
       return null;
     }
     
@@ -212,14 +212,14 @@ export class ResearchTradingMaster {
     // MODEL 1: Market Cycle Analysis (Wyckoff + Halving + Seasonal)
     const cycleAnalysis = this.cycleDetector.detectCycle(symbol);
     if (!cycleAnalysis) {
-      console.log(`🛑 ${symbol}: Insufficient data for cycle analysis`);
+      // console.log(`🛑 ${symbol}: Insufficient data for cycle analysis`);
       return null;
     }
     
     // MODEL 2: Multi-Factor Alpha (Momentum + Value + Quality + Mean Reversion + Volume)
     const alphaSignal = this.alphaModel.generateAlpha(symbol);
     if (!alphaSignal) {
-      console.log(`🛑 ${symbol}: Insufficient data for alpha model`);
+      // console.log(`🛑 ${symbol}: Insufficient data for alpha model`);
       return null;
     }
     
@@ -301,7 +301,7 @@ export class ResearchTradingMaster {
       
     } else if (cycleVote && alphaVote && cycleVote !== alphaVote) {
       // ⚠️ DISAGREEMENT: Models contradict - skip trade
-      console.log(`🛑 ${symbol}: Model disagreement - Cycle says ${cycleVote}, Alpha says ${alphaVote}`);
+      // console.log(`🛑 ${symbol}: Model disagreement - Cycle says ${cycleVote}, Alpha says ${alphaVote}`);
       return null;
       
     } else if (alphaVote && alphaStrength > 0.6 && Math.abs(alphaScore) > 0.5) {
@@ -314,7 +314,7 @@ export class ResearchTradingMaster {
       // No clear signal
       cycleVote = cycleVote || 'none';
       alphaVote = alphaVote || 'none';
-      console.log(`🛑 ${symbol}: Weak signals - Cycle:${cycleVote}, Alpha:${alphaVote} (${(alphaScore*100).toFixed(0)}%)`);
+      // console.log(`🛑 ${symbol}: Weak signals - Cycle:${cycleVote}, Alpha:${alphaVote} (${(alphaScore*100).toFixed(0)}%)`);
       return null;
     }
     
@@ -359,7 +359,7 @@ export class ResearchTradingMaster {
     }
     
     if (!action) {
-      console.log(`🛑 ${symbol}: ${cycle.toUpperCase()} + ${regime.toUpperCase()} VOL (${(avgChange*100).toFixed(2)}%), RSI ${rsi.toFixed(1)}, Trend ${trend} - No signal`);
+      // console.log(`🛑 ${symbol}: ${cycle.toUpperCase()} + ${regime.toUpperCase()} VOL (${(avgChange*100).toFixed(2)}%), RSI ${rsi.toFixed(1)}, Trend ${trend} - No signal`);
       return null;
     }
     
@@ -383,13 +383,13 @@ export class ResearchTradingMaster {
     const reward = Math.abs(takeProfit - price);
     const rrRatio = reward / risk;
     
-    console.log(`\n✅ ${cycle.toUpperCase()} + ${regime.toUpperCase()} VOL: ${action.toUpperCase()} ${symbol}`);
-    console.log(`📊 ${reasoning}`);
-    console.log(`💰 Entry: $${price.toFixed(2)}`);
-    console.log(`🛡️ Stop: $${stopLoss.toFixed(2)} (-${(stopPct*100).toFixed(2)}%)`);
-    console.log(`🎯 Target: $${takeProfit.toFixed(2)} (+${(targetPct*100).toFixed(2)}%)`);
-    console.log(`📈 R/R: 1:${rrRatio.toFixed(2)} | Win Prob: ${(confidence*100).toFixed(1)}%`);
-    console.log(`💵 Size: $${sizeUSD.toFixed(2)} (${(positionPct*100).toFixed(1)}%)`);
+    // console.log(`\n✅ ${cycle.toUpperCase()} + ${regime.toUpperCase()} VOL: ${action.toUpperCase()} ${symbol}`);
+    // console.log(`📊 ${reasoning}`);
+    // console.log(`💰 Entry: $${price.toFixed(2)}`);
+    // console.log(`🛡️ Stop: $${stopLoss.toFixed(2)} (-${(stopPct*100).toFixed(2)}%)`);
+    // console.log(`🎯 Target: $${takeProfit.toFixed(2)} (+${(targetPct*100).toFixed(2)}%)`);
+    // console.log(`📈 R/R: 1:${rrRatio.toFixed(2)} | Win Prob: ${(confidence*100).toFixed(1)}%`);
+    // console.log(`💵 Size: $${sizeUSD.toFixed(2)} (${(positionPct*100).toFixed(1)}%)`);
     
     return {
       action,
@@ -455,10 +455,10 @@ export class ResearchTradingMaster {
         takeProfit: signal.takeProfit
       });
       
-      console.log(`✅ Trade ${trade.id} executed`);
+      // console.log(`✅ Trade ${trade.id} executed`);
       
     } catch (error) {
-      console.error('❌ Trade execution failed:', error);
+      // console.error('❌ Trade execution failed:', error);
     }
   }
   
@@ -491,7 +491,7 @@ export class ResearchTradingMaster {
         if (trailingStop > stopLoss) {
           stopLoss = trailingStop;
           this.openTrades.set(trade.id, { ...tradeParams, stopLoss });
-          console.log(`📈 ${trade.symbol} trailing stop moved to $${stopLoss.toFixed(2)}`);
+          // console.log(`📈 ${trade.symbol} trailing stop moved to $${stopLoss.toFixed(2)}`);
         }
       } else if (trade.side === 'sell' && currentPrice < entryPrice) {
         const unrealizedProfit = entryPrice - currentPrice;
@@ -499,7 +499,7 @@ export class ResearchTradingMaster {
         if (trailingStop < stopLoss) {
           stopLoss = trailingStop;
           this.openTrades.set(trade.id, { ...tradeParams, stopLoss });
-          console.log(`📈 ${trade.symbol} trailing stop moved to $${stopLoss.toFixed(2)}`);
+          // console.log(`📈 ${trade.symbol} trailing stop moved to $${stopLoss.toFixed(2)}`);
         }
       }
       
@@ -574,7 +574,7 @@ export class ResearchTradingMaster {
         
         const winRate = this.tradePerformance.wins / this.tradePerformance.totalTrades;
         const emoji = pnl > 0 ? '✅' : '❌';
-        console.log(`${emoji} ${trade.symbol} closed: ${reason} | P&L: $${pnl.toFixed(2)} | Win Rate: ${(winRate*100).toFixed(1)}% (${this.tradePerformance.wins}W/${this.tradePerformance.losses}L)`);
+        // console.log(`${emoji} ${trade.symbol} closed: ${reason} | P&L: $${pnl.toFixed(2)} | Win Rate: ${(winRate*100).toFixed(1)}% (${this.tradePerformance.wins}W/${this.tradePerformance.losses}L)`);
       }
     }
   }
@@ -584,11 +584,11 @@ export class ResearchTradingMaster {
    */
   async start(): Promise<void> {
     try {
-      console.log('🔍 DEBUG: start() called, about to call run()');
+      // console.log('🔍 DEBUG: start() called, about to call run()');
       return await this.run();
     } catch (error) {
-      console.error('💥 SYNC ERROR in start():', error);
-      console.error('Stack:', error instanceof Error ? error.stack : 'No stack');
+      // console.error('💥 SYNC ERROR in start():', error);
+      // console.error('Stack:', error instanceof Error ? error.stack : 'No stack');
       throw error;
     }
   }
@@ -610,14 +610,14 @@ export class ResearchTradingMaster {
     optionsFlowScanner.stop();
     whaleTracker.stop();
     
-    console.log('⏸️  Research Trading Master STOPPED');
+    // console.log('⏸️  Research Trading Master STOPPED');
   }
   
   /**
    * Emergency stop - immediately halt all trading
    */
   async emergencyStop(): Promise<void> {
-    console.log('🚨 EMERGENCY STOP ACTIVATED');
+    // console.log('🚨 EMERGENCY STOP ACTIVATED');
     await this.stop();
     
     // Close all open trades at market price
@@ -638,15 +638,15 @@ export class ResearchTradingMaster {
             })
             .where(eq(trades.id, trade.id));
           
-          console.log(`⚠️ Emergency closed ${trade.symbol} at $${currentPrice}`);
+          // console.log(`⚠️ Emergency closed ${trade.symbol} at $${currentPrice}`);
         }
       } catch (error) {
-        console.error(`Failed to emergency close trade ${tradeId}:`, error);
+        // console.error(`Failed to emergency close trade ${tradeId}:`, error);
       }
     }
     
     this.openTrades.clear();
-    console.log('✅ All positions closed - system safe');
+    // console.log('✅ All positions closed - system safe');
   }
   
   /**
@@ -656,10 +656,10 @@ export class ResearchTradingMaster {
     if (this.isRunning) return;
     
     this.isRunning = true;
-    console.log('🚀 Research Trading Master STARTED');
+    // console.log('🚀 Research Trading Master STARTED');
     
     // Start alternative data scanners for extra alpha
-    console.log('📡 Starting alternative data scanners...');
+    // console.log('📡 Starting alternative data scanners...');
     await politicianTradesScanner.start();
     await optionsFlowScanner.start();
     await whaleTracker.start();
@@ -684,17 +684,17 @@ export class ResearchTradingMaster {
           // Only skip if ALL data sources are down (critical failure)
           const criticalBreakers = openBreakers.filter(b => b === 'market_data' || b === 'forex_data');
           if (criticalBreakers.length > 0 && openBreakers.length >= 4) {
-            console.log(`🚨 CRITICAL: All data sources down - Skipping trading loop`);
+            // console.log(`🚨 CRITICAL: All data sources down - Skipping trading loop`);
             return;
           }
           // Otherwise: Trade with reduced size (handled in position sizing)
-          console.log(`⚠️ Partial degradation: ${openBreakers.join(', ')} - Trading with reduced size`);
+          // console.log(`⚠️ Partial degradation: ${openBreakers.join(', ')} - Trading with reduced size`);
         }
         
         // 🔴 CHECK DAILY LOSS LIMIT
         const todaysPnL = await this.getTodaysPnL();
         if (!portfolioRiskManager.checkDailyLossLimit(todaysPnL)) {
-          console.log(`🚨 DAILY LOSS LIMIT HIT: $${todaysPnL.toFixed(2)} (max -$${portfolioRiskManager.getRiskLimits().maxDailyLoss})`);
+          // console.log(`🚨 DAILY LOSS LIMIT HIT: $${todaysPnL.toFixed(2)} (max -$${portfolioRiskManager.getRiskLimits().maxDailyLoss})`);
           await this.emergencyStop();
           return;
         }
@@ -711,7 +711,7 @@ export class ResearchTradingMaster {
         }
         
       } catch (error) {
-        console.error('Trading loop error:', error);
+        // console.error('Trading loop error:', error);
       }
     }, 10000);
   }

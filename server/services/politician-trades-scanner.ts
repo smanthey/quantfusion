@@ -55,14 +55,14 @@ export class PoliticianTradesScanner {
   private readonly DAYS_LOOKBACK = 45; // Congressional disclosure window
   
   constructor() {
-    console.log('📊 Politicians Trades Scanner initialized');
+    // console.log('📊 Politicians Trades Scanner initialized');
   }
 
   /**
    * Start scanning for politician trades
    */
   async start(): Promise<void> {
-    console.log('🏛️  Starting Politicians Trades Scanner...');
+    // console.log('🏛️  Starting Politicians Trades Scanner...');
     
     // Initial scan
     await this.scan();
@@ -72,7 +72,7 @@ export class PoliticianTradesScanner {
       await this.scan();
     }, this.SCAN_INTERVAL_MS);
     
-    console.log(`✅ Scanner started (checking every ${this.SCAN_INTERVAL_MS/1000/60} minutes)`);
+    // console.log(`✅ Scanner started (checking every ${this.SCAN_INTERVAL_MS/1000/60} minutes)`);
   }
 
   /**
@@ -83,7 +83,7 @@ export class PoliticianTradesScanner {
       clearInterval(this.scanInterval);
       this.scanInterval = null;
     }
-    console.log('⏸️  Politicians Trades Scanner stopped');
+    // console.log('⏸️  Politicians Trades Scanner stopped');
   }
 
   /**
@@ -91,7 +91,7 @@ export class PoliticianTradesScanner {
    */
   private async scan(): Promise<void> {
     try {
-      console.log('🔍 Scanning for new politician trades...');
+      // console.log('🔍 Scanning for new politician trades...');
       
       // TODO: Integrate with actual API (Capitol Trades, Quiver Quantitative)
       // For now, use mock data to demonstrate the system
@@ -112,17 +112,17 @@ export class PoliticianTradesScanner {
       // Generate signals from clustered activity
       const signals = this.generateSignals();
       
-      console.log(`📋 Found ${trades.length} new trades, generated ${signals.length} signals`);
+      // console.log(`📋 Found ${trades.length} new trades, generated ${signals.length} signals`);
       
       // Log high-confidence signals
       for (const signal of signals.filter(s => s.confidence >= 0.7)) {
-        console.log(`🎯 POLITICIAN SIGNAL: ${signal.action} ${signal.symbol} (${(signal.confidence*100).toFixed(0)}% confidence, ${signal.politicianCount} politicians)`);
+        // console.log(`🎯 POLITICIAN SIGNAL: ${signal.action} ${signal.symbol} (${(signal.confidence*100).toFixed(0)}% confidence, ${signal.politicianCount} politicians)`);
       }
       
       this.lastScanTime = new Date();
       
     } catch (error) {
-      console.error('❌ Politicians trade scan failed:', error);
+      // console.error('❌ Politicians trade scan failed:', error);
     }
   }
 

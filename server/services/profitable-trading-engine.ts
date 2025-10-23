@@ -11,7 +11,7 @@ export class ProfitableTradingEngine {
   private readonly DAILY_LOSS_LIMIT = 50; // Stop trading if we lose $50 in a day
 
   constructor() {
-    console.log('💰 PROFITABLE Trading Engine initialized - FOCUS ON PROFITS');
+    // console.log('💰 PROFITABLE Trading Engine initialized - FOCUS ON PROFITS');
   }
 
   /**
@@ -177,7 +177,7 @@ export class ProfitableTradingEngine {
     // Check daily loss limit
     const dailyPnL = await this.getDailyPnL();
     if (dailyPnL < -this.DAILY_LOSS_LIMIT) {
-      console.log(`🛑 Daily loss limit reached: $${dailyPnL.toFixed(2)}. Stopping trading.`);
+      // console.log(`🛑 Daily loss limit reached: $${dailyPnL.toFixed(2)}. Stopping trading.`);
       return;
     }
     
@@ -187,16 +187,16 @@ export class ProfitableTradingEngine {
     const riskRewardRatio = profitPotential / lossPotential;
     
     if (riskRewardRatio < 2.0) { // Need at least 2:1 risk/reward
-      console.log(`🚫 Poor risk/reward ratio: ${riskRewardRatio.toFixed(2)}. Skipping trade.`);
+      // console.log(`🚫 Poor risk/reward ratio: ${riskRewardRatio.toFixed(2)}. Skipping trade.`);
       return;
     }
     
-    console.log(`💰 PROFITABLE SIGNAL: ${signal.action} ${signal.symbol} - Risk/Reward: ${riskRewardRatio.toFixed(2)}:1`);
-    console.log(`💰 Target: ${((profitPotential * 100).toFixed(2))}% profit | Stop: ${((lossPotential * 100).toFixed(2))}% loss`);
+    // console.log(`💰 PROFITABLE SIGNAL: ${signal.action} ${signal.symbol} - Risk/Reward: ${riskRewardRatio.toFixed(2)}:1`);
+    // console.log(`💰 Target: ${((profitPotential * 100).toFixed(2))}% profit | Stop: ${((lossPotential * 100).toFixed(2))}% loss`);
     
     // Execute the trade with the existing trading infrastructure
     // Direct execution using trading engine
-    console.log(`✅ PROFITABLE TRADE EXECUTED: ${signal.action} ${signal.symbol}`);
+    // console.log(`✅ PROFITABLE TRADE EXECUTED: ${signal.action} ${signal.symbol}`);
   }
 
   // Helper methods
@@ -246,7 +246,7 @@ export class ProfitableTradingEngine {
     if (this.isRunning) return;
     this.isRunning = true;
     
-    console.log('🎯 PROFITABLE Trading Engine STARTED - Focus on making money, not just trading');
+    // console.log('🎯 PROFITABLE Trading Engine STARTED - Focus on making money, not just trading');
     
     const tradingLoop = async () => {
       if (!this.isRunning) return;
@@ -268,7 +268,7 @@ export class ProfitableTradingEngine {
           }
         }
       } catch (error) {
-        console.error('Profitable trading loop error:', error);
+        // console.error('Profitable trading loop error:', error);
       }
       
       // Run every 30 seconds for quality over quantity
@@ -280,6 +280,6 @@ export class ProfitableTradingEngine {
 
   stop(): void {
     this.isRunning = false;
-    console.log('🛑 PROFITABLE Trading Engine STOPPED');
+    // console.log('🛑 PROFITABLE Trading Engine STOPPED');
   }
 }

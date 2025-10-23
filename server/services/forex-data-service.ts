@@ -83,7 +83,7 @@ export class ForexDataService {
       });
     }
 
-    console.log(`💱 Initialized ${this.cache.size} forex pairs with live rates`);
+    // console.log(`💱 Initialized ${this.cache.size} forex pairs with live rates`);
   }
 
   /**
@@ -170,10 +170,10 @@ export class ForexDataService {
       
       // Log every 5 minutes
       if (now % 300000 < this.UPDATE_INTERVAL) {
-        console.log(`💱 Updated ${this.cache.size} forex rates - Market ${this.getMarketSession()}`);
+        // console.log(`💱 Updated ${this.cache.size} forex rates - Market ${this.getMarketSession()}`);
       }
     } catch (error) {
-      console.error('Error updating forex rates:', error);
+      // console.error('Error updating forex rates:', error);
     }
   }
 
@@ -290,16 +290,16 @@ export class ForexDataService {
    */
   async connectToForexAPIs(): Promise<void> {
     // Implementation for connecting to research-identified free APIs
-    console.log('🔌 Connecting to free forex data APIs...');
+    // console.log('🔌 Connecting to free forex data APIs...');
     
     try {
       // Alpha Vantage integration (25 requests/day)
       // ExchangeRatesAPI integration (100 requests/month)
       // FX-1-Minute-Data GitHub integration for historical data
       
-      console.log('✅ Connected to forex data providers');
+      // console.log('✅ Connected to forex data providers');
     } catch (error) {
-      console.error('❌ Error connecting to forex APIs:', error);
+      // console.error('❌ Error connecting to forex APIs:', error);
     }
   }
 

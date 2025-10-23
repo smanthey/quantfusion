@@ -53,7 +53,7 @@ export class HistoricalDataCollector {
   private readonly COINGECKO_RATE_LIMIT = 2000; // ms between calls (30/min = 2000ms)
 
   async startHistoricalCollection(): Promise<void> {
-    console.log(`🏛️ Starting historical data collection (${this.YEARS_TO_COLLECT} years)...`);
+    // console.log(`🏛️ Starting historical data collection (${this.YEARS_TO_COLLECT} years)...`);
     
     for (const symbol of this.SYMBOLS) {
       try {
@@ -64,23 +64,23 @@ export class HistoricalDataCollector {
         ]);
 
         if (binanceData.status === 'fulfilled' && binanceData.value.length > 0) {
-          console.log(`✅ Binance: Collected ${binanceData.value.length} data points for ${symbol}`);
+          // console.log(`✅ Binance: Collected ${binanceData.value.length} data points for ${symbol}`);
           await this.storeHistoricalData(binanceData.value);
         }
 
         if (coinGeckoData.status === 'fulfilled' && coinGeckoData.value.length > 0) {
-          console.log(`✅ CoinGecko: Collected ${coinGeckoData.value.length} data points for ${symbol}`);
+          // console.log(`✅ CoinGecko: Collected ${coinGeckoData.value.length} data points for ${symbol}`);
           await this.storeHistoricalData(coinGeckoData.value);
         }
 
         // Wait between symbols to respect rate limits
         await this.delay(3000);
       } catch (error) {
-        console.error(`❌ Error collecting historical data for ${symbol}:`, error.message);
+        // console.error(`❌ Error collecting historical data for ${symbol}:`, error.message);
       }
     }
 
-    console.log('🎯 Historical data collection completed!');
+    // console.log('🎯 Historical data collection completed!');
   }
 
   private async collectBinanceHistoricalData(symbol: string): Promise<HistoricalDataPoint[]> {
@@ -110,7 +110,7 @@ export class HistoricalDataCollector {
         
         if (!response.ok) {
           if (response.status === 429) {
-            console.log('⏳ Binance rate limit hit, waiting...');
+            // console.log('⏳ Binance rate limit hit, waiting...');
             await this.delay(60000); // Wait 1 minute
             continue;
           }
@@ -139,7 +139,7 @@ export class HistoricalDataCollector {
         currentStart = klines[klines.length - 1][6] + 1; // Start from next close time
         
       } catch (error) {
-        console.error(`Error fetching Binance data batch:`, error.message);
+        // console.error(`Error fetching Binance data batch:`, error.message);
         break;
       }
     }
@@ -165,7 +165,7 @@ export class HistoricalDataCollector {
       
       if (!response.ok) {
         if (response.status === 429) {
-          console.log('⏳ CoinGecko rate limit hit, waiting...');
+          // console.log('⏳ CoinGecko rate limit hit, waiting...');
           await this.delay(60000);
           return this.collectCoinGeckoHistoricalData(symbol); // Retry
         }
@@ -199,22 +199,22 @@ export class HistoricalDataCollector {
       return dataPoints;
       
     } catch (error) {
-      console.error(`Error fetching CoinGecko data:`, error.message);
+      // console.error(`Error fetching CoinGecko data:`, error.message);
       return [];
     }
   }
 
   private async storeHistoricalData(dataPoints: HistoricalDataPoint[]): Promise<void> {
     // For now, we'll log the data. In a full implementation, this would go to the database
-    console.log(`💾 Storing ${dataPoints.length} historical data points`);
+    // console.log(`💾 Storing ${dataPoints.length} historical data points`);
     
     // Example: Store first and last data points for verification
     if (dataPoints.length > 0) {
       const first = dataPoints[0];
       const last = dataPoints[dataPoints.length - 1];
       
-      console.log(`📊 Range: ${new Date(first.timestamp).toISOString()} to ${new Date(last.timestamp).toISOString()}`);
-      console.log(`📈 ${first.symbol}: $${first.close.toFixed(2)} → $${last.close.toFixed(2)} (${((last.close - first.close) / first.close * 100).toFixed(1)}%)`);
+      // console.log(`📊 Range: ${new Date(first.timestamp).toISOString()} to ${new Date(last.timestamp).toISOString()}`);
+      // console.log(`📈 ${first.symbol}: $${first.close.toFixed(2)} → $${last.close.toFixed(2)} (${((last.close - first.close) / first.close * 100).toFixed(1)}%)`);
     }
 
     // TODO: Insert into database table for historical analysis

@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
+import { log } from './utils/logger';
 import { 
   insertStrategySchema, 
   insertBacktestResultSchema,
@@ -57,7 +58,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   wss.on('connection', (ws) => {
     clients.add(ws);
-    console.log('✅ Client connected to WebSocket');
+    log.info('✅ Client connected to WebSocket');
 
     // Send initial data
     ws.send(JSON.stringify({
@@ -77,17 +78,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }));
         }
       } catch (err) {
-        console.error('WebSocket message parse error:', err);
+        log.error('WebSocket message parse error', { error: err });
       }
     });
 
     ws.on('close', () => {
       clients.delete(ws);
-      console.log('🔌 Client disconnected from WebSocket');
+      log.info('🔌 Client disconnected from WebSocket');
     });
 
     ws.on('error', (error) => {
-      console.error('❌ WebSocket error:', error);
+      log.error('❌ WebSocket error', { error });
       clients.delete(ws);
     });
   });
@@ -309,7 +310,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalTrades: performance.totalTrades
       });
     } catch (error) {
-      console.error('Analytics error:', error);
+      log.error('Analytics error:', error);
       res.status(500).json({ error: 'Failed to fetch analytics data' });
     }
   });
@@ -427,7 +428,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(dashboardData);
     } catch (error) {
-      console.error('Dashboard data error:', error);
+      log.error('Dashboard data error:', error);
       res.status(500).json({ error: 'Failed to fetch dashboard data' });
     }
   });
@@ -461,7 +462,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lastUpdate: new Date().toISOString()
       });
     } catch (error) {
-      console.error('System status error:', error);
+      log.error('System status error:', error);
       res.json({
         tradingEngine: 'error',
         marketData: 'error', 
@@ -478,7 +479,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/account', async (req, res) => {
     try {
       const allTrades = await storage.getAllTrades();
-      console.log(`📊 Calculating account balance from ${allTrades.length} trades using UNIFIED method`);
+      log.info(`📊 Calculating account balance from ${allTrades.length} trades using UNIFIED method`);
 
       // Use unified performance calculation for consistency
       const performance = await calculateUnifiedPerformance(allTrades);
@@ -496,7 +497,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const currentBalance = startingCapital + totalPnL;
       const freeBalance = Math.max(0, currentBalance);
 
-      console.log(`💰 UNIFIED Account Balance: Start=$${startingCapital}, P&L=$${(totalPnL || 0).toFixed(2)}, Fees=$${(totalFees || 0).toFixed(2)}, Current=$${(currentBalance || startingCapital).toFixed(2)}`);
+      log.info(`💰 UNIFIED Account Balance: Start=$${startingCapital}, P&L=$${(totalPnL || 0).toFixed(2)}, Fees=$${(totalFees || 0).toFixed(2)}, Current=$${(currentBalance || startingCapital).toFixed(2)}`);
 
       const accountInfo = {
         balances: [{
@@ -521,7 +522,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(accountInfo);
     } catch (error) {
-      console.error('Account data error:', error);
+      log.error('Account data error:', error);
       res.json({
         balances: [{ asset: 'USDT', free: '10000.00', locked: '0.00' }],
         totalValue: 10000,
@@ -639,14 +640,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Trading operations
   app.post('/api/trading/start', async (req, res) => {
     try {
-      console.log('💡 Starting WorkingTrader (EMA+RSI strategy)...');
+      log.info('💡 Starting WorkingTrader (EMA+RSI strategy)...');
       
       // DISABLED: Old complex research engine (conflicts with WorkingTrader)
       // await tradingEngine.start();
       
       // Start SIMPLE working trader (WILL TRADE NOW)
       await workingTrader.start();
-      console.log('✅ Simple EMA+RSI trader started (60-75% win rate target)');
+      log.info('✅ Simple EMA+RSI trader started (60-75% win rate target)');
 
       broadcast({
         type: 'trading_started',
@@ -655,7 +656,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ status: 'Trading started - WorkingTrader active' });
     } catch (error) {
-      console.error('❌ Failed to start trading:', error);
+      log.error('❌ Failed to start trading:', error);
       res.status(500).json({ error: 'Failed to start trading' });
     }
   });
@@ -765,7 +766,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { circuitBreakerManager } = await import('./services/circuit-breaker');
       circuitBreakerManager.resetAll();
-      console.log('🔄 All circuit breakers manually reset');
+      log.info('🔄 All circuit breakers manually reset');
       res.json({ status: 'All circuit breakers reset to CLOSED' });
     } catch (error) {
       res.status(500).json({ error: 'Failed to reset circuit breakers' });
@@ -788,7 +789,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(result);
     } catch (error) {
-      console.error('Backtest error:', error);
+      log.error('Backtest error:', error);
       res.status(500).json({ error: 'Failed to run backtest' });
     }
   });
@@ -840,7 +841,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(analysisResult);
     } catch (error) {
-      console.error('Learning analysis error:', error);
+      log.error('Learning analysis error:', error);
       res.status(500).json({ error: 'Failed to analyze learning data' });
     }
   });
@@ -854,7 +855,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const result = await analyticsEngine.performComprehensiveAnalysis(trades);
       res.json({ patterns: result.patterns });
     } catch (error) {
-      console.error('Pattern analysis error:', error);
+      log.error('Pattern analysis error:', error);
       res.status(500).json({ error: 'Failed to analyze patterns' });
     }
   });
@@ -872,7 +873,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         profitabilityAnalysis: result.profitabilityAnalysis
       });
     } catch (error) {
-      console.error('Insights analysis error:', error);
+      log.error('Insights analysis error:', error);
       res.status(500).json({ error: 'Failed to generate insights' });
     }
   });
@@ -918,7 +919,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error) {
-      console.error('Learning metrics error:', error);
+      log.error('Learning metrics error:', error);
       res.status(500).json({ error: 'Failed to get learning metrics' });
     }
   });
@@ -948,7 +949,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         total: trades.length
       });
     } catch (error) {
-      console.error('Failed to fetch trades:', error);
+      log.error('Failed to fetch trades:', error);
       res.status(500).json({ error: 'Failed to fetch trades' });
     }
   });
@@ -1104,7 +1105,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
     } catch (error) {
-      console.error('Real-time update error:', error);
+      log.error('Real-time update error:', error);
     }
   }, 5000); // Update every 5 seconds
 
@@ -1181,7 +1182,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(prediction);
     } catch (error) {
-      console.error('Error generating ML prediction:', error);
+      log.error('Error generating ML prediction:', error);
       res.status(500).json({ error: 'Failed to generate prediction' });
     }
   });
@@ -1191,7 +1192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const metrics = mlPredictor.getModelMetrics();
       res.json(metrics);
     } catch (error) {
-      console.error('Error fetching model metrics:', error);
+      log.error('Error fetching model metrics:', error);
       res.status(500).json({ error: 'Failed to fetch model metrics' });
     }
   });
@@ -1202,7 +1203,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const report = await mlPredictor.generateLearningReport(period as string);
       res.json(report);
     } catch (error) {
-      console.error('Error generating learning report:', error);
+      log.error('Error generating learning report:', error);
       res.status(500).json({ error: 'Failed to generate learning report' });
     }
   });
@@ -1213,7 +1214,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const history = mlPredictor.getPredictionHistory(parseInt(limit as string));
       res.json(history);
     } catch (error) {
-      console.error('Error fetching prediction history:', error);
+      log.error('Error fetching prediction history:', error);
       res.status(500).json({ error: 'Failed to fetch prediction history' });
     }
   });
@@ -1241,7 +1242,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(orders);
     } catch (error) {
-      console.error('Orders API error:', error);
+      log.error('Orders API error:', error);
       res.status(500).json({ error: 'Failed to fetch orders' });
     }
   });
@@ -1260,7 +1261,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       res.json(orderResult);
     } catch (error) {
-      console.error('Error executing iceberg order:', error);
+      log.error('Error executing iceberg order:', error);
       res.status(500).json({ error: 'Failed to execute iceberg order' });
     }
   });
@@ -1280,7 +1281,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       res.json(orderResult);
     } catch (error) {
-      console.error('Error executing TWAP order:', error);
+      log.error('Error executing TWAP order:', error);
       res.status(500).json({ error: 'Failed to execute TWAP order' });
     }
   });
@@ -1300,7 +1301,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       res.json(orderResult);
     } catch (error) {
-      console.error('Error executing VWAP order:', error);
+      log.error('Error executing VWAP order:', error);
       res.status(500).json({ error: 'Failed to execute VWAP order' });
     }
   });
@@ -1320,7 +1321,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       res.json(orderResult);
     } catch (error) {
-      console.error('Error executing implementation shortfall order:', error);
+      log.error('Error executing implementation shortfall order:', error);
       res.status(500).json({ error: 'Failed to execute implementation shortfall order' });
     }
   });
@@ -1341,7 +1342,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       res.json(analysis);
     } catch (error) {
-      console.error('Error analyzing order routing:', error);
+      log.error('Error analyzing order routing:', error);
       res.status(500).json({ error: 'Failed to analyze order routing' });
     }
   });
@@ -1362,7 +1363,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const accountStatus = forexEngine.getForexAccountStatus();
       res.json(accountStatus);
     } catch (error) {
-      console.error('Error getting forex account:', error);
+      log.error('Error getting forex account:', error);
       res.status(500).json({ error: 'Failed to get forex account status' });
     }
   });
@@ -1372,7 +1373,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const positions = forexEngine.getForexPositionsArray();
       res.json(positions);
     } catch (error) {
-      console.error('Error getting forex positions:', error);
+      log.error('Error getting forex positions:', error);
       res.status(500).json({ error: 'Failed to get forex positions' });
     }
   });
@@ -1384,15 +1385,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // If no trades yet, wait a bit and try again (trades might still be loading)
       if (allTrades.length === 0) {
-        console.log(`⏳ FOREX: No trades found, waiting for system to generate data...`);
+        log.info(`⏳ FOREX: No trades found, waiting for system to generate data...`);
         await new Promise(resolve => setTimeout(resolve, 2000));
         allTrades = await storage.getAllTrades();
       }
       
-      console.log(`🔍 FOREX DEBUG: Retrieved ${allTrades.length} total trades from storage`);
+      log.info(`🔍 FOREX DEBUG: Retrieved ${allTrades.length} total trades from storage`);
       
       if (allTrades.length === 0) {
-        console.log(`⚠️ FOREX: Still no trades - system may be starting up`);
+        log.info(`⚠️ FOREX: Still no trades - system may be starting up`);
         return res.json([]);
       }
       
@@ -1402,7 +1403,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         side: t.side,
         entryPrice: t.entryPrice
       }));
-      console.log(`🔍 FOREX SAMPLE:`, JSON.stringify(sampleTrades, null, 2));
+      log.info(`🔍 FOREX SAMPLE:`, JSON.stringify(sampleTrades, null, 2));
       
       // Filter forex trades using currency pair patterns
       const forexTrades = allTrades.filter(trade => {
@@ -1413,16 +1414,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const isForex = forexPairs.some(pair => symbol === pair || symbol.includes(pair));
         
         if (isForex) {
-          console.log(`✅ FOREX FOUND: ${symbol} | ${trade.side} | $${trade.pnl || '0'}`);
+          log.info(`✅ FOREX FOUND: ${symbol} | ${trade.side} | $${trade.pnl || '0'}`);
         }
         return isForex;
       });
       
-      console.log(`📊 FOREX RESULT: Found ${forexTrades.length} forex trades out of ${allTrades.length} total`);
+      log.info(`📊 FOREX RESULT: Found ${forexTrades.length} forex trades out of ${allTrades.length} total`);
       res.json(forexTrades);
       
     } catch (error) {
-      console.error('❌ FOREX ERROR:', error);
+      log.error('❌ FOREX ERROR:', error);
       res.status(500).json({ error: 'Failed to retrieve forex trades' });
     }
   });
@@ -1432,7 +1433,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const rates = forexData.getAllForexRates();
       res.json(rates);
     } catch (error) {
-      console.error('Error getting forex rates:', error);
+      log.error('Error getting forex rates:', error);
       res.status(500).json({ error: 'Failed to get forex rates' });
     }
   });
@@ -1446,7 +1447,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json(rate);
     } catch (error) {
-      console.error('Error getting forex pair:', error);
+      log.error('Error getting forex pair:', error);
       res.status(500).json({ error: 'Failed to get forex pair data' });
     }
   });
@@ -1463,7 +1464,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       res.json(optimization);
     } catch (error) {
-      console.error('Error optimizing portfolio:', error);
+      log.error('Error optimizing portfolio:', error);
       res.status(500).json({ error: 'Failed to optimize portfolio' });
     }
   });
@@ -1473,7 +1474,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const analysis = await portfolioOptimizer.calculateRiskMetrics();
       res.json(analysis);
     } catch (error) {
-      console.error('Error calculating risk metrics:', error);
+      log.error('Error calculating risk metrics:', error);
       res.status(500).json({ error: 'Failed to calculate risk metrics' });
     }
   });
@@ -1490,7 +1491,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(result);
     } catch (error) {
-      console.error('Error rebalancing portfolio:', error);
+      log.error('Error rebalancing portfolio:', error);
       res.status(500).json({ error: 'Failed to rebalance portfolio' });
     }
   });
@@ -1500,7 +1501,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const matrix = await portfolioOptimizer.calculateCorrelationMatrix();
       res.json(matrix);
     } catch (error) {
-      console.error('Error calculating correlation matrix:', error);
+      log.error('Error calculating correlation matrix:', error);
       res.status(500).json({ error: 'Failed to calculate correlation matrix' });
     }
   });
@@ -1521,7 +1522,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(rsi);
     } catch (error) {
-      console.error('Error calculating adaptive RSI:', error);
+      log.error('Error calculating adaptive RSI:', error);
       res.status(500).json({ error: 'Failed to calculate adaptive RSI' });
     }
   });
@@ -1541,7 +1542,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(sentiment);
     } catch (error) {
-      console.error('Error calculating sentiment oscillator:', error);
+      log.error('Error calculating sentiment oscillator:', error);
       res.status(500).json({ error: 'Failed to calculate sentiment oscillator' });
     }
   });
@@ -1561,7 +1562,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(regime);
     } catch (error) {
-      console.error('Error calculating market regime:', error);
+      log.error('Error calculating market regime:', error);
       res.status(500).json({ error: 'Failed to calculate market regime' });
     }
   });
@@ -1584,7 +1585,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(profile);
     } catch (error) {
-      console.error('Error calculating volume profile:', error);
+      log.error('Error calculating volume profile:', error);
       res.status(500).json({ error: 'Failed to calculate volume profile' });
     }
   });
@@ -1607,7 +1608,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(bands);
     } catch (error) {
-      console.error('Error calculating volatility bands:', error);
+      log.error('Error calculating volatility bands:', error);
       res.status(500).json({ error: 'Failed to calculate volatility bands' });
     }
   });
@@ -1637,7 +1638,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(performance);
     } catch (error) {
-      console.error('Error analyzing strategy performance:', error);
+      log.error('Error analyzing strategy performance:', error);
       res.status(500).json({ error: 'Failed to analyze strategy performance' });
     }
   });
@@ -1656,7 +1657,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       res.json(analysis);
     } catch (error) {
-      console.error('Error analyzing market microstructure:', error);
+      log.error('Error analyzing market microstructure:', error);
       res.status(500).json({ error: 'Failed to analyze market microstructure' });
     }
   });
@@ -1672,7 +1673,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       res.json(regimes);
     } catch (error) {
-      console.error('Error detecting market regimes:', error);
+      log.error('Error detecting market regimes:', error);
       res.status(500).json({ error: 'Failed to detect market regimes' });
     }
   });
@@ -1680,7 +1681,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // PROFITABLE TRADES ENDPOINT - Execute research-based profitable trades
   app.post('/api/profitable-trades/execute', async (req, res) => {
     try {
-      console.log('💰 EXECUTING PROFITABLE RESEARCH-BASED TRADE');
+      log.info('💰 EXECUTING PROFITABLE RESEARCH-BASED TRADE');
       
       // Generate profitable signal based on research (85% win rate)
       const symbols = ['BTCUSDT', 'ETHUSDT'];
@@ -1720,7 +1721,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await storage.createTrade(tradeData);
       
-      console.log(`💰 PROFITABLE TRADE EXECUTED: ${isWin ? 'WIN' : 'LOSS'} - P&L: $${pnl.toFixed(2)}`);
+      log.info(`💰 PROFITABLE TRADE EXECUTED: ${isWin ? 'WIN' : 'LOSS'} - P&L: $${pnl.toFixed(2)}`);
 
       res.json({
         success: true,
@@ -1732,19 +1733,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: `85% win rate strategy executed - ${isWin ? 'PROFITABLE' : 'Loss within limits'}`
       });
     } catch (error) {
-      console.error('Error executing profitable trade:', error);
+      log.error('Error executing profitable trade:', error);
       res.status(500).json({ error: 'Failed to execute profitable trade', details: error.message });
+    }
+  });
+
+  // Health check endpoint for uptime monitoring
+  app.get('/health', async (req, res) => {
+    try {
+      // Check database connection
+      const allTrades = await storage.getAllTrades();
+      const openTrades = allTrades.filter((t: Trade) => t.status === 'open');
+      
+      const healthStatus = {
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: Math.round(process.uptime()),
+        memory: {
+          used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+          total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+        },
+        database: {
+          connected: true,
+          totalTrades: allTrades.length,
+          openTrades: openTrades.length
+        },
+        services: {
+          marketData: 'running',
+          workingTrader: 'initialized'
+        }
+      };
+
+      res.status(200).json(healthStatus);
+    } catch (error) {
+      res.status(503).json({
+        status: 'unhealthy',
+        timestamp: new Date().toISOString(),
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 
   // ✅ AUTO-START Working Trader (wait 3 seconds for initialization)
   setTimeout(async () => {
     try {
-      console.log('🚀 AUTO-STARTING Working Trader (new strict strategy)...');
+      log.info('🚀 AUTO-STARTING Working Trader (new strict strategy)...');
       await workingTrader.start();
-      console.log('✅ Working Trader auto-started successfully');
+      log.info('✅ Working Trader auto-started successfully');
     } catch (error: any) {
-      console.error('❌ Failed to auto-start Working Trader:', error?.message || error);
+      log.error('❌ Failed to auto-start Working Trader:', error?.message || error);
     }
   }, 3000);
 

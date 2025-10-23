@@ -10,7 +10,7 @@ export class ETHUSDTWinnerStrategy {
   private readonly MAX_POSITION_SIZE = 150;
 
   constructor() {
-    console.log('🎯 ETHUSDT Winner Strategy initialized - focusing on profitable patterns');
+    // console.log('🎯 ETHUSDT Winner Strategy initialized - focusing on profitable patterns');
   }
 
   /**

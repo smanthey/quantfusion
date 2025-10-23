@@ -56,7 +56,7 @@ export class StrategyEngine {
           return null;
       }
     } catch (error) {
-      console.error(`Error generating signal for ${strategy.name}:`, error);
+      // console.error(`Error generating signal for ${strategy.name}:`, error);
       return null;
     }
   }

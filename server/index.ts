@@ -1,6 +1,9 @@
 import express, { type Request, Response, NextFunction } from "express";
+import cors from "cors";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { setupVite, serveStatic, log as viteLog } from "./vite";
+import { log } from './utils/logger';
+import { enforceHTTPS, securityHeaders, createRateLimiter } from './middleware/security';
 import { TradingEngine } from './services/trading-engine';
 import { MultiAssetEngine } from './services/multi-asset-engine';
 import { ABTestingService } from './services/ab-testing';
@@ -10,6 +13,44 @@ import { ResearchTradingMaster } from './services/research-trading-master';
 import { setGlobalForexEngine } from './routes/multi-asset';
 
 const app = express();
+
+// Security: CORS configuration
+const allowedOrigins = process.env.CORS_ORIGIN 
+  ? process.env.CORS_ORIGIN.split(',')
+  : ['http://localhost:5000', 'http://0.0.0.0:5000'];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    
+    // In production, strictly enforce allowed origins
+    if (process.env.NODE_ENV === 'production') {
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        log.warn('CORS blocked request from unauthorized origin', { origin });
+        callback(new Error('Not allowed by CORS'));
+      }
+    } else {
+      // In development, allow all origins
+      callback(null, true);
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+// Security: Enforce HTTPS in production
+app.use(enforceHTTPS);
+
+// Security: Add security headers
+app.use(securityHeaders);
+
+// Security: Rate limiting for API routes
+app.use('/api', createRateLimiter(100, 60000)); // 100 requests per minute
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -36,7 +77,7 @@ app.use((req, res, next) => {
         logLine = logLine.slice(0, 79) + "…";
       }
 
-      log(logLine);
+      viteLog(logLine);
     }
   });
 
@@ -50,8 +91,8 @@ app.use((req, res, next) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
+    log.error('Server error', { status, message, stack: err.stack });
     res.status(status).json({ message });
-    throw err;
   });
 
   // importantly only setup vite in development and after
@@ -73,26 +114,34 @@ app.use((req, res, next) => {
   // Initialize engines - INSTITUTIONAL MULTI-ASSET QUANT SYSTEM
   async function startServer() {
     try {
-      console.log('🚀 Starting Institutional Multi-Asset Quant Trading System');
-      console.log('💱 CRYPTO: Cycle + Multi-Factor Alpha + Volatility + Pairs Trading');
-      console.log('💱 FOREX: Carry Trade + PPP + Momentum + Trend + Risk Parity');
+      log.info('🚀 Starting Institutional Multi-Asset Quant Trading System');
+      log.info('💱 CRYPTO: Cycle + Multi-Factor Alpha + Volatility + Pairs Trading');
+      log.info('💱 FOREX: Carry Trade + PPP + Momentum + Trend + Risk Parity');
       
       // Note: Trading engine will be started via /api/trading/start endpoint or auto-started below
-      console.log('📊 Trading system ready - will auto-start in 5 seconds...');
+      log.info('📊 Trading system ready - will auto-start in 5 seconds...');
+      
+      // Log security configuration
+      const mode = process.env.NODE_ENV || 'development';
+      log.info(`Security: Running in ${mode} mode`, {
+        cors: mode === 'production' ? allowedOrigins : 'all origins allowed',
+        https: mode === 'production' ? 'enforced' : 'not enforced',
+        rateLimit: '100 req/min per IP'
+      });
 
       // Use the HTTP server from registerRoutes that includes WebSocket support
       server.listen(port, host, () => {
-        console.log(`🌐 Server running on http://${host}:${port}`);
-        console.log(`🔌 WebSocket server running on ws://${host}:${port}/ws`);
+        log.info(`🌐 Server running on http://${host}:${port}`);
+        log.info(`🔌 WebSocket server running on ws://${host}:${port}/ws`);
         
         // ⏸️  AUTO-START DISABLED: Use dashboard to manually start trading
         // This prevents creating trades before database cleanup
-        console.log('⏸️  Auto-start DISABLED - Use dashboard button to start trading manually');
+        log.info('⏸️  Auto-start DISABLED - Use dashboard button to start trading manually');
       });
 
       return server;
     } catch (error) {
-      console.error('❌ Server startup failed:', error);
+      log.error('❌ Server startup failed', { error });
       process.exit(1);
     }
   }

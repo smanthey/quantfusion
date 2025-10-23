@@ -38,7 +38,7 @@ export class RegimeDetector {
         avgSpread: currentSpread.toString()
       };
     } catch (error) {
-      console.error('Regime detection error:', error);
+      // console.error('Regime detection error:', error);
       // Default to safe regime
       return {
         regime: 'off',

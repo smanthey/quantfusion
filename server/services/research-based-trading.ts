@@ -17,7 +17,7 @@ export class ResearchBasedTrading {
   private readonly FEE_RATE = 0.001; // 0.1% trading fee
 
   constructor() {
-    console.log('🚀 REAL TRADING ENGINE initialized with LIVE MARKET DATA');
+    // console.log('🚀 REAL TRADING ENGINE initialized with LIVE MARKET DATA');
   }
 
   /**
@@ -164,12 +164,12 @@ export class ResearchBasedTrading {
       return false;
     }
     
-    console.log(`\n🎯 EXECUTING TRADE: ${signal.action.toUpperCase()} ${signal.symbol}`);
-    console.log(`📊 Strategy: ${signal.strategy} | Confidence: ${(signal.confidence*100).toFixed(0)}%`);
-    console.log(`💰 Entry: $${signal.price.toFixed(2)} | Size: ${signal.size.toFixed(4)}`);
-    console.log(`🎯 Target: $${signal.takeProfit.toFixed(2)} | Stop: $${signal.stopLoss.toFixed(2)}`);
-    console.log(`📈 Risk/Reward: ${riskRewardRatio.toFixed(2)}:1`);
-    console.log(`💡 ${signal.reasoning}`);
+    // console.log(`\n🎯 EXECUTING TRADE: ${signal.action.toUpperCase()} ${signal.symbol}`);
+    // console.log(`📊 Strategy: ${signal.strategy} | Confidence: ${(signal.confidence*100).toFixed(0)}%`);
+    // console.log(`💰 Entry: $${signal.price.toFixed(2)} | Size: ${signal.size.toFixed(4)}`);
+    // console.log(`🎯 Target: $${signal.takeProfit.toFixed(2)} | Stop: $${signal.stopLoss.toFixed(2)}`);
+    // console.log(`📈 Risk/Reward: ${riskRewardRatio.toFixed(2)}:1`);
+    // console.log(`💡 ${signal.reasoning}`);
     
     try {
       // Apply realistic slippage to entry price
@@ -239,12 +239,12 @@ export class ResearchBasedTrading {
       await storage.createTrade(tradeData);
       this.tradeCount++;
       
-      console.log(`${isWin ? '✅' : '❌'} TRADE ${isWin ? 'WIN' : 'LOSS'}: P&L $${pnl.toFixed(2)} (Fees: $${totalFees.toFixed(2)})`);
-      console.log(`📊 Exit: $${exitPrice.toFixed(2)} | Daily count: ${this.tradeCount}/${this.MAX_DAILY_TRADES}\n`);
+      // console.log(`${isWin ? '✅' : '❌'} TRADE ${isWin ? 'WIN' : 'LOSS'}: P&L $${pnl.toFixed(2)} (Fees: $${totalFees.toFixed(2)})`);
+      // console.log(`📊 Exit: $${exitPrice.toFixed(2)} | Daily count: ${this.tradeCount}/${this.MAX_DAILY_TRADES}\n`);
       
       return true;
     } catch (error) {
-      console.error('Trade execution error:', error);
+      // console.error('Trade execution error:', error);
       return false;
     }
   }
@@ -257,17 +257,17 @@ export class ResearchBasedTrading {
     this.isRunning = true;
     this.tradeCount = 0;
     
-    console.log('\n🚀 REAL TRADING ENGINE STARTED');
-    console.log('📡 Using LIVE market data from CoinGecko, CoinCap, and Binance');
-    console.log('💹 Realistic execution with slippage and fees');
-    console.log('🎯 Target: Consistent profits through quality trades\n');
+    // console.log('\n🚀 REAL TRADING ENGINE STARTED');
+    // console.log('📡 Using LIVE market data from CoinGecko, CoinCap, and Binance');
+    // console.log('💹 Realistic execution with slippage and fees');
+    // console.log('🎯 Target: Consistent profits through quality trades\n');
     
     const tradingLoop = async () => {
       if (!this.isRunning) return;
       
       try {
         if (this.tradeCount >= this.MAX_DAILY_TRADES) {
-          console.log('📊 Daily trade limit reached. Monitoring only...');
+          // console.log('📊 Daily trade limit reached. Monitoring only...');
           setTimeout(tradingLoop, 60000);
           return;
         }
@@ -291,7 +291,7 @@ export class ResearchBasedTrading {
           }
         }
       } catch (error) {
-        console.error('Trading loop error:', error);
+        // console.error('Trading loop error:', error);
       }
       
       // Check every 30 seconds (realistic trading frequency)
@@ -303,6 +303,6 @@ export class ResearchBasedTrading {
 
   stop(): void {
     this.isRunning = false;
-    console.log('🛑 REAL TRADING ENGINE STOPPED');
+    // console.log('🛑 REAL TRADING ENGINE STOPPED');
   }
 }

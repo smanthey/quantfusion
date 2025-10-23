@@ -272,7 +272,7 @@ export class SentimentAnalyzer {
         timestamp: Date.now()
       };
     } catch (error) {
-      console.error(`Error getting aggregate sentiment for ${symbol}:`, error);
+      // console.error(`Error getting aggregate sentiment for ${symbol}:`, error);
       // Return neutral sentiment on error
       return {
         symbol,

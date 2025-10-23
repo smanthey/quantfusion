@@ -311,8 +311,8 @@ export class ImprovedTradingStrategy {
     
     if (isClose || emaCrossover) {
       const adxStatus = isNaN(adx) ? 'N/A' : adx.toFixed(1);
-      console.log(`📊 [${symbol}] DIAGNOSTIC: EMA5=${ema5.toFixed(5)} EMA10=${ema10.toFixed(5)} (diff:${emaDiff}%)`);
-      console.log(`   RSI=${rsi.toFixed(1)} ADX=${adxStatus} EMACross=${emaCrossover || 'none'}`);
+      // console.log(`📊 [${symbol}] DIAGNOSTIC: EMA5=${ema5.toFixed(5)} EMA10=${ema10.toFixed(5)} (diff:${emaDiff}%)`);
+      // console.log(`   RSI=${rsi.toFixed(1)} ADX=${adxStatus} EMACross=${emaCrossover || 'none'}`);
     }
 
     return null; // No clear signal

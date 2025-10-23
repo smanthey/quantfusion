@@ -85,7 +85,7 @@ export class CircuitBreaker {
     this.lastStateChange = new Date();
     this.nextAttemptTime = new Date(Date.now() + this.config.timeout);
     this.successes = 0;
-    console.log(`🔴 Circuit breaker ${this.config.name} OPENED (too many failures)`);
+    // console.log(`🔴 Circuit breaker ${this.config.name} OPENED (too many failures)`);
   }
 
   private moveToHalfOpen(): void {
@@ -93,7 +93,7 @@ export class CircuitBreaker {
     this.lastStateChange = new Date();
     this.successes = 0;
     this.failures = 0;
-    console.log(`🟡 Circuit breaker ${this.config.name} HALF_OPEN (testing recovery)`);
+    // console.log(`🟡 Circuit breaker ${this.config.name} HALF_OPEN (testing recovery)`);
   }
 
   private moveToClosed(): void {
@@ -101,7 +101,7 @@ export class CircuitBreaker {
     this.lastStateChange = new Date();
     this.failures = 0;
     this.successes = 0;
-    console.log(`🟢 Circuit breaker ${this.config.name} CLOSED (service recovered)`);
+    // console.log(`🟢 Circuit breaker ${this.config.name} CLOSED (service recovered)`);
   }
 
   getStats(): CircuitStats {
@@ -124,7 +124,7 @@ export class CircuitBreaker {
     this.successes = 0;
     this.lastFailureTime = null;
     this.lastStateChange = new Date();
-    console.log(`🔄 Circuit breaker ${this.config.name} manually reset`);
+    // console.log(`🔄 Circuit breaker ${this.config.name} manually reset`);
   }
 }
 
@@ -167,7 +167,7 @@ export class CircuitBreakerManager {
     for (const breaker of this.breakers.values()) {
       breaker.reset();
     }
-    console.log('🔄 All circuit breakers reset');
+    // console.log('🔄 All circuit breakers reset');
   }
 }
 

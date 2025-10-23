@@ -52,7 +52,7 @@ export class ExponentialBackoff {
         // Don't delay on last attempt
         if (attempt < this.config.maxAttempts - 1) {
           const delay = this.calculateDelay(attempt);
-          console.log(`⏳ Retry ${attempt + 1}/${this.config.maxAttempts} after ${delay}ms`);
+          // console.log(`⏳ Retry ${attempt + 1}/${this.config.maxAttempts} after ${delay}ms`);
           await this.sleep(delay);
         }
       }
@@ -124,7 +124,7 @@ export class AdaptiveRateLimiter {
       this.currentIntervalMs * 2,
       60000 // Max 60 second interval
     );
-    console.log(`⚠️ Rate limit error #${this.successiveErrors}, slowing to ${(this.currentIntervalMs/1000).toFixed(1)}s interval`);
+    // console.log(`⚠️ Rate limit error #${this.successiveErrors}, slowing to ${(this.currentIntervalMs/1000).toFixed(1)}s interval`);
   }
 
   /**
