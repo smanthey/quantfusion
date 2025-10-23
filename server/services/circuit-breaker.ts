@@ -36,6 +36,21 @@ export class CircuitBreaker {
   private nextAttemptTime: Date | null = null;
   
   constructor(private config: CircuitBreakerConfig) {}
+  
+  /**
+   * Get position size multiplier based on circuit breaker state
+   * CLOSED: 1.0 (100% normal size)
+   * HALF_OPEN: 0.5 (50% reduced size while testing recovery)
+   * OPEN: 0.0 (0% - no trading)
+   */
+  getPositionSizeMultiplier(): number {
+    switch (this.state) {
+      case 'CLOSED': return 1.0;
+      case 'HALF_OPEN': return 0.5; // Reduce size while testing recovery
+      case 'OPEN': return 0.0; // No trading
+      default: return 1.0;
+    }
+  }
 
   async execute<T>(operation: () => Promise<T>): Promise<T> {
     // Check if circuit is OPEN
@@ -161,6 +176,18 @@ export class CircuitBreakerManager {
     return Array.from(this.breakers.entries())
       .filter(([_, breaker]) => breaker.isOpen())
       .map(([name, _]) => name);
+  }
+  
+  /**
+   * Get global position size multiplier considering all circuit breakers
+   * Returns the minimum multiplier from all breakers (most conservative)
+   */
+  getGlobalPositionSizeMultiplier(): number {
+    const breakers = Array.from(this.breakers.values());
+    if (breakers.length === 0) return 1.0;
+    
+    // Take the most conservative (smallest) multiplier
+    return Math.min(...breakers.map(b => b.getPositionSizeMultiplier()));
   }
 
   resetAll(): void {

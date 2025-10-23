@@ -1,6 +1,7 @@
 import { storage } from '../storage';
 import { log } from './logger';
 import type { Trade } from '@shared/schema';
+import { circuitBreakerManager } from '../services/circuit-breaker';
 
 export interface TradeValidationResult {
   allowed: boolean;
@@ -155,7 +156,40 @@ export class TradeValidator {
   }
 
   /**
-   * Validate position size
+   * Adjust position size based on circuit breaker state
+   * Returns adjusted size and multiplier used
+   */
+  adjustPositionSizeForCircuitBreakers(requestedSize: number): { 
+    adjustedSize: number; 
+    multiplier: number; 
+    reason?: string;
+  } {
+    const multiplier = circuitBreakerManager.getGlobalPositionSizeMultiplier();
+    
+    if (multiplier === 0) {
+      return {
+        adjustedSize: 0,
+        multiplier: 0,
+        reason: 'Circuit breakers OPEN - trading suspended'
+      };
+    }
+    
+    if (multiplier < 1.0) {
+      return {
+        adjustedSize: requestedSize * multiplier,
+        multiplier,
+        reason: `Position size reduced to ${(multiplier * 100).toFixed(0)}% due to circuit breaker HALF_OPEN state`
+      };
+    }
+    
+    return {
+      adjustedSize: requestedSize,
+      multiplier: 1.0
+    };
+  }
+
+  /**
+   * Validate position size (after circuit breaker adjustment)
    */
   validatePositionSize(positionSize: number, accountBalance: number): TradeValidationResult {
     const sizePercent = positionSize / accountBalance;
