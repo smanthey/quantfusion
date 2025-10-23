@@ -69,16 +69,14 @@ export function TradingDashboard() {
   // All hooks must be called at the top level
   const { data: dashboardData, isLoading: dashboardLoading, error: dashboardError } = useQuery<DashboardData>({
     queryKey: ['/api/dashboard'],
-    refetchInterval: 3000, // Refresh every 3 seconds for more responsive updates
     refetchOnWindowFocus: true,
-    staleTime: 1000, // Consider data stale after 1 second
+    staleTime: 1000,
   });
 
   const { data: accountData, isLoading: accountLoading } = useQuery<AccountData>({
     queryKey: ['/api/account'],
-    refetchInterval: 5000, // Refresh every 5 seconds
     refetchOnWindowFocus: true,
-    staleTime: 2000, // Consider data stale after 2 seconds
+    staleTime: 2000,
   });
 
   // WebSocket connection for real-time updates - MUST be called unconditionally

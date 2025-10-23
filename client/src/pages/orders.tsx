@@ -11,12 +11,12 @@ import { useQuery } from '@tanstack/react-query';
 export default function OrdersPage() {
   const { data: dashboardData, isLoading } = useQuery({
     queryKey: ['/api/dashboard'],
-    refetchInterval: 5000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: accountData } = useQuery({
     queryKey: ['/api/account'],
-    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
   });
 
   // Transform recent trades into order-like display - use authenticated data only

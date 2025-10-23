@@ -13,7 +13,7 @@ interface SystemStatus {
 export function SimpleStatus() {
   const { data: status, isLoading } = useQuery<SystemStatus>({
     queryKey: ['/api/system/status'],
-    refetchInterval: 5000,
+    refetchOnWindowFocus: true,
   });
 
   if (isLoading) {

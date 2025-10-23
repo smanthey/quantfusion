@@ -162,23 +162,27 @@ export class CircuitBreakerManager {
 
   getAllStats(): Map<string, CircuitStats> {
     const stats = new Map<string, CircuitStats>();
-    for (const [name, breaker] of this.breakers.entries()) {
+    this.breakers.forEach((breaker, name) => {
       stats.set(name, breaker.getStats());
-    }
+    });
     return stats;
   }
 
   hasOpenBreakers(): boolean {
-    return Array.from(this.breakers.values()).some(b => b.isOpen());
+    let hasOpen = false;
+    this.breakers.forEach(b => {
+      if (b.isOpen()) hasOpen = true;
+    });
+    return hasOpen;
   }
 
   getOpenBreakers(): string[] {
     const openBreakers: string[] = [];
-    for (const [name, breaker] of this.breakers.entries()) {
+    this.breakers.forEach((breaker, name) => {
       if (breaker.isOpen()) {
         openBreakers.push(name);
       }
-    }
+    });
     return openBreakers;
   }
   
@@ -187,18 +191,19 @@ export class CircuitBreakerManager {
    * Returns the minimum multiplier from all breakers (most conservative)
    */
   getGlobalPositionSizeMultiplier(): number {
-    const breakers = Array.from(this.breakers.values());
-    if (breakers.length === 0) return 1.0;
+    const multipliers: number[] = [];
+    this.breakers.forEach(b => multipliers.push(b.getPositionSizeMultiplier()));
+    
+    if (multipliers.length === 0) return 1.0;
     
     // Take the most conservative (smallest) multiplier
-    const multipliers = breakers.map(b => b.getPositionSizeMultiplier());
     return Math.min(...multipliers);
   }
 
   resetAll(): void {
-    for (const breaker of this.breakers.values()) {
+    this.breakers.forEach(breaker => {
       breaker.reset();
-    }
+    });
     // console.log('🔄 All circuit breakers reset');
   }
 }
