@@ -1,0 +1,128 @@
+Got it — you don’t want a line-by-line walk-through, just the concrete things that need to be **fixed or improved** so QuantFusion runs cleaner, safer, and more profitably.
+Based on the project files, Replit deployment info, and your recent commits, here’s a focused list of **actionable changes**:
+
+---
+
+## 🔒 Security & Config
+
+1. **Environment variables:**
+
+   * Move all API keys (Binance, Alpaca, etc.) into `.env` and confirm `.env` is in `.gitignore`.
+   * Don’t print keys or account info in logs — replace with masked values.
+
+2. **CORS & HTTPS:**
+
+   * Enforce HTTPS in production routes.
+   * Limit CORS to your production domain (`Tradingbit.replit.app`).
+
+3. **Error logging:**
+
+   * Replace console logging with a centralized logger (pino / winston) that redacts secrets.
+   * Include a rotating file or Replit DB sink to preserve error context.
+
+---
+
+## 🧠 Trading Logic & Risk
+
+4. **Duplicate-trade prevention:**
+
+   * The commits mention fixing this, but confirm in `server/tradingEngine.ts` that before placing a trade, it checks if an open position exists for that symbol.
+
+5. **Stop-loss & take-profit enforcement:**
+
+   * Add validation to ensure both are defined and updated with ATR or fixed ratio.
+   * Use a circuit breaker if any stop loss fails to trigger (data drift).
+
+6. **Position sizing:**
+
+   * Verify it uses account equity * risk %.
+   * Add a cap on simultaneous exposure (e.g., max 30% of equity across all open positions).
+
+7. **Backtest vs. live parity:**
+
+   * Ensure both use the same order-execution path (to avoid “paper profit” mismatches).
+   * Create a `MODE` flag in `.env` = `backtest` | `live`.
+
+---
+
+## ⚙️ Architecture & Performance
+
+8. **Server concurrency:**
+
+   * Wrap data fetch + order execution in a queue or lock to avoid overlapping signals.
+   * Use async throttling for API requests (Binance rate limit ~1200/min).
+
+9. **Circuit breakers:**
+
+   * Implement in a separate module, triggered when latency > threshold or data feed missing.
+   * Gradually reduce position size before full halt (you started this — make sure it persists).
+
+10. **Websocket reconnect logic:**
+
+* Auto-reconnect with exponential backoff and logging when data streams drop.
+
+---
+
+## 💾 Database (Drizzle ORM)
+
+11. **Indexing:**
+
+* Add indices on `symbol`, `timestamp`, and `tradeId` for performance.
+* Confirm foreign keys between `Trades` and `Positions`.
+
+12. **Archival safety:**
+
+* When archiving trades, verify balances are recalculated and references aren’t lost.
+
+---
+
+## 🖥️ Frontend
+
+13. **Data freshness:**
+
+* Replace polling with WebSocket or SSE stream for live updates.
+* Ensure Trade History auto-refreshes after order close.
+
+14. **Validation:**
+
+* Sanitize and type-check all API responses before rendering (avoid undefined values).
+
+15. **Simplify Navigation:**
+
+* You did this right — keep only *Dashboard* + *Trade History*.
+* Ensure removed routes are deleted from `vite.config.ts` and `App.tsx` imports.
+
+---
+
+## 🚀 Deployment
+
+16. **Autoscale:**
+
+* Monitor memory use — 8 GiB is fine, but logs show occasional stalls; schedule a nightly restart.
+* Add a simple health-check endpoint (`/health`) for uptime monitoring.
+
+17. **Backup & rollback:**
+
+* Create a cron job or script to dump trade data daily to off-site (S3, GDrive).
+
+---
+
+## 📊 Analytics & Accuracy
+
+18. **Fee inclusion:**
+
+* Ensure all P&L includes trading fees (Binance maker/taker).
+* Re-test Sharpe/Sortino math after fee inclusion.
+
+19. **Metrics rounding:**
+
+* Round to 2 decimals for consistency between front and back end.
+
+---
+
+If you fix **1–11**, you’ll have a stable, secure, and production-safe core.
+If you fix **12–19**, you’ll polish user experience and analytics accuracy.
+
+---
+
+Would you like me to generate a **“QuantFusion_FIX_LIST.md”** with these prioritized (e.g., Critical / High / Medium / Low) so you can track them directly in your repo?
