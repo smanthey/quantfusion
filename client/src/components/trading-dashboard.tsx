@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { queryClient } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -95,17 +96,34 @@ export function TradingDashboard() {
             },
             positions: lastMessage.data.positions || prev.positions,
           }));
+          
+          // Update TanStack Query cache for all components
+          queryClient.setQueryData(['/api/dashboard'], (old: any) => ({
+            ...old,
+            marketData: { ...old?.marketData, ...lastMessage.data.marketData },
+            positions: lastMessage.data.positions || old?.positions,
+          }));
         } else if (lastMessage.type === 'trade') {
           // Update recent trades when new trades come in
           setLiveData(prev => ({
             ...prev,
             recentTrades: lastMessage.data.recentTrades || prev.recentTrades,
           }));
+          
+          queryClient.setQueryData(['/api/dashboard'], (old: any) => ({
+            ...old,
+            recentTrades: lastMessage.data.recentTrades || old?.recentTrades,
+          }));
         } else if (lastMessage.type === 'position') {
           // Update positions when they change
           setLiveData(prev => ({
             ...prev,
             positions: lastMessage.data.positions || prev.positions,
+          }));
+          
+          queryClient.setQueryData(['/api/dashboard'], (old: any) => ({
+            ...old,
+            positions: lastMessage.data.positions || old?.positions,
           }));
         }
       } catch (error) {
