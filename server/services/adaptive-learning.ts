@@ -151,7 +151,7 @@ export class AdaptiveLearningEngine {
           { expectedOutcome: existing.successRate > 0.5 ? 'improve' : 'maintain' },
           { actualOutcome: update.performance > 0 ? 'success' : 'failure' },
           existing.successRate
-        ).catch(err => // console.error('Meta-learning feedback error:', err));
+        ).catch(() => {}); // Suppress storage errors
       }
     } else {
       // Create new rule

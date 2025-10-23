@@ -203,7 +203,7 @@ export class MarketDataService {
               new Date(marketData.timestamp),
               'binance',
               '1m'
-            ).catch(err => // console.error('Storage error:', err));
+            ).catch(() => {}); // Suppress storage errors
           });
           this.unsubscribeFunctions.push(unsubscribeTicker);
         } catch (error) {
@@ -248,7 +248,7 @@ export class MarketDataService {
         new Date(marketData.timestamp),
         data.sources.join(','),
         '1m'
-      ).catch(err => // console.error('Storage error:', err));
+      ).catch(() => {}); // Suppress storage errors
     });
     
     // Start regular aggregated updates every 60 seconds for CRYPTO only
@@ -312,7 +312,7 @@ export class MarketDataService {
               new Date(forexRate.timestamp),
               'forex',
               '1m'
-            ).catch(err => // console.error('Storage error:', err));
+            ).catch(() => {}); // Suppress storage errors
           }
         }
       } catch (error) {
