@@ -155,8 +155,27 @@ export class WorkingTrader {
   }
 
   private async executeTrade(symbol: string, signal: any) {
-    const positionSize = signal.positionSize || (this.accountBalance * 0.05);
+    const requestedSize = signal.positionSize || (this.accountBalance * 0.05);
     const side = signal.action === 'buy' ? 'BUY' : 'SELL';
+
+    // Apply circuit breaker position size adjustment
+    const sizeAdjustment = tradeValidator.adjustPositionSizeForCircuitBreakers(requestedSize);
+    
+    if (sizeAdjustment.multiplier === 0) {
+      log.warn(`🔴 TRADE BLOCKED: ${sizeAdjustment.reason}`, { symbol, side });
+      return;
+    }
+    
+    const positionSize = sizeAdjustment.adjustedSize;
+    
+    if (sizeAdjustment.multiplier < 1.0) {
+      log.warn(`⚠️  ${sizeAdjustment.reason}`, {
+        symbol,
+        side,
+        requested: `$${requestedSize.toFixed(2)}`,
+        adjusted: `$${positionSize.toFixed(2)}`
+      });
+    }
 
     // Use centralized trade validator
     const validation = await tradeValidator.validateTrade({

@@ -117,7 +117,7 @@ All improvements follow proven patterns from production trading systems and inst
 
 Systematic implementation of 19 critical fixes for production deployment:
 
-### ✅ COMPLETED (12/19 Tasks)
+### ✅ COMPLETED (15/19 Tasks - October 23, 2025)
 
 **Security & Logging (Tasks 1-3)**
 - `.env.example` template created with all required API keys and configuration
@@ -164,19 +164,36 @@ Systematic implementation of 19 critical fixes for production deployment:
 - Fees included in all P&L calculations (grossPnL - fees = netPnL)
 - Metrics consistently rounded to 2 decimals (.toFixed(2)) throughout
 
-### 🔄 REMAINING (7/19 Tasks - Future Enhancements)
+**Circuit Breaker Enhancements (Task 9)**
+- Position size multipliers based on circuit breaker state:
+  - CLOSED: 100% normal size
+  - HALF_OPEN: 50% reduced size (testing recovery)
+  - OPEN: 0% (no trading)
+- Integrated into WorkingTrader.executeTrade for automatic size reduction
+- Global multiplier considers all breakers (most conservative wins)
 
-**Architecture Improvements**
-- Task 9: Enhance circuit breakers with gradual position size reduction
-- Task 10: Add WebSocket reconnect logic with exponential backoff
+**WebSocket Resilience (Task 10)**
+- Exponential backoff already implemented in use-websocket.ts
+- Automatic reconnection with 2s → 4s → 8s → 16s → 30s delays
+- Max 5 reconnection attempts before requiring page refresh
+- Ping/pong heartbeat for connection health monitoring
+
+**Trade Data Backup (Task 17)**
+- Created server/scripts/backup-trades.ts for automated exports
+- Exports to both JSON (complete data) and CSV (trade summary)
+- Includes trades, users (passwords redacted), positions
+- Automatic cleanup of backups older than 30 days
+- Statistics: total P&L, fees, win rate, trade counts
+- Run with: `tsx server/scripts/backup-trades.ts`
+- Backups saved to: `./backups/` directory
+
+### 🔄 REMAINING (4/19 Tasks - Future Enhancements)
 
 **Frontend Enhancements**
-- Task 13: Replace polling with WebSocket for live updates (WebSockets already functional)
-- Task 14: Add validation and type-checking for all API responses
+- Task 13: Replace polling with WebSocket-only updates (WebSockets functional, some polling remains)
+- Task 14: Add Zod validation for all API responses
 - Task 15: Verify navigation is simplified to Dashboard + Trade History only
-
-**Deployment**
-- Task 17: Create backup script for daily trade data export
+- Task 16: Remove CDN Tailwind warning from production build
 
 ### Key Files Modified
 - `server/utils/logger.ts` - Centralized Pino logger with redaction
