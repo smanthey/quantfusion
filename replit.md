@@ -3,6 +3,9 @@
 ## Overview
 A production-ready algorithmic crypto trading platform designed for multi-strategy execution, regime detection, dynamic allocation, and comprehensive risk management. The platform aims to achieve sustainable profitability through research-backed strategies and real-time market adaptation.
 
+## Additional Research Inputs (2026-02-28)
+- See [RESEARCH_SOURCES_2026_02_28.md](./RESEARCH_SOURCES_2026_02_28.md) for newly added external strategy/code sources and integration review steps.
+
 ## User Preferences
 - No placeholder data - authentic market data only
 - Production-ready code with proper error handling
@@ -113,6 +116,7 @@ Based on research of proven solutions from OpenAlgo, Jesse, NautilusTrader, Quan
    - **Net P&L Display** - UI shows net P&L (after fees), not gross
 
 All improvements follow proven patterns from production trading systems and institutional hedge funds.
+<<<<<<< HEAD
 
 ## Production Readiness Improvements (October 23, 2025)
 
