@@ -621,7 +621,7 @@ export class ResearchTradingMaster {
     await this.stop();
     
     // Close all open trades at market price
-    for (const [tradeId, _] of this.openTrades) {
+    for (const [tradeId, _] of Array.from(this.openTrades.entries())) {
       try {
         const trade = await storage.getTradeById(tradeId);
         if (trade && trade.status === 'open') {

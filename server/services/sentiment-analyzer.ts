@@ -358,7 +358,7 @@ export class SentimentAnalyzer {
   clearOldData(maxAge: number = 86400000): void { // 24 hours default
     const cutoff = Date.now() - maxAge;
     
-    for (const [symbol, history] of this.sentimentHistory.entries()) {
+    for (const [symbol, history] of Array.from(this.sentimentHistory.entries())) {
       const filtered = history.filter(s => s.timestamp > cutoff);
       this.sentimentHistory.set(symbol, filtered);
     }

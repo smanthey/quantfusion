@@ -9,6 +9,7 @@ import { Brain, TrendingUp, TrendingDown, Activity, Shield, Zap } from "lucide-r
 import { motion } from "framer-motion";
 import { AnimatedCounter, AnimatedPrice } from "@/components/ui/animated-counter";
 import { TradesTable } from "@/components/trades-table";
+import { MockTradingLabPanel } from "@/components/mock-trading-lab-panel";
 
 interface DashboardData {
   strategies: any[];
@@ -332,7 +333,6 @@ export function EnhancedTradingDashboard() {
               >
                 <Button asChild variant="outline" size="sm" className="backdrop-blur-sm bg-white/5 border-white/10 hover:bg-white/10">
                   <Link href={item.href}>
-                    {item.icon && <item.icon className="w-3 h-3 mr-1" />}
                     {item.label}
                   </Link>
                 </Button>
@@ -741,6 +741,11 @@ export function EnhancedTradingDashboard() {
               </motion.div>
             </CardContent>
           </Card>
+        </motion.div>
+
+        {/* OpenClaw Mock Trading Lab */}
+        <motion.div variants={itemVariants}>
+          <MockTradingLabPanel />
         </motion.div>
 
         {/* Recent Trades */}

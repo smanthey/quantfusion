@@ -83,8 +83,8 @@ export class MultiApiClient {
     try {
       await this.canMakeRequest('CoinLore', 1000); // CoinLore rate limit
       const coinLoreData = await coinLoreClient.getCurrentPrice(symbol);
-      if (coinLoreData && coinLoreData.price > 0) {
-        prices.push(coinLoreData.price);
+      if (typeof coinLoreData === 'number' && coinLoreData > 0) {
+        prices.push(coinLoreData);
         sources.push('CoinLore');
         this.failureCount.set('CoinLore', 0); // Reset failure count on success
       }
@@ -188,7 +188,7 @@ export class MultiApiClient {
       let weightedMarketCap = 0;
 
       // Collect data from all APIs for this symbol
-      for (const [apiName, data] of apiResults) {
+      for (const [apiName, data] of Array.from(apiResults.entries())) {
         const symbolData = data.get(symbol);
         if (symbolData && symbolData.price > 0) {
           const api = this.apiPriority.find(a => a.name === apiName);

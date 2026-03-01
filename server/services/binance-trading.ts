@@ -77,40 +77,52 @@ export class BinanceTradingService {
   ): Promise<Trade | null> {
     try {
       // Determine quantity based on current market conditions
-      const orderQuantity = quantity || this.calculateOrderQuantity(symbol);
+      const orderQuantity = quantity || await this.calculateOrderQuantity(symbol);
       
       // Real trading mode - execute actual orders
       return this.executeRealMarketOrder(symbol, side, orderQuantity);
-
-      const order = await binanceClient.createOrder(
-        symbol,
-        side,
-        'MARKET',
-        orderQuantity.toString()
-      );
-
-      // Convert Binance order to our Trade format
-      const trade: Trade = {
-        id: order.orderId.toString(),
-        symbol,
-        side: side.toLowerCase() as 'buy' | 'sell',
-        size: parseFloat(order.executedQty).toString(),
-        entryPrice: parseFloat(order.fills?.[0]?.price || '0').toString(),
-        fees: parseFloat(order.fills?.[0]?.commission || '0').toString(),
-        executedAt: new Date(order.transactTime),
-        strategyId: 'manual',
-        closedAt: null,
-        positionId: null,
-        exitPrice: null,
-        pnl: null,
-        duration: null
-      };
-
-      return trade;
     } catch (error) {
       // console.error(`Failed to create market order for ${symbol}:`, error);
       return null;
     }
+  }
+
+  private async executeRealMarketOrder(
+    symbol: string,
+    side: 'BUY' | 'SELL',
+    quantity: number
+  ): Promise<Trade | null> {
+    const order = await binanceClient.createOrder(
+      symbol,
+      side,
+      'MARKET',
+      quantity.toString()
+    );
+
+    // Keep server-side minimum required trade shape
+    return {
+      id: order.orderId.toString(),
+      symbol,
+      side: side.toLowerCase() as 'buy' | 'sell',
+      size: parseFloat(order.executedQty).toString(),
+      entryPrice: parseFloat(order.fills?.[0]?.price || '0').toString(),
+      fees: parseFloat(order.fills?.[0]?.commission || '0').toString(),
+      executedAt: new Date(order.transactTime),
+      strategyId: 'manual',
+      status: 'open',
+      stopLoss: null,
+      takeProfit: null,
+      pnl: null,
+      profit: null,
+      loss: null,
+      closedAt: null,
+      positionId: null,
+      exitPrice: null,
+      duration: null,
+      confidence: null,
+      strategy: null,
+      archived: false,
+    } as unknown as Trade;
   }
 
 
@@ -121,18 +133,18 @@ export class BinanceTradingService {
     return await marketDataService.getCurrentPrice(symbol);
   }
 
-  private calculateOrderQuantity(symbol: string): number {
+  private async calculateOrderQuantity(symbol: string): Promise<number> {
     try {
       // Calculate order size based on current account balance and 2% risk per trade
-      const balance = this.getAccountBalance();
+      const balance = await this.getAccountBalance();
       const usdtBalance = parseFloat(balance[0]?.free || '10000');
       const maxRiskPerTrade = usdtBalance * 0.02; // 2% risk per trade
       
       // Get current price for the symbol
-      const price = this.getCurrentPrice(symbol);
+      const price = await this.getCurrentPrice(symbol);
       
       // Calculate quantity based on USD amount
-      const quantity = maxRiskPerTrade / price;
+      const quantity = maxRiskPerTrade / Math.max(price, 1);
       
       // Apply minimum/maximum limits
       const minQuantities = {
@@ -166,13 +178,14 @@ export class BinanceTradingService {
       const positions: Position[] = [];
 
       for (const order of openOrders) {
+        const currentPrice = await this.getCurrentPrice(order.symbol);
         const position: Position = {
           id: order.orderId.toString(),
           symbol: order.symbol,
           side: order.side.toLowerCase() as 'buy' | 'sell',
           size: parseFloat(order.origQty).toString(),
           entryPrice: parseFloat(order.price).toString(),
-          currentPrice: this.getCurrentPrice(order.symbol).toString(),
+          currentPrice: currentPrice.toString(),
           unrealizedPnl: '0', // Calculate based on current price
           openedAt: new Date(order.time),
           status: 'open',

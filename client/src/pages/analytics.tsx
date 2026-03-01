@@ -6,13 +6,31 @@ import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 
+interface AnalyticsMetric {
+  name: string;
+  value: string | number;
+  change?: string;
+}
+
+interface AnalyticsData {
+  metrics: AnalyticsMetric[];
+  equityData?: unknown[];
+  monthlyReturns?: unknown[];
+  strategyAllocation?: unknown[];
+  riskMetrics?: unknown[];
+}
+
 export default function AnalyticsPage() {
-  const { data: analyticsData, isLoading } = useQuery({
+  const { data: analyticsData, isLoading } = useQuery<AnalyticsData>({
     queryKey: ['/api/analytics'],
     refetchInterval: 30000
   });
 
-  const metrics = analyticsData?.metrics || [];
+  const metrics: AnalyticsMetric[] = analyticsData?.metrics || [];
+  const equityData = analyticsData?.equityData || [];
+  const monthlyReturns = analyticsData?.monthlyReturns || [];
+  const strategyAllocation = analyticsData?.strategyAllocation || [];
+  const riskMetrics = analyticsData?.riskMetrics || [];
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -79,8 +97,8 @@ export default function AnalyticsPage() {
               ) : (
                 <div className="h-64 flex items-center justify-center bg-muted rounded">
                   <p className="text-muted-foreground">
-                    {analyticsData?.equityData?.length > 0 
-                      ? `Equity data available: ${analyticsData.equityData.length} points` 
+                    {equityData.length > 0
+                      ? `Equity data available: ${equityData.length} points`
                       : "No trading data available yet - start trading to see equity curve"}
                   </p>
                 </div>
@@ -98,8 +116,8 @@ export default function AnalyticsPage() {
             <CardContent>
               <div className="h-64 flex items-center justify-center bg-muted rounded">
                 <p className="text-muted-foreground">
-                  {analyticsData?.monthlyReturns?.length > 0
-                    ? `Monthly data available: ${analyticsData.monthlyReturns.length} months`
+                  {monthlyReturns.length > 0
+                    ? `Monthly data available: ${monthlyReturns.length} months`
                     : "No trading data available yet - start trading to see returns"}
                 </p>
               </div>
@@ -116,8 +134,8 @@ export default function AnalyticsPage() {
             <CardContent>
               <div className="h-64 flex items-center justify-center bg-muted rounded">
                 <p className="text-muted-foreground">
-                  {analyticsData?.strategyAllocation?.length > 0
-                    ? `Active strategies: ${analyticsData.strategyAllocation.length}`
+                  {strategyAllocation.length > 0
+                    ? `Active strategies: ${strategyAllocation.length}`
                     : "No strategy allocation data available yet"}
                 </p>
               </div>
@@ -134,8 +152,8 @@ export default function AnalyticsPage() {
             <CardContent>
               <div className="h-64 flex items-center justify-center bg-muted rounded">
                 <p className="text-muted-foreground">
-                  {analyticsData?.riskMetrics?.length > 0
-                    ? `Risk metrics available: ${analyticsData.riskMetrics.length} data points`
+                  {riskMetrics.length > 0
+                    ? `Risk metrics available: ${riskMetrics.length} data points`
                     : "No risk metrics data available yet"}
                 </p>
               </div>

@@ -27,7 +27,7 @@ import {
   type InsertHistoricalPrice
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, gte, and } from "drizzle-orm";
+import { eq, desc, gte, and, lte } from "drizzle-orm";
 import { log } from './utils/logger';
 
 export interface IStorage {
@@ -52,6 +52,7 @@ export interface IStorage {
   
   // Trade management
   getAllTrades(): Promise<Trade[]>;
+  getTradeById(id: string): Promise<Trade | undefined>;
   getRecentTrades(limit: number): Promise<Trade[]>;
   getTradesSince(date: Date): Promise<Trade[]>;
   getTradesByStrategy(strategyId: string): Promise<Trade[]>;
@@ -213,6 +214,11 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
+  async getTradeById(id: string): Promise<Trade | undefined> {
+    const [trade] = await db.select().from(trades).where(eq(trades.id, id));
+    return trade || undefined;
+  }
+
   async getRecentTrades(limit: number): Promise<Trade[]> {
     return await db
       .select()
@@ -364,7 +370,7 @@ export class DatabaseStorage implements IStorage {
           eq(historicalPrices.symbol, symbol),
           eq(historicalPrices.interval, interval),
           gte(historicalPrices.timestamp, startTime),
-          gte(endTime, historicalPrices.timestamp)
+          lte(historicalPrices.timestamp, endTime)
         )
       )
       .orderBy(historicalPrices.timestamp);

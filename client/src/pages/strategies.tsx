@@ -6,13 +6,40 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Plus, Play, Pause, Settings } from "lucide-react";
 import { Link } from "wouter";
 
+interface DashboardResponse {
+  strategies?: Array<{
+    id: string;
+    name: string;
+    status?: string;
+    symbol?: string;
+  }>;
+}
+
+interface TradesResponse {
+  trades?: Array<{
+    strategyId?: string;
+    strategy?: string;
+    pnl?: string | number | null;
+  }>;
+}
+
+interface StrategyViewModel {
+  id: string;
+  name: string;
+  status: string;
+  pnl: number;
+  trades: number;
+  winRate: number;
+  symbol: string;
+}
+
 export default function StrategiesPage() {
-  const { data: dashboardData, isLoading } = useQuery({
+  const { data: dashboardData, isLoading } = useQuery<DashboardResponse>({
     queryKey: ['/api/dashboard'],
     refetchInterval: 5000,
   });
 
-  const { data: tradesData } = useQuery({
+  const { data: tradesData } = useQuery<TradesResponse>({
     queryKey: ['/api/trades'],
     refetchInterval: 10000,
   });
@@ -34,13 +61,13 @@ export default function StrategiesPage() {
     );
   }
 
-  const strategies = (dashboardData?.strategies || []).map((strategy: any) => {
+  const strategies: StrategyViewModel[] = (dashboardData?.strategies || []).map((strategy) => {
     // Calculate strategy performance from ALL trades
     const allTrades = tradesData?.trades || [];
-    const strategyTrades = allTrades.filter((trade: any) => trade.strategyId === strategy.id || trade.strategy === strategy.id);
-    const completedTrades = strategyTrades.filter((trade: any) => trade.pnl !== undefined && trade.pnl !== null);
-    const totalPnl = completedTrades.reduce((sum: number, trade: any) => sum + parseFloat(trade.pnl || '0'), 0);
-    const winningTrades = completedTrades.filter((trade: any) => parseFloat(trade.pnl || '0') > 0);
+    const strategyTrades = allTrades.filter((trade) => trade.strategyId === strategy.id || trade.strategy === strategy.id);
+    const completedTrades = strategyTrades.filter((trade) => trade.pnl !== undefined && trade.pnl !== null);
+    const totalPnl = completedTrades.reduce((sum: number, trade) => sum + parseFloat(String(trade.pnl ?? '0')), 0);
+    const winningTrades = completedTrades.filter((trade) => parseFloat(String(trade.pnl ?? '0')) > 0);
     const winRate = completedTrades.length > 0 ? (winningTrades.length / completedTrades.length) * 100 : 0;
 
     return {

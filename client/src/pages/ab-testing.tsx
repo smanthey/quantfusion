@@ -35,18 +35,31 @@ interface ABTestResult {
   statisticalSignificance: boolean;
 }
 
+interface ABTestsResponse {
+  tests: ABTest[];
+}
+
+interface ABResultsResponse {
+  results: Record<string, ABTestResult[]>;
+}
+
+interface ABReportResponse {
+  timestamp?: string | number;
+  report?: string;
+}
+
 export default function ABTestingPage() {
-  const { data: testsData } = useQuery({
+  const { data: testsData } = useQuery<ABTestsResponse>({
     queryKey: ['/api/ab-testing/tests'],
     refetchInterval: 5000,
   });
 
-  const { data: resultsData } = useQuery({
+  const { data: resultsData } = useQuery<ABResultsResponse>({
     queryKey: ['/api/ab-testing/results'],
     refetchInterval: 5000,
   });
 
-  const { data: reportData } = useQuery({
+  const { data: reportData } = useQuery<ABReportResponse>({
     queryKey: ['/api/ab-testing/report'],
     refetchInterval: 10000,
   });
@@ -235,7 +248,7 @@ export default function ABTestingPage() {
                 <CardContent>
                   <div className="grid gap-6 md:grid-cols-2">
                     {testResults.map((result) => {
-                      const variant = test.variants.find(v => v.variantId === result.variantId);
+                      const variant = test.variants.find(v => v.id === result.variantId);
                       
                       return (
                         <div key={result.variantId} className="space-y-4">

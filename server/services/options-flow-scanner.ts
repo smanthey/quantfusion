@@ -126,7 +126,7 @@ export class OptionsFlowScanner {
   private generateSignals(): OptionsFlowSignal[] {
     const signals: OptionsFlowSignal[] = [];
     
-    for (const [symbol, flow] of this.recentFlow.entries()) {
+    for (const [symbol, flow] of Array.from(this.recentFlow.entries())) {
       const calls = flow.filter(f => f.optionType === 'CALL');
       const puts = flow.filter(f => f.optionType === 'PUT');
       

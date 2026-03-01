@@ -8,13 +8,36 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Brain, TrendingUp, TrendingDown, AlertTriangle, CheckCircle } from "lucide-react";
 import { Link } from "wouter";
 
+interface LearningPattern {
+  avgPnL: number;
+}
+
+interface LearningAnalysisResponse {
+  patterns?: LearningPattern[];
+}
+
+interface ProfitabilityAnalysis {
+  totalTrades: number;
+  winRate: number;
+  profitFactor: number;
+  avgWin: number;
+  avgLoss: number;
+  issues: Record<string, unknown>;
+}
+
+interface LearningInsightsResponse {
+  insights?: unknown[];
+  recommendations?: string[];
+  profitabilityAnalysis?: ProfitabilityAnalysis;
+}
+
 export default function LearningPage() {
-  const { data: learningData, isLoading } = useQuery({
+  const { data: learningData, isLoading } = useQuery<LearningAnalysisResponse>({
     queryKey: ['/api/learning/analysis'],
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
-  const { data: insightsData } = useQuery({
+  const { data: insightsData } = useQuery<LearningInsightsResponse>({
     queryKey: ['/api/learning/insights'],
     refetchInterval: 60000, // Refresh every minute
   });
@@ -36,9 +59,9 @@ export default function LearningPage() {
     );
   }
 
-  const patterns = learningData?.patterns || [];
+  const patterns: LearningPattern[] = learningData?.patterns || [];
   const insights = insightsData?.insights || [];
-  const recommendations = insightsData?.recommendations || [];
+  const recommendations: string[] = insightsData?.recommendations || [];
   const profitabilityAnalysis = insightsData?.profitabilityAnalysis || {
     totalTrades: 0,
     winRate: 0,

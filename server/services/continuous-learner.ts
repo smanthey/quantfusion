@@ -142,7 +142,7 @@ export class ContinuousLearner {
    */
   private normalizeFeatureWeights(): void {
     const total = Array.from(this.featureWeights.values()).reduce((sum, w) => sum + w, 0);
-    for (const [feature, weight] of this.featureWeights.entries()) {
+    for (const [feature, weight] of Array.from(this.featureWeights.entries())) {
       this.featureWeights.set(feature, weight / total);
     }
   }

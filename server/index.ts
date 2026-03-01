@@ -19,8 +19,10 @@ const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',')
   : ['http://localhost:5000', 'http://0.0.0.0:5000'];
 
-app.use(cors({
-  origin: (origin, callback) => {
+const corsOriginDelegate = (
+  origin: string | undefined,
+  callback: (err: Error | null, allow?: boolean) => void
+) => {
     // Allow requests with no origin (mobile apps, curl, etc.)
     if (!origin) return callback(null, true);
     
@@ -36,7 +38,10 @@ app.use(cors({
       // In development, allow all origins
       callback(null, true);
     }
-  },
+};
+
+app.use(cors({
+  origin: corsOriginDelegate,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],

@@ -103,60 +103,60 @@ export interface RiskMetrics {
 }
 
 export const tradingApi = {
-  getDashboard: (): Promise<DashboardData> => 
-    apiRequest('/api/dashboard'),
+  getDashboard: async (): Promise<DashboardData> => {
+    const res = await apiRequest('GET', '/api/dashboard');
+    return res.json();
+  },
   
-  startTrading: () => 
-    apiRequest('/api/trading/start', { method: 'POST' }),
+  startTrading: () =>
+    apiRequest('POST', '/api/trading/start'),
   
-  stopTrading: () => 
-    apiRequest('/api/trading/stop', { method: 'POST' }),
+  stopTrading: () =>
+    apiRequest('POST', '/api/trading/stop'),
   
-  emergencyStop: () => 
-    apiRequest('/api/trading/emergency-stop', { method: 'POST' }),
+  emergencyStop: () =>
+    apiRequest('POST', '/api/trading/emergency-stop'),
   
   updateStrategy: (strategyId: string, data: Partial<StrategyStatus>) =>
-    apiRequest(`/api/strategies/${strategyId}`, { 
-      method: 'PATCH', 
-      body: JSON.stringify(data) 
-    }),
+    apiRequest('PATCH', `/api/strategies/${strategyId}`, data),
   
   closePosition: (positionId: string) =>
-    apiRequest(`/api/positions/${positionId}/close`, { method: 'POST' }),
+    apiRequest('POST', `/api/positions/${positionId}/close`),
   
   acknowledgeAlert: (alertId: string) =>
-    apiRequest(`/api/alerts/${alertId}/acknowledge`, { method: 'POST' }),
+    apiRequest('POST', `/api/alerts/${alertId}/acknowledge`),
   
   runBacktest: (strategyId: string, params: any) =>
-    apiRequest('/api/backtest', {
-      method: 'POST',
-      body: JSON.stringify({ strategyId, params })
-    }),
+    apiRequest('POST', '/api/backtest', { strategyId, params }),
   
   updateRiskLimits: (limits: Partial<RiskMetrics>) =>
-    apiRequest('/api/risk/limits', {
-      method: 'PATCH',
-      body: JSON.stringify(limits)
-    }),
+    apiRequest('PATCH', '/api/risk/limits', limits),
   
-  getPerformanceHistory: (timeframe: '1d' | '7d' | '30d') =>
-    apiRequest(`/api/performance/history?timeframe=${timeframe}`),
+  getPerformanceHistory: async (timeframe: '1d' | '7d' | '30d') => {
+    const res = await apiRequest('GET', `/api/performance/history?timeframe=${timeframe}`);
+    return res.json();
+  },
   
-  exportTrades: (startDate: string, endDate: string) =>
-    apiRequest(`/api/trades/export?startDate=${startDate}&endDate=${endDate}`),
+  exportTrades: async (startDate: string, endDate: string) => {
+    const res = await apiRequest('GET', `/api/trades/export?startDate=${startDate}&endDate=${endDate}`);
+    return res.json();
+  },
   
-  getMarketData: (symbol: string) =>
-    apiRequest(`/api/market-data/${symbol}`),
+  getMarketData: async (symbol: string) => {
+    const res = await apiRequest('GET', `/api/market-data/${symbol}`);
+    return res.json();
+  },
   
-  getStrategyMetrics: (strategyId: string) =>
-    apiRequest(`/api/strategies/${strategyId}/metrics`),
+  getStrategyMetrics: async (strategyId: string) => {
+    const res = await apiRequest('GET', `/api/strategies/${strategyId}/metrics`);
+    return res.json();
+  },
   
-  getAllocations: () =>
-    apiRequest('/api/allocations'),
+  getAllocations: async () => {
+    const res = await apiRequest('GET', '/api/allocations');
+    return res.json();
+  },
   
   updateAllocations: (allocations: any[]) =>
-    apiRequest('/api/allocations', {
-      method: 'PUT',
-      body: JSON.stringify(allocations)
-    })
+    apiRequest('PUT', '/api/allocations', allocations)
 };

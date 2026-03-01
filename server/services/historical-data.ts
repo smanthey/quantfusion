@@ -261,8 +261,28 @@ export class HistoricalDataService {
     ];
   }
 
-  getHistoricalData(symbol: string, startTime: number, endTime: number): HistoricalDataPoint[] {
+  getHistoricalData(symbol: string, startTime: number, endTime: number): HistoricalDataPoint[];
+  getHistoricalData(symbol: string, timeframe: string, limit?: number): HistoricalDataPoint[];
+  getHistoricalData(symbol: string, startOrTimeframe: number | string, endOrLimit?: number): HistoricalDataPoint[] {
     const data = this.historicalData.get(symbol) || [];
+
+    // Support getHistoricalData(symbol, timeframe, limit) calls used across services
+    if (typeof startOrTimeframe === 'string') {
+      const intervalMsByTimeframe: Record<string, number> = {
+        '1m': 60_000,
+        '5m': 5 * 60_000,
+        '15m': 15 * 60_000,
+        '1h': 60 * 60_000,
+        '4h': 4 * 60 * 60_000,
+        '1d': 24 * 60 * 60_000,
+      };
+      const timeframeMs = intervalMsByTimeframe[startOrTimeframe] ?? intervalMsByTimeframe['1h'];
+      const limit = endOrLimit ?? 100;
+      return data.slice(-(limit * Math.max(1, Math.floor(timeframeMs / 60_000))));
+    }
+
+    const startTime = startOrTimeframe;
+    const endTime = endOrLimit ?? Date.now();
     return data.filter(point => point.timestamp >= startTime && point.timestamp <= endTime);
   }
 

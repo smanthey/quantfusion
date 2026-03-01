@@ -4,6 +4,7 @@ import { EventEmitter } from 'events';
 export interface BaseOrder {
   id: string;
   symbol: string;
+  type?: string;
   side: 'buy' | 'sell';
   quantity: number;
   status: 'pending' | 'partial' | 'filled' | 'cancelled' | 'rejected';
@@ -446,7 +447,7 @@ export class SmartOrderRouter extends EventEmitter {
     let bestNetPrice = 0;
     let bestSavings = 0;
 
-    for (const [venueName, venue] of this.venues) {
+    for (const [venueName, venue] of Array.from(this.venues.entries())) {
       const quote = quotes[venueName];
       if (!quote) continue;
 
@@ -474,7 +475,7 @@ export class SmartOrderRouter extends EventEmitter {
     const basePrice = symbol === 'BTCUSDT' ? 43000 : 2500;
     const quotes: Record<string, { bid: number; ask: number }> = {};
     
-    for (const venueName of this.venues.keys()) {
+    for (const venueName of Array.from(this.venues.keys())) {
       const spread = Math.random() * 0.001 + 0.0005; // 0.05% - 0.15% spread
       quotes[venueName] = {
         bid: basePrice * (1 - spread/2 + (Math.random() - 0.5) * 0.001),

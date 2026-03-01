@@ -144,7 +144,7 @@ export class PoliticianTradesScanner {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - this.DAYS_LOOKBACK);
     
-    for (const [symbol, trades] of this.recentTrades.entries()) {
+    for (const [symbol, trades] of Array.from(this.recentTrades.entries())) {
       const validTrades = trades.filter(t => t.disclosureDate >= cutoffDate);
       if (validTrades.length === 0) {
         this.recentTrades.delete(symbol);
@@ -160,7 +160,7 @@ export class PoliticianTradesScanner {
   private generateSignals(): PoliticianTradeSignal[] {
     const signals: PoliticianTradeSignal[] = [];
     
-    for (const [symbol, trades] of this.recentTrades.entries()) {
+    for (const [symbol, trades] of Array.from(this.recentTrades.entries())) {
       if (trades.length < this.SIGNAL_THRESHOLD) continue;
       
       // Analyze trade direction

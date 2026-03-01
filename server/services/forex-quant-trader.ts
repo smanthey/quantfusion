@@ -31,7 +31,7 @@ export class ForexQuantTrader {
   private marketData: MarketDataService;
   
   // INTEREST RATES (Central Bank policy rates - updated quarterly)
-  private readonly INTEREST_RATES = {
+  private readonly INTEREST_RATES: Record<string, number> = {
     'USD': 5.50,  // Fed Funds Rate
     'EUR': 4.00,  // ECB Deposit Rate
     'GBP': 5.00,  // Bank of England Base Rate
@@ -39,7 +39,7 @@ export class ForexQuantTrader {
   };
   
   // LONG-TERM FAIR VALUES (based on PPP models from OECD, IMF)
-  private readonly PPP_FAIR_VALUES = {
+  private readonly PPP_FAIR_VALUES: Record<string, number> = {
     'EURUSD': 1.15,  // Historical PPP average
     'GBPUSD': 1.30,  // Historical PPP average
     'AUDUSD': 0.72,  // Historical PPP average

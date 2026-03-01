@@ -119,7 +119,7 @@ export class WhaleTracker {
     const cutoffTime = new Date();
     cutoffTime.setHours(cutoffTime.getHours() - this.LOOKBACK_HOURS);
     
-    for (const [symbol, txs] of this.recentTransactions.entries()) {
+    for (const [symbol, txs] of Array.from(this.recentTransactions.entries())) {
       const recentTxs = txs.filter(tx => tx.timestamp >= cutoffTime);
       if (recentTxs.length === 0) {
         this.recentTransactions.delete(symbol);
@@ -132,7 +132,7 @@ export class WhaleTracker {
   private generateSignals(): WhaleSignal[] {
     const signals: WhaleSignal[] = [];
     
-    for (const [symbol, txs] of this.recentTransactions.entries()) {
+    for (const [symbol, txs] of Array.from(this.recentTransactions.entries())) {
       if (txs.length === 0) continue;
       
       // Analyze flow direction

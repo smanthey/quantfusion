@@ -5,13 +5,36 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
 import { Link } from "wouter";
 
+interface DashboardResponse {
+  positions?: any[];
+  performance?: {
+    dailyPnL?: number;
+    totalPnl?: number;
+  };
+  marketData?: {
+    BTCUSDT?: { price?: number };
+    ETHUSDT?: { price?: number };
+  };
+}
+
+interface AccountResponse {
+  balances?: Array<{
+    asset: string;
+    free: string;
+    locked: string;
+  }>;
+  totalValue?: number;
+  totalPnL?: number;
+  totalFees?: number;
+}
+
 export default function PortfolioPage() {
-  const { data: dashboardData, isLoading } = useQuery({
+  const { data: dashboardData, isLoading } = useQuery<DashboardResponse>({
     queryKey: ['/api/dashboard'],
     refetchInterval: 5000,
   });
 
-  const { data: accountData } = useQuery({
+  const { data: accountData } = useQuery<AccountResponse>({
     queryKey: ['/api/account'],
     refetchInterval: 10000,
   });

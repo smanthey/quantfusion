@@ -8,8 +8,16 @@ import { Link } from "wouter";
 
 import { useQuery } from '@tanstack/react-query';
 
+interface DashboardResponse {
+  recentTrades?: any[];
+  marketData?: {
+    BTCUSDT?: { price?: number };
+    ETHUSDT?: { price?: number };
+  };
+}
+
 export default function OrdersPage() {
-  const { data: dashboardData, isLoading } = useQuery({
+  const { data: dashboardData, isLoading } = useQuery<DashboardResponse>({
     queryKey: ['/api/dashboard'],
     refetchOnWindowFocus: true,
   });

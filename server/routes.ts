@@ -32,6 +32,8 @@ import { ForexTradingEngine } from './services/forex-trading-engine';
 import { ForexDataService } from './services/forex-data-service';
 import { ResearchTradingMaster } from './services/research-trading-master';
 import { WorkingTrader } from './services/working-trader';
+import { openClawTradingService } from './services/openclaw-trading';
+import { openClawMockLabService } from './services/openclaw-mock-lab';
 
 // Initialize trading services - SIMPLE SYSTEM ONLY (proven Freqtrade patterns)
 const marketData = new MarketDataService();
@@ -289,7 +291,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalTrades: performance.totalTrades,
           totalPnL: performance.totalPnl,
           totalWins: performance.totalProfits,
-          totalLosses: -performance.totalLosses,
+          totalLosses: -(performance.totalLosses ?? 0),
           winRate: performance.winRate,
           profitFactor: performance.profitFactor,
           averageTrade: allTrades.length > 0 ? performance.totalPnl / allTrades.length : 0,
@@ -351,8 +353,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const performance = await calculateUnifiedPerformance(allTrades);
       
       // Use unified performance values for ALL metrics (eliminates inconsistency bugs)
-      const totalProfits = performance.totalProfits;
-      const totalLosses = performance.totalLosses;
+      const totalProfits = performance.totalProfits ?? 0;
+      const totalLosses = performance.totalLosses ?? 0;
       const totalFees = performance.totalFees;
       const totalPnL = performance.totalPnl;
       const winCount = performance.winningTrades;
@@ -679,7 +681,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/trading/emergency-stop', async (req, res) => {
     try {
-      await tradingEngine.emergencyStop();
+      workingTrader.stop();
 
       broadcast({
         type: 'emergency_stop',
@@ -689,6 +691,269 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ status: 'Emergency stop executed' });
     } catch (error) {
       res.status(500).json({ error: 'Failed to execute emergency stop' });
+    }
+  });
+
+  // OpenClaw Trading Automation (paper-first with live confirmation gate)
+  app.get('/api/openclaw/trading/config', async (_req, res) => {
+    res.json({
+      mode: openClawTradingService.getMode(),
+      paperDefault: openClawTradingService.getMode() !== 'live',
+      liveRequiresConfirmation: true,
+    });
+  });
+
+  app.post('/api/openclaw/trading/alerts/tradingview', async (req, res) => {
+    try {
+      const secret = String(req.headers['x-tradingview-secret'] || req.body?.secret || '');
+      if (!openClawTradingService.verifyTradingViewSecret(secret)) {
+        return res.status(401).json({ ok: false, error: 'invalid_webhook_secret' });
+      }
+
+      const payload = req.body || {};
+      if (!payload.symbol) {
+        return res.status(400).json({ ok: false, error: 'symbol_required' });
+      }
+
+      const result = await openClawTradingService.ingestTradingViewAlert(payload);
+      broadcast({
+        type: 'openclaw_tradingview_alert',
+        data: payload,
+        timestamp: new Date().toISOString(),
+      });
+      res.json(result);
+    } catch (error) {
+      log.error('TradingView alert ingest error', { error });
+      res.status(500).json({ ok: false, error: 'alert_ingest_failed' });
+    }
+  });
+
+  app.post('/api/openclaw/trading/position-size', async (req, res) => {
+    try {
+      const {
+        accountBalance,
+        riskPercent,
+        entryPrice,
+        stopLossPrice,
+        maxNotionalPercent,
+      } = req.body || {};
+
+      if (!accountBalance || !riskPercent || !entryPrice || !stopLossPrice) {
+        return res.status(400).json({ ok: false, error: 'accountBalance,riskPercent,entryPrice,stopLossPrice_required' });
+      }
+
+      const sizing = openClawTradingService.calculatePositionSize({
+        accountBalance: Number(accountBalance),
+        riskPercent: Number(riskPercent),
+        entryPrice: Number(entryPrice),
+        stopLossPrice: Number(stopLossPrice),
+        maxNotionalPercent: maxNotionalPercent ? Number(maxNotionalPercent) : undefined,
+      });
+
+      res.json({ ok: true, sizing });
+    } catch (error) {
+      log.error('position size calc error', { error });
+      res.status(500).json({ ok: false, error: 'position_size_calc_failed' });
+    }
+  });
+
+  app.post('/api/openclaw/trading/orders', async (req, res) => {
+    try {
+      const body = req.body || {};
+      const required = ['symbol', 'side', 'entryPrice', 'stopLoss', 'takeProfit'];
+      for (const f of required) {
+        if (body[f] === undefined || body[f] === null || body[f] === '') {
+          return res.status(400).json({ ok: false, error: `${f}_required` });
+        }
+      }
+
+      const result = await openClawTradingService.submitTrade({
+        symbol: String(body.symbol).toUpperCase(),
+        side: String(body.side).toUpperCase() === 'SELL' ? 'SELL' : 'BUY',
+        entryPrice: Number(body.entryPrice),
+        stopLoss: Number(body.stopLoss),
+        takeProfit: Number(body.takeProfit),
+        riskPercent: body.riskPercent ? Number(body.riskPercent) : undefined,
+        accountBalance: body.accountBalance ? Number(body.accountBalance) : undefined,
+        mode: body.mode === 'live' ? 'live' : 'paper',
+        notes: body.notes ? String(body.notes) : undefined,
+      });
+
+      broadcast({
+        type: 'openclaw_order_submitted',
+        data: result,
+        timestamp: new Date().toISOString(),
+      });
+      res.json(result);
+    } catch (error) {
+      log.error('openclaw order submission error', { error });
+      res.status(500).json({ ok: false, error: 'order_submission_failed' });
+    }
+  });
+
+  app.post('/api/openclaw/trading/orders/:id/confirm', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const token = String(req.body?.token || '');
+      const confirm = req.body?.confirm === true;
+      if (!token) {
+        return res.status(400).json({ ok: false, error: 'token_required' });
+      }
+
+      const result = await openClawTradingService.confirmLiveOrder(id, token, confirm);
+      broadcast({
+        type: 'openclaw_order_confirmation',
+        data: { id, result },
+        timestamp: new Date().toISOString(),
+      });
+      res.json(result);
+    } catch (error) {
+      log.error('openclaw order confirm error', { error });
+      res.status(500).json({ ok: false, error: 'order_confirm_failed' });
+    }
+  });
+
+  app.get('/api/openclaw/trading/orders/pending', async (_req, res) => {
+    res.json({
+      ok: true,
+      orders: openClawTradingService.listPendingOrders(),
+    });
+  });
+
+  app.get('/api/openclaw/trading/pnl/daily', async (req, res) => {
+    try {
+      const date = req.query.date ? String(req.query.date) : undefined;
+      const summary = await openClawTradingService.getDailyPnLSummary(date);
+      res.json({ ok: true, summary });
+    } catch (error) {
+      log.error('daily pnl summary error', { error });
+      res.status(500).json({ ok: false, error: 'daily_pnl_failed' });
+    }
+  });
+
+  // OpenClaw Mock Lab (paper-only quant systems from research posts)
+  app.get('/api/openclaw/mock/dashboard', async (_req, res) => {
+    try {
+      const data = await openClawMockLabService.getDashboard();
+      res.json({ ok: true, ...data });
+    } catch (error) {
+      log.error('mock dashboard error', { error });
+      res.status(500).json({ ok: false, error: 'mock_dashboard_failed' });
+    }
+  });
+
+  app.post('/api/openclaw/mock/evaluate-probability', async (req, res) => {
+    try {
+      const body = req.body || {};
+      const required = ['forwardPrice', 'strike', 'volatility', 'timeToExpiryYears'];
+      for (const f of required) {
+        if (body[f] === undefined || body[f] === null || body[f] === '') {
+          return res.status(400).json({ ok: false, error: `${f}_required` });
+        }
+      }
+
+      const result = await openClawMockLabService.evaluateProbability({
+        forwardPrice: Number(body.forwardPrice),
+        strike: Number(body.strike),
+        volatility: Number(body.volatility),
+        timeToExpiryYears: Number(body.timeToExpiryYears),
+        marketProbability: body.marketProbability !== undefined ? Number(body.marketProbability) : undefined,
+        feeBps: body.feeBps !== undefined ? Number(body.feeBps) : undefined,
+      });
+
+      res.json({ ok: true, result });
+    } catch (error) {
+      log.error('mock probability evaluation error', { error });
+      res.status(500).json({ ok: false, error: 'mock_probability_evaluation_failed' });
+    }
+  });
+
+  app.post('/api/openclaw/mock/scan-arb', async (req, res) => {
+    try {
+      const body = req.body || {};
+      if (!body.symbol || !Array.isArray(body.quotes)) {
+        return res.status(400).json({ ok: false, error: 'symbol_and_quotes_required' });
+      }
+
+      const result = await openClawMockLabService.scanArbitrage({
+        symbol: String(body.symbol),
+        fairProbability: body.fairProbability !== undefined ? Number(body.fairProbability) : undefined,
+        minEdgeBps: body.minEdgeBps !== undefined ? Number(body.minEdgeBps) : undefined,
+        quotes: body.quotes,
+      });
+
+      broadcast({
+        type: 'openclaw_mock_scan',
+        data: result,
+        timestamp: new Date().toISOString(),
+      });
+
+      res.json({ ok: true, result });
+    } catch (error) {
+      log.error('mock scan arb error', { error });
+      res.status(500).json({ ok: false, error: 'mock_scan_arb_failed' });
+    }
+  });
+
+  app.post('/api/openclaw/mock/trades', async (req, res) => {
+    try {
+      const body = req.body || {};
+      const required = ['symbol', 'marketId', 'venue', 'marketProbability', 'fairProbability', 'bankrollUsd'];
+      for (const f of required) {
+        if (body[f] === undefined || body[f] === null || body[f] === '') {
+          return res.status(400).json({ ok: false, error: `${f}_required` });
+        }
+      }
+
+      const result = await openClawMockLabService.executePaperTrade({
+        symbol: String(body.symbol).toUpperCase(),
+        marketId: String(body.marketId),
+        venue: String(body.venue),
+        side: String(body.side || 'BUY').toUpperCase() === 'SELL' ? 'SELL' : 'BUY',
+        marketProbability: Number(body.marketProbability),
+        fairProbability: Number(body.fairProbability),
+        bankrollUsd: Number(body.bankrollUsd),
+        maxRiskPct: body.maxRiskPct !== undefined ? Number(body.maxRiskPct) : undefined,
+        feeBps: body.feeBps !== undefined ? Number(body.feeBps) : undefined,
+        notes: body.notes ? String(body.notes) : undefined,
+      });
+
+      broadcast({
+        type: 'openclaw_mock_trade_opened',
+        data: result,
+        timestamp: new Date().toISOString(),
+      });
+
+      res.json({ ok: true, result });
+    } catch (error) {
+      log.error('mock trade create error', { error });
+      res.status(500).json({ ok: false, error: 'mock_trade_create_failed' });
+    }
+  });
+
+  app.post('/api/openclaw/mock/trades/:id/close', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const exitProbability = Number(req.body?.exitProbability);
+      if (!Number.isFinite(exitProbability)) {
+        return res.status(400).json({ ok: false, error: 'exitProbability_required' });
+      }
+
+      const result = await openClawMockLabService.closePaperTrade(id, exitProbability);
+      if (!result.ok) {
+        return res.status(404).json(result);
+      }
+
+      broadcast({
+        type: 'openclaw_mock_trade_closed',
+        data: result,
+        timestamp: new Date().toISOString(),
+      });
+
+      res.json(result);
+    } catch (error) {
+      log.error('mock trade close error', { error });
+      res.status(500).json({ ok: false, error: 'mock_trade_close_failed' });
     }
   });
 
@@ -1573,7 +1838,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { period = '50' } = req.query;
 
       const periodNum = parseInt(period as string) || 100;
-      const data = historicalDataService.getHistoricalData(symbol, periodNum, '1h');
+      const data = historicalDataService.getHistoricalData(symbol, Date.now() - periodNum * 60 * 60 * 1000, Date.now());
       // Simulate volume profile calculation
       const profile = {
         symbol,
@@ -1596,7 +1861,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { period = '20', multiplier = '2' } = req.query;
 
       const periodNum = parseInt(period as string) || 100;
-      const data = historicalDataService.getHistoricalData(symbol, periodNum, '1h');
+      const data = historicalDataService.getHistoricalData(symbol, Date.now() - periodNum * 60 * 60 * 1000, Date.now());
       // Simulate volatility bands calculation
       const bands = {
         symbol,
@@ -1734,7 +1999,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       log.error('Error executing profitable trade:', error);
-      res.status(500).json({ error: 'Failed to execute profitable trade', details: error.message });
+      const message = error instanceof Error ? error.message : 'unknown_error';
+      res.status(500).json({ error: 'Failed to execute profitable trade', details: message });
     }
   });
 

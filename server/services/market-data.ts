@@ -14,6 +14,7 @@ export interface MarketData {
   volume: number;
   spread: number;
   volatility: number;
+  confidence?: number;
   change?: number; // 24h price change percentage
   priceChangePercent24h?: number; // Alternative name for API compatibility
 }

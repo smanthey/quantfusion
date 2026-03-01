@@ -198,9 +198,9 @@ export function TradingDashboard() {
   };
 
   // Use current data with comprehensive safety checks
-  const finalData = currentData ? {
-    ...currentData,
-    performance: currentData.performance || {
+  const finalData = {
+    ...(currentData ?? {}),
+    performance: currentData?.performance || {
       totalPnl: 0,
       dailyPnl: 0,
       drawdown: 0,
@@ -210,12 +210,12 @@ export function TradingDashboard() {
       totalTrades: 0,
       equity: []
     },
-    marketData: currentData.marketData || {
+    marketData: currentData?.marketData || {
       BTCUSDT: { price: 0, change: 0, volume: 0, volatility: 0 },
       ETHUSDT: { price: 0, change: 0, volume: 0, volatility: 0 },
       regime: { current: 'Unknown', strength: 0, confidence: 0 }
     },
-    riskMetrics: currentData.riskMetrics || {
+    riskMetrics: currentData?.riskMetrics || {
       currentDrawdown: 0,
       dailyPnL: 0,
       totalPositionSize: 0,
@@ -223,11 +223,11 @@ export function TradingDashboard() {
       isHalted: false,
       circuitBreakers: []
     },
-    recentTrades: currentData.recentTrades || [],
-    positions: currentData.positions || [],
-    strategies: currentData.strategies || [],
-    systemAlerts: currentData.systemAlerts || []
-  } : null;
+    recentTrades: currentData?.recentTrades || [],
+    positions: currentData?.positions || [],
+    strategies: currentData?.strategies || [],
+    systemAlerts: currentData?.systemAlerts || []
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
