@@ -38,7 +38,10 @@ export class PositionPersistence {
         symbol: position.symbol,
         side: position.side,
         size: position.quantity.toString(),
-        entryPrice: position.entryPrice.toString()
+        entryPrice: position.entryPrice.toString(),
+        stopLoss: position.stopLoss.toString(),
+        takeProfit: position.takeProfit.toString(),
+        status: 'open',
       }).returning();
       
       // console.log(`💾 Position saved to database: ${position.symbol} ${position.side} @ ${position.entryPrice}`);
@@ -65,8 +68,8 @@ export class PositionPersistence {
         side: trade.side as 'long' | 'short',
         entryPrice: trade.entryPrice,
         quantity: trade.size,
-        stopLoss: '0',
-        takeProfit: '0',
+        stopLoss: trade.stopLoss || '0',
+        takeProfit: trade.takeProfit || '0',
         strategyUsed: trade.strategyId,
         openedAt: trade.executedAt || new Date()
       }));
@@ -90,9 +93,25 @@ export class PositionPersistence {
     takeProfit?: number;
   }): Promise<void> {
     try {
-      // Note: trades table doesn't have stopLoss/takeProfit fields
-      // This is a placeholder for future enhancement
-      // console.log(`💾 Position update requested: ${id} (not implemented in schema)`);
+      const payload: Partial<{
+        stopLoss: string;
+        takeProfit: string;
+      }> = {};
+
+      if (typeof updates.stopLoss === 'number') {
+        payload.stopLoss = updates.stopLoss.toString();
+      }
+      if (typeof updates.takeProfit === 'number') {
+        payload.takeProfit = updates.takeProfit.toString();
+      }
+
+      if (Object.keys(payload).length === 0) return;
+
+      await db.update(trades)
+        .set(payload)
+        .where(eq(trades.id, id));
+
+      // console.log(`💾 Position updated in database: ${id}`);
     } catch (error) {
       // console.error('Failed to update position:', error);
     }
@@ -106,7 +125,9 @@ export class PositionPersistence {
       await db.update(trades)
         .set({
           exitPrice: exitPrice.toString(),
-          pnl: pnl.toString()
+          pnl: pnl.toString(),
+          status: 'closed',
+          closedAt: new Date(),
         })
         .where(eq(trades.id, id));
       
