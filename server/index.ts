@@ -3,6 +3,7 @@ import cors from "cors";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log as viteLog } from "./vite";
 import { log } from './utils/logger';
+import { pool } from "./db";
 import { enforceHTTPS, securityHeaders, createRateLimiter } from './middleware/security';
 import { TradingEngine } from './services/trading-engine';
 import { MultiAssetEngine } from './services/multi-asset-engine';
@@ -89,7 +90,35 @@ app.use((req, res, next) => {
   next();
 });
 
+async function assertHistoricalUniqMigration(): Promise<void> {
+  const enforceInProd = process.env.QUANT_ENFORCE_HISTORICAL_UNIQ !== "false";
+  if (process.env.NODE_ENV !== "production" && process.env.QUANT_ENFORCE_HISTORICAL_UNIQ !== "true") {
+    return;
+  }
+  if (process.env.NODE_ENV === "production" && !enforceInProd) {
+    return;
+  }
+
+  const requiredIndex = "historical_prices_symbol_interval_timestamp_uniq";
+  const result = await pool.query<{ indexname: string }>(
+    `SELECT indexname
+       FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND indexname = $1`,
+    [requiredIndex]
+  );
+
+  if (result.rows.length === 0) {
+    const message =
+      `Missing required DB index: ${requiredIndex}. ` +
+      `Apply the quantfusion migration before starting the server.`;
+    log.error(message);
+    throw new Error(message);
+  }
+}
+
 (async () => {
+  await assertHistoricalUniqMigration();
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
