@@ -49,6 +49,14 @@ export class MarketDataService {
   private symbols = ['BTCUSDT', 'ETHUSDT', 'EURUSD', 'GBPUSD', 'AUDUSD'];
   private forexData: ForexDataService;
 
+  private assertStrictLiveDataReady(context: string) {
+    if (!this.strictLiveDataMode) return;
+    if (this.useLiveData) return;
+    throw new Error(
+      `strict_live_data_required:${context}:${this.dataFeedError || "live_data_unavailable"}`
+    );
+  }
+
   constructor() {
     this.forexData = new ForexDataService();
     this.initializeService();
@@ -565,6 +573,7 @@ export class MarketDataService {
   }
 
   async getCurrentPrice(symbol: string): Promise<number> {
+    this.assertStrictLiveDataReady(`getCurrentPrice:${symbol}`);
     try {
       // Use multi-API aggregated pricing for best accuracy
       return await multiApiClient.getAggregatedPrice(symbol);
@@ -576,12 +585,17 @@ export class MarketDataService {
       if (cachedData) {
         return cachedData.price;
       }
-      
+
+      if (this.strictLiveDataMode) {
+        throw new Error(`strict_live_data_required:no_cached_price:${symbol}`);
+      }
+
       return 0;
     }
   }
 
   getCurrentPriceSync(symbol: string): number {
+    this.assertStrictLiveDataReady(`getCurrentPriceSync:${symbol}`);
     return this.data.get(symbol)?.price ?? 0;
   }
 
