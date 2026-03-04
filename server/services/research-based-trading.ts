@@ -24,7 +24,7 @@ export class ResearchBasedTrading {
    * STRATEGY 1: Mean Reversion using REAL historical prices
    */
   private async meanReversionSignal(symbol: string): Promise<any> {
-    // Get REAL historical candles (not fake data!)
+    // Get REAL historical candles (not synthetic data!)
     const candles = marketDataService.getCandles(symbol, 20);
     
     if (candles.length < 20) {

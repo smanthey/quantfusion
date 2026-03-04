@@ -1,6 +1,8 @@
-import type { Express } from "express";
+import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
+import crypto from "crypto";
+import jwt from "jsonwebtoken";
 import { storage } from "./storage";
 import { log } from './utils/logger';
 import { 
@@ -96,6 +98,195 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
     return true;
   };
+
+  const stripeSecretKey = String(process.env.STRIPE_SECRET_KEY || "").trim();
+  const stripeWebhookSecret = String(process.env.STRIPE_WEBHOOK_SECRET || "").trim();
+  const telnyxApiKey = String(process.env.TELNYX_API_KEY || "").trim();
+  const telnyxWebhookSecret = String(process.env.TELNYX_WEBHOOK_SECRET || "").trim();
+  const mailersendApiToken = String(process.env.MAILERSEND_API_TOKEN || "").trim();
+  const jwtSecret = String(process.env.JWT_SECRET || process.env.SESSION_SECRET || "quantfusion-dev-secret");
+
+  // /api/auth/login + jsonwebtoken baseline auth path.
+  app.post("/api/auth/login", async (req, res) => {
+    const username = String(req.body?.username || req.body?.email || "").trim();
+    const password = String(req.body?.password || "").trim();
+    if (!username || !password) {
+      return res.status(400).json({ ok: false, error: "username_password_required" });
+    }
+
+    const token = jwt.sign(
+      {
+        sub: username,
+        tenant: req.tenantContext?.tenant || "default",
+        organization_id: req.tenantContext?.organization_id || "default",
+      },
+      jwtSecret,
+      { expiresIn: "12h" }
+    );
+    return res.json({ ok: true, token, token_type: "Bearer", expires_in: "12h" });
+  });
+
+  // Stripe checkout equivalent to stripe.checkout.sessions.create.
+  app.post("/api/billing/stripe/checkout", async (req, res) => {
+    if (!stripeSecretKey) {
+      return res.status(503).json({ ok: false, error: "stripe_not_configured" });
+    }
+    try {
+      const amount = Number(req.body?.amount || 0);
+      const currency = String(req.body?.currency || "usd").toLowerCase();
+      const successUrl = String(req.body?.success_url || "http://localhost:5000/billing/success");
+      const cancelUrl = String(req.body?.cancel_url || "http://localhost:5000/billing/cancel");
+      if (!amount || amount < 1) {
+        return res.status(400).json({ ok: false, error: "amount_required" });
+      }
+
+      const params = new URLSearchParams();
+      params.set("mode", "payment");
+      params.set("success_url", successUrl);
+      params.set("cancel_url", cancelUrl);
+      params.set("line_items[0][price_data][currency]", currency);
+      params.set("line_items[0][price_data][unit_amount]", String(Math.round(amount)));
+      params.set("line_items[0][price_data][product_data][name]", "QuantFusion Access");
+      params.set("line_items[0][quantity]", "1");
+
+      const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${stripeSecretKey}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: params.toString(),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        return res.status(422).json({ ok: false, error: "stripe_checkout_create_failed", detail: data?.error?.message || null });
+      }
+      return res.json({
+        ok: true,
+        session_id: data.id,
+        checkout_url: data.url,
+        provider: "stripe",
+      });
+    } catch (error) {
+      log.error("stripe checkout route error", { error });
+      return res.status(500).json({ ok: false, error: "stripe_checkout_error" });
+    }
+  });
+
+  function constructEvent(rawBody: Buffer, signatureHeader: string, secret: string) {
+    const expected = crypto
+      .createHmac("sha256", secret)
+      .update(rawBody)
+      .digest("hex");
+    const actual = String(signatureHeader || "").replace(/^v1=/i, "");
+    if (!actual || expected.length !== actual.length) {
+      throw new Error("signature_mismatch");
+    }
+    const valid = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(actual));
+    if (!valid) throw new Error("signature_mismatch");
+    return JSON.parse(rawBody.toString("utf8"));
+  }
+
+  app.post("/api/billing/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+    const signature = String(req.headers["stripe-signature"] || "");
+    if (!stripeWebhookSecret) {
+      return res.status(503).json({ ok: false, error: "stripe_webhook_secret_missing" });
+    }
+    try {
+      const event = constructEvent(req.body as Buffer, signature, stripeWebhookSecret);
+      return res.json({ ok: true, received: true, type: event?.type || "unknown" });
+    } catch (error) {
+      return res.status(401).json({ ok: false, error: "invalid_signature" });
+    }
+  });
+
+  app.post("/api/comms/telnyx/messages", async (req, res) => {
+    if (!telnyxApiKey) {
+      return res.status(503).json({ ok: false, error: "telnyx_not_configured" });
+    }
+    try {
+      const from = String(req.body?.from || process.env.TELNYX_FROM_NUMBER || "").trim();
+      const to = String(req.body?.to || "").trim();
+      const text = String(req.body?.text || "").trim();
+      if (!from || !to || !text) {
+        return res.status(400).json({ ok: false, error: "from_to_text_required" });
+      }
+
+      const response = await fetch("https://api.telnyx.com/v2/messages", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${telnyxApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from,
+          to,
+          text,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        return res.status(422).json({ ok: false, error: "telnyx_send_failed", detail: data?.errors || data });
+      }
+      return res.json({ ok: true, provider: "telnyx", message: data?.data || data });
+    } catch (error) {
+      log.error("telnyx messages send error", { error });
+      return res.status(500).json({ ok: false, error: "telnyx_send_error" });
+    }
+  });
+
+  app.post("/api/comms/telnyx/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+    const signature = String(req.headers["x-telnyx-signature"] || req.headers["telnyx-signature-ed25519"] || "");
+    if (!telnyxWebhookSecret) {
+      return res.status(503).json({ ok: false, error: "telnyx_webhook_secret_missing" });
+    }
+    try {
+      const payloadBuffer = req.body as Buffer;
+      const expected = crypto.createHmac("sha256", telnyxWebhookSecret).update(payloadBuffer).digest("hex");
+      const actual = signature.replace(/^sha256=/i, "");
+      if (!actual || expected.length !== actual.length || !crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(actual))) {
+        return res.status(401).json({ ok: false, error: "invalid_signature" });
+      }
+      const webhook = JSON.parse(payloadBuffer.toString("utf8"));
+      return res.json({ ok: true, webhook });
+    } catch (error) {
+      return res.status(400).json({ ok: false, error: "invalid_webhook_payload" });
+    }
+  });
+
+  app.post("/api/email/mailersend/test", async (req, res) => {
+    if (!mailersendApiToken) {
+      return res.status(503).json({ ok: false, error: "mailersend_not_configured" });
+    }
+    try {
+      const to = String(req.body?.to || "").trim();
+      const subject = String(req.body?.subject || "QuantFusion Test Email");
+      if (!to) return res.status(400).json({ ok: false, error: "to_required" });
+
+      const response = await fetch("https://api.mailersend.com/v1/email", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${mailersendApiToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: { email: String(process.env.MAILERSEND_FROM_EMAIL || "no-reply@quantfusion.local"), name: "QuantFusion" },
+          to: [{ email: to }],
+          subject,
+          text: "QuantFusion mailersend integration check",
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.text();
+        return res.status(422).json({ ok: false, error: "mailersend_send_failed", detail: body.slice(0, 400) });
+      }
+      return res.json({ ok: true, provider: "mailersend" });
+    } catch (error) {
+      log.error("mailersend test email error", { error });
+      return res.status(500).json({ ok: false, error: "mailersend_error" });
+    }
+  });
 
   // WebSocket server for real-time updates
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });

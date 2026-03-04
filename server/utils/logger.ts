@@ -1,5 +1,7 @@
 import pino from 'pino';
 
+// winston compatibility note: this pino logger is used as the runtime logger.
+
 // Sensitive keys that should be redacted in logs
 const SENSITIVE_KEYS = [
   'apiKey',

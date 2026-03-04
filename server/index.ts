@@ -1,5 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log as viteLog } from "./vite";
 import { log } from './utils/logger';
@@ -12,6 +14,7 @@ import { ForexTradingEngine } from './services/forex-trading-engine';
 import { ProfitableTradingEngine } from './services/profitable-trading-engine';
 import { ResearchTradingMaster } from './services/research-trading-master';
 import { setGlobalForexEngine } from './routes/multi-asset';
+import { tenantResolver } from "./middleware/tenant";
 
 const app = express();
 
@@ -53,9 +56,17 @@ app.use(enforceHTTPS);
 
 // Security: Add security headers
 app.use(securityHeaders);
+app.use(helmet());
 
 // Security: Rate limiting for API routes
 app.use('/api', createRateLimiter(100, 60000)); // 100 requests per minute
+app.use("/api", rateLimit({
+  windowMs: 60_000,
+  max: Number(process.env.API_RATE_LIMIT_MAX || 200),
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
+app.use("/api", tenantResolver);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
