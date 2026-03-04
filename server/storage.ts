@@ -344,6 +344,18 @@ export class DatabaseStorage implements IStorage {
     const [stored] = await db
       .insert(historicalPrices)
       .values(price)
+      .onConflictDoUpdate({
+        target: [historicalPrices.symbol, historicalPrices.interval, historicalPrices.timestamp],
+        set: {
+          open: price.open,
+          high: price.high,
+          low: price.low,
+          close: price.close,
+          volume: price.volume,
+          trades: price.trades ?? null,
+          source: price.source,
+        },
+      })
       .returning();
     return stored;
   }
@@ -353,7 +365,10 @@ export class DatabaseStorage implements IStorage {
     
     await db
       .insert(historicalPrices)
-      .values(prices);
+      .values(prices)
+      .onConflictDoNothing({
+        target: [historicalPrices.symbol, historicalPrices.interval, historicalPrices.timestamp],
+      });
   }
 
   async getHistoricalPrices(

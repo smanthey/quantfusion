@@ -131,6 +131,11 @@ export const historicalPrices = pgTable("historical_prices", {
   // Indices for efficient historical data queries
   idxSymbolTimestamp: index("historical_prices_symbol_timestamp_idx").on(t.symbol, t.timestamp),
   idxSymbolInterval: index("historical_prices_symbol_interval_idx").on(t.symbol, t.interval),
+  uniqSymbolIntervalTimestamp: unique("historical_prices_symbol_interval_timestamp_uniq").on(
+    t.symbol,
+    t.interval,
+    t.timestamp
+  ),
 }));
 
 // Alternative Data Sources - Politicians' Trades, Options Flow, Whale Tracking

@@ -7,6 +7,8 @@
  * 
  * No API keys required - uses public endpoints only
  */
+import { storage } from "../storage";
+import { log } from "../utils/logger";
 
 interface HistoricalDataPoint {
   timestamp: number;
@@ -51,9 +53,16 @@ export class HistoricalDataCollector {
   private lastCoinGeckoCall = 0;
   private readonly BINANCE_RATE_LIMIT = 100; // ms between calls
   private readonly COINGECKO_RATE_LIMIT = 2000; // ms between calls (30/min = 2000ms)
+  private lastRunAt: Date | null = null;
+  private lastError: string | null = null;
+  private totalStoredPoints = 0;
+  private runStoredPoints = 0;
 
   async startHistoricalCollection(): Promise<void> {
     // console.log(`🏛️ Starting historical data collection (${this.YEARS_TO_COLLECT} years)...`);
+    this.lastRunAt = new Date();
+    this.lastError = null;
+    this.runStoredPoints = 0;
     
     for (const symbol of this.SYMBOLS) {
       try {
@@ -77,10 +86,18 @@ export class HistoricalDataCollector {
         await this.delay(3000);
       } catch (error) {
         // console.error(`❌ Error collecting historical data for ${symbol}:`, error.message);
+        this.lastError = error instanceof Error ? error.message : String(error);
+        log.error("Historical collector symbol pass failed", { symbol, error: this.lastError });
       }
     }
 
     // console.log('🎯 Historical data collection completed!');
+    if (!this.lastError) {
+      log.info("Historical data collection completed", {
+        symbols: this.SYMBOLS,
+        runStoredPoints: this.runStoredPoints,
+      });
+    }
   }
 
   private async collectBinanceHistoricalData(symbol: string): Promise<HistoricalDataPoint[]> {
@@ -205,20 +222,27 @@ export class HistoricalDataCollector {
   }
 
   private async storeHistoricalData(dataPoints: HistoricalDataPoint[]): Promise<void> {
-    // For now, we'll log the data. In a full implementation, this would go to the database
-    // console.log(`💾 Storing ${dataPoints.length} historical data points`);
-    
-    // Example: Store first and last data points for verification
-    if (dataPoints.length > 0) {
-      const first = dataPoints[0];
-      const last = dataPoints[dataPoints.length - 1];
-      
-      // console.log(`📊 Range: ${new Date(first.timestamp).toISOString()} to ${new Date(last.timestamp).toISOString()}`);
-      // console.log(`📈 ${first.symbol}: $${first.close.toFixed(2)} → $${last.close.toFixed(2)} (${((last.close - first.close) / first.close * 100).toFixed(1)}%)`);
-    }
+    if (dataPoints.length === 0) return;
 
-    // TODO: Insert into database table for historical analysis
-    // This data would be used for backtesting, ML training, and pattern recognition
+    const rows = dataPoints
+      .filter((point) => Number.isFinite(point.timestamp))
+      .map((point) => ({
+        symbol: point.symbol,
+        timestamp: new Date(point.timestamp),
+        open: point.open.toFixed(8),
+        high: point.high.toFixed(8),
+        low: point.low.toFixed(8),
+        close: point.close.toFixed(8),
+        volume: point.volume.toFixed(8),
+        trades: null,
+        interval: "1d",
+        source: point.source,
+      }));
+
+    if (rows.length === 0) return;
+    await storage.storeHistoricalPrices(rows);
+    this.totalStoredPoints += rows.length;
+    this.runStoredPoints += rows.length;
   }
 
   private async rateLimitBinance(): Promise<void> {
@@ -249,13 +273,27 @@ export class HistoricalDataCollector {
 
   // Utility method to get data summary for ML training
   async getHistoricalDataSummary(): Promise<any> {
-    // This would query the stored historical data and return statistics
+    const latestBySymbol = await Promise.all(
+      this.SYMBOLS.map(async (symbol) => {
+        const latest = await storage.getLatestPrice(symbol, "1d");
+        return {
+          symbol,
+          latestTimestamp: latest?.timestamp ?? null,
+          latestClose: latest?.close ?? null,
+          source: latest?.source ?? null,
+        };
+      })
+    );
+
     return {
-      totalDataPoints: 0,
-      dateRange: { start: null, end: null },
+      totalDataPointsStored: this.totalStoredPoints,
+      runStoredPoints: this.runStoredPoints,
       symbols: this.SYMBOLS,
       sources: ['binance', 'coingecko'],
-      ready: false
+      lastRunAt: this.lastRunAt,
+      lastError: this.lastError,
+      latestBySymbol,
+      ready: latestBySymbol.some((item) => item.latestTimestamp !== null),
     };
   }
 }

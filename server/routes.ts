@@ -34,6 +34,7 @@ import { ResearchTradingMaster } from './services/research-trading-master';
 import { WorkingTrader } from './services/working-trader';
 import { openClawTradingService } from './services/openclaw-trading';
 import { openClawMockLabService } from './services/openclaw-mock-lab';
+import { predictionMarketQuoteService } from './services/prediction-market-quote-service';
 
 // Initialize trading services - SIMPLE SYSTEM ONLY (proven Freqtrade patterns)
 const marketData = new MarketDataService();
@@ -51,6 +52,38 @@ const indicatorEngine = new CustomIndicatorEngine();
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
+  const mockLabEnabled = process.env.ENABLE_OPENCLAW_MOCK_LAB === "true";
+  let scannerInitPromise: Promise<void> | null = null;
+
+  const ensureScannersStarted = async () => {
+    if (!scannerInitPromise) {
+      scannerInitPromise = (async () => {
+        const [{ politicianTradesScanner }, { optionsFlowScanner }, { whaleTracker }] =
+          await Promise.all([
+            import("./services/politician-trades-scanner"),
+            import("./services/options-flow-scanner"),
+            import("./services/whale-tracker"),
+          ]);
+
+        await Promise.all([
+          politicianTradesScanner.start(),
+          optionsFlowScanner.start(),
+          whaleTracker.start(),
+        ]);
+      })();
+    }
+    await scannerInitPromise;
+  };
+
+  const requireMockLabEnabled = (res: any): boolean => {
+    if (mockLabEnabled) return true;
+    res.status(404).json({
+      ok: false,
+      error: "mock_lab_disabled",
+      message: "Enable with ENABLE_OPENCLAW_MOCK_LAB=true",
+    });
+    return false;
+  };
 
   // WebSocket server for real-time updates
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
@@ -833,6 +866,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // OpenClaw Mock Lab (paper-only quant systems from research posts)
   app.get('/api/openclaw/mock/dashboard', async (_req, res) => {
+    if (!requireMockLabEnabled(res)) return;
     try {
       const data = await openClawMockLabService.getDashboard();
       res.json({ ok: true, ...data });
@@ -842,7 +876,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/openclaw/mock/live-quotes', async (req, res) => {
+    if (!requireMockLabEnabled(res)) return;
+    try {
+      const symbol = req.query.symbol ? String(req.query.symbol) : undefined;
+      const marketId = req.query.marketId ? String(req.query.marketId) : undefined;
+      const result = await predictionMarketQuoteService.getLiveQuotes({ symbol, marketId });
+
+      broadcast({
+        type: 'openclaw_mock_live_quotes',
+        data: result,
+        timestamp: new Date().toISOString(),
+      });
+
+      res.json({ ok: true, result });
+    } catch (error) {
+      log.error('mock live quotes error', { error });
+      res.status(500).json({ ok: false, error: 'mock_live_quotes_failed' });
+    }
+  });
+
   app.post('/api/openclaw/mock/evaluate-probability', async (req, res) => {
+    if (!requireMockLabEnabled(res)) return;
     try {
       const body = req.body || {};
       const required = ['forwardPrice', 'strike', 'volatility', 'timeToExpiryYears'];
@@ -869,6 +924,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post('/api/openclaw/mock/scan-arb', async (req, res) => {
+    if (!requireMockLabEnabled(res)) return;
     try {
       const body = req.body || {};
       if (!body.symbol || !Array.isArray(body.quotes)) {
@@ -895,7 +951,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/openclaw/mock/scan-latency', async (req, res) => {
+    if (!requireMockLabEnabled(res)) return;
+    try {
+      const body = req.body || {};
+      const required = [
+        'symbol',
+        'marketId',
+        'venue',
+        'marketProbability',
+        'referencePriceNow',
+        'referencePricePrev',
+        'referenceTimestampMs',
+        'marketTimestampMs',
+      ];
+
+      for (const f of required) {
+        if (body[f] === undefined || body[f] === null || body[f] === '') {
+          return res.status(400).json({ ok: false, error: `${f}_required` });
+        }
+      }
+
+      const result = await openClawMockLabService.scanLatencyDislocation({
+        symbol: String(body.symbol),
+        marketId: String(body.marketId),
+        venue: String(body.venue),
+        marketProbability: Number(body.marketProbability),
+        referencePriceNow: Number(body.referencePriceNow),
+        referencePricePrev: Number(body.referencePricePrev),
+        referenceTimestampMs: Number(body.referenceTimestampMs),
+        marketTimestampMs: Number(body.marketTimestampMs),
+        fairProbability: body.fairProbability !== undefined ? Number(body.fairProbability) : undefined,
+        feeBps: body.feeBps !== undefined ? Number(body.feeBps) : undefined,
+        liquidityUsd: body.liquidityUsd !== undefined ? Number(body.liquidityUsd) : undefined,
+        minEdgeBps: body.minEdgeBps !== undefined ? Number(body.minEdgeBps) : undefined,
+        blindWindowMs: body.blindWindowMs !== undefined ? Number(body.blindWindowMs) : undefined,
+      });
+
+      broadcast({
+        type: 'openclaw_mock_latency_scan',
+        data: result,
+        timestamp: new Date().toISOString(),
+      });
+
+      res.json({ ok: true, result });
+    } catch (error) {
+      log.error('mock latency scan error', { error });
+      res.status(500).json({ ok: false, error: 'mock_latency_scan_failed' });
+    }
+  });
+
   app.post('/api/openclaw/mock/trades', async (req, res) => {
+    if (!requireMockLabEnabled(res)) return;
     try {
       const body = req.body || {};
       const required = ['symbol', 'marketId', 'venue', 'marketProbability', 'fairProbability', 'bankrollUsd'];
@@ -932,6 +1039,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post('/api/openclaw/mock/trades/:id/close', async (req, res) => {
+    if (!requireMockLabEnabled(res)) return;
     try {
       const { id } = req.params;
       const exitProbability = Number(req.body?.exitProbability);
@@ -960,6 +1068,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Alternative Data Scanners - Politicians, Options, Whales
   app.get('/api/scanners/politicians', async (req, res) => {
     try {
+      await ensureScannersStarted();
       const { politicianTradesScanner } = await import('./services/politician-trades-scanner');
       const signals = politicianTradesScanner.getAllSignals();
       const stats = politicianTradesScanner.getStats();
@@ -967,6 +1076,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         signals,
         stats,
+        integrationStatus: politicianTradesScanner.getIntegrationStatus(),
         timestamp: new Date().toISOString()
       });
     } catch (error) {
@@ -976,6 +1086,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/scanners/options', async (req, res) => {
     try {
+      await ensureScannersStarted();
       const { optionsFlowScanner } = await import('./services/options-flow-scanner');
       const signals = optionsFlowScanner.getAllSignals();
       const stats = optionsFlowScanner.getStats();
@@ -983,6 +1094,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         signals,
         stats,
+        integrationStatus: optionsFlowScanner.getIntegrationStatus(),
         timestamp: new Date().toISOString()
       });
     } catch (error) {
@@ -992,6 +1104,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/scanners/whales', async (req, res) => {
     try {
+      await ensureScannersStarted();
       const { whaleTracker } = await import('./services/whale-tracker');
       const signals = whaleTracker.getAllSignals();
       const stats = whaleTracker.getStats();
@@ -999,6 +1112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         signals,
         stats,
+        integrationStatus: whaleTracker.getIntegrationStatus(),
         timestamp: new Date().toISOString()
       });
     } catch (error) {
@@ -1023,6 +1137,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.status(500).json({ error: 'Failed to fetch circuit breaker status' });
+    }
+  });
+
+  app.get('/api/scanners/health', async (req, res) => {
+    try {
+      await ensureScannersStarted();
+      const [{ politicianTradesScanner }, { optionsFlowScanner }, { whaleTracker }, { historicalDataCollector }] =
+        await Promise.all([
+          import('./services/politician-trades-scanner'),
+          import('./services/options-flow-scanner'),
+          import('./services/whale-tracker'),
+          import('./services/historical-data-collector'),
+        ]);
+
+      const providers = {
+        politicians: politicianTradesScanner.getIntegrationStatus(),
+        options: optionsFlowScanner.getIntegrationStatus(),
+        whales: whaleTracker.getIntegrationStatus(),
+      };
+
+      const configuredProviders = [
+        providers.politicians.enabled && !!process.env.QUIVER_API_KEY,
+        providers.options.enabled && !!process.env.UNUSUAL_WHALES_API_KEY,
+        providers.whales.enabled && !!process.env.WHALE_ALERT_API_KEY,
+      ].filter(Boolean).length;
+
+      const liveProviders = [
+        providers.politicians.liveData,
+        providers.options.liveData,
+        providers.whales.liveData,
+      ].filter(Boolean).length;
+
+      const historicalSummary = await historicalDataCollector.getHistoricalDataSummary();
+
+      res.json({
+        ok: true,
+        timestamp: new Date().toISOString(),
+        scanners: providers,
+        historicalCollector: historicalSummary,
+        totals: {
+          configuredProviders,
+          liveProviders,
+          providersTracked: 3,
+        },
+      });
+    } catch (error) {
+      log.error('Scanner health endpoint failed', { error });
+      res.status(500).json({
+        ok: false,
+        error: 'Failed to fetch scanner health status',
+      });
     }
   });
 
