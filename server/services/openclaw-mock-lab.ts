@@ -38,6 +38,38 @@ interface PaperTradeInput {
   notes?: string;
 }
 
+interface LatencyDislocationInput {
+  symbol: string;
+  marketId: string;
+  venue: string;
+  marketProbability: number;
+  referencePriceNow: number;
+  referencePricePrev: number;
+  referenceTimestampMs: number;
+  marketTimestampMs: number;
+  fairProbability?: number;
+  feeBps?: number;
+  liquidityUsd?: number;
+  minEdgeBps?: number;
+  blindWindowMs?: number;
+}
+
+interface OpportunityRecord {
+  id: string;
+  createdAt: string;
+  lastSeenAt: string;
+  evidenceCount: number;
+  symbol: string;
+  marketId: string;
+  venue: string;
+  marketProbability: number;
+  fairProbability: number;
+  edgeBps: number;
+  expectedRoiPct: number;
+  score: number;
+  source: "fair_value" | "latency_dislocation";
+}
+
 function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0;
   return Math.min(1, Math.max(0, n));
@@ -67,17 +99,8 @@ export class OpenClawMockLabService {
   private readonly strategyName = "quantfusion-mock-lab";
   private readonly strategyType = "prediction_market";
   private readonly maxRecentOpportunities = 200;
-  private readonly recentOpportunities: Array<{
-    id: string;
-    createdAt: string;
-    symbol: string;
-    marketId: string;
-    venue: string;
-    marketProbability: number;
-    fairProbability: number;
-    edgeBps: number;
-    expectedRoiPct: number;
-  }> = [];
+  private readonly recentOpportunities: OpportunityRecord[] = [];
+  private readonly opportunityIndex = new Map<string, OpportunityRecord>();
 
   async evaluateProbability(input: ProbabilityInput) {
     const F = Math.max(1e-9, Number(input.forwardPrice || 0));
@@ -145,9 +168,8 @@ export class OpenClawMockLabService {
 
         if (edgeBps < minEdgeBps) return null;
 
-        const item = {
-          id: crypto.randomUUID(),
-          createdAt: new Date().toISOString(),
+        const score = this.scoreOpportunity(edgeBps, expectedRoiPct, q.liquidityUsd);
+        return this.upsertOpportunity({
           symbol,
           marketId: q.marketId,
           venue: q.venue,
@@ -155,11 +177,9 @@ export class OpenClawMockLabService {
           fairProbability,
           edgeBps,
           expectedRoiPct,
-        };
-
-        this.recentOpportunities.unshift(item);
-        this.trimRecentOpportunities();
-        return item;
+          score,
+          source: "fair_value",
+        });
       })
       .filter(Boolean);
 
@@ -179,8 +199,66 @@ export class OpenClawMockLabService {
     return {
       symbol,
       crossVenueArb,
-      fairOpportunities,
+      fairOpportunities: this.rankOpportunities(fairOpportunities as OpportunityRecord[]),
       totalQuotes: normalized.length,
+    };
+  }
+
+  async scanLatencyDislocation(input: LatencyDislocationInput) {
+    const symbol = String(input.symbol || "UNKNOWN").toUpperCase();
+    const marketProbability = clamp01(Number(input.marketProbability || 0));
+    const referenceNow = Math.max(1e-9, Number(input.referencePriceNow || 0));
+    const referencePrev = Math.max(1e-9, Number(input.referencePricePrev || 0));
+    const fairProbabilityInput = input.fairProbability !== undefined ? clamp01(Number(input.fairProbability)) : null;
+    const feeBps = Math.max(0, Number(input.feeBps ?? 30));
+    const liquidityUsd = Math.max(0, Number(input.liquidityUsd ?? 0));
+    const blindWindowMs = Math.max(1, Number(input.blindWindowMs ?? 500));
+    const minEdgeBps = Number(input.minEdgeBps ?? 50);
+
+    const lagMs = Math.max(0, Number(input.referenceTimestampMs) - Number(input.marketTimestampMs));
+    const referenceReturn = (referenceNow - referencePrev) / referencePrev;
+    const projectedShift = Math.max(-0.49, Math.min(0.49, referenceReturn * 0.45));
+    const projectedFair = clamp01(marketProbability + projectedShift);
+    const fairProbability = fairProbabilityInput ?? projectedFair;
+
+    const edge = fairProbability - marketProbability;
+    const edgeBps = edge * 10_000;
+    const expectedRoiPct = (edge - feeBps / 10_000) * 100;
+    const withinBlindWindow = lagMs <= blindWindowMs;
+    const score = this.scoreOpportunity(edgeBps, expectedRoiPct, liquidityUsd) + (withinBlindWindow ? 8 : -3);
+
+    if (edgeBps >= minEdgeBps) {
+      this.upsertOpportunity({
+        symbol,
+        marketId: String(input.marketId || "unknown"),
+        venue: String(input.venue || "unknown"),
+        marketProbability,
+        fairProbability,
+        edgeBps,
+        expectedRoiPct,
+        score,
+        source: "latency_dislocation",
+      });
+    }
+
+    return {
+      symbol,
+      marketId: String(input.marketId || "unknown"),
+      venue: String(input.venue || "unknown"),
+      lagMs,
+      blindWindowMs,
+      withinBlindWindow,
+      referenceReturn,
+      projectedShift,
+      marketProbability,
+      fairProbability,
+      edgeBps,
+      expectedRoiPct,
+      score,
+      recommendation:
+        edgeBps >= minEdgeBps && expectedRoiPct > 0 && withinBlindWindow
+          ? "enter_candidate"
+          : "skip",
     };
   }
 
@@ -344,7 +422,7 @@ export class OpenClawMockLabService {
       },
       equityCurve,
       recentTrades,
-      opportunities: this.recentOpportunities.slice(0, 20),
+      opportunities: this.rankOpportunities(this.recentOpportunities.slice(0, 20)),
     };
   }
 
@@ -369,8 +447,64 @@ export class OpenClawMockLabService {
   }
 
   private trimRecentOpportunities() {
+    this.recentOpportunities.sort((a, b) => {
+      if (a.lastSeenAt !== b.lastSeenAt) return b.lastSeenAt.localeCompare(a.lastSeenAt);
+      return a.id.localeCompare(b.id);
+    });
+
     if (this.recentOpportunities.length <= this.maxRecentOpportunities) return;
-    this.recentOpportunities.splice(this.maxRecentOpportunities);
+    const removed = this.recentOpportunities.splice(this.maxRecentOpportunities);
+    for (const item of removed) {
+      this.opportunityIndex.delete(this.opportunityKey(item.symbol, item.marketId, item.venue, item.source));
+    }
+  }
+
+  private scoreOpportunity(edgeBps: number, expectedRoiPct: number, liquidityUsd = 0): number {
+    const liquidityBoost = Math.log10(Math.max(1, liquidityUsd + 1));
+    return Number((edgeBps * 0.04 + expectedRoiPct * 3 + liquidityBoost).toFixed(4));
+  }
+
+  private opportunityKey(symbol: string, marketId: string, venue: string, source: OpportunityRecord["source"]): string {
+    return `${symbol}|${marketId}|${venue}|${source}`;
+  }
+
+  private upsertOpportunity(input: Omit<OpportunityRecord, "id" | "createdAt" | "lastSeenAt" | "evidenceCount">): OpportunityRecord {
+    const now = new Date().toISOString();
+    const key = this.opportunityKey(input.symbol, input.marketId, input.venue, input.source);
+    const existing = this.opportunityIndex.get(key);
+
+    if (existing) {
+      existing.lastSeenAt = now;
+      existing.evidenceCount += 1;
+      existing.marketProbability = input.marketProbability;
+      existing.fairProbability = input.fairProbability;
+      existing.edgeBps = input.edgeBps;
+      existing.expectedRoiPct = input.expectedRoiPct;
+      existing.score = input.score;
+      return existing;
+    }
+
+    const created: OpportunityRecord = {
+      id: crypto.randomUUID(),
+      createdAt: now,
+      lastSeenAt: now,
+      evidenceCount: 1,
+      ...input,
+    };
+
+    this.recentOpportunities.unshift(created);
+    this.opportunityIndex.set(key, created);
+    this.trimRecentOpportunities();
+    return created;
+  }
+
+  // Deterministic ranking for stable UI ordering.
+  private rankOpportunities(items: OpportunityRecord[]): OpportunityRecord[] {
+    return [...items].sort((a, b) => {
+      if (a.score !== b.score) return b.score - a.score;
+      if (a.lastSeenAt !== b.lastSeenAt) return b.lastSeenAt.localeCompare(a.lastSeenAt);
+      return a.id.localeCompare(b.id);
+    });
   }
 }
 

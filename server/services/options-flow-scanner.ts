@@ -41,9 +41,24 @@ export interface OptionsFlowSignal {
   callPutRatio: number;
 }
 
+export interface OptionsIntegrationStatus {
+  provider: string;
+  liveData: boolean;
+  enabled: boolean;
+  message: string;
+  lastError?: string;
+  lastSuccessAt?: Date;
+}
+
 export class OptionsFlowScanner {
   private scanInterval: NodeJS.Timeout | null = null;
   private recentFlow: Map<string, OptionsFlowData[]> = new Map();
+  private integrationStatus: OptionsIntegrationStatus = {
+    provider: "unusual_whales",
+    liveData: false,
+    enabled: false,
+    message: "Live provider disabled",
+  };
   
   // Configuration
   private readonly SCAN_INTERVAL_MS = 300000; // 5 minutes
@@ -78,8 +93,7 @@ export class OptionsFlowScanner {
     try {
       // console.log('🔍 Scanning for unusual options activity...');
       
-      // TODO: Integrate with actual options data API
-      // For now, placeholder for demonstration
+      // Pull live options flow from configured provider when enabled.
       const flow = await this.fetchOptionsFlow();
       
       // Detect unusual activity
@@ -101,15 +115,101 @@ export class OptionsFlowScanner {
       for (const signal of signals.filter(s => s.confidence >= 0.7)) {
         // console.log(`🎯 OPTIONS SIGNAL: ${signal.direction} ${signal.symbol} (${(signal.confidence*100).toFixed(0)}% confidence, $${(signal.totalPremium/1000).toFixed(0)}k premium)`);
       }
+      if (this.integrationStatus.enabled && flow.length > 0) {
+        this.integrationStatus.liveData = true;
+        this.integrationStatus.lastSuccessAt = new Date();
+        this.integrationStatus.lastError = undefined;
+        this.integrationStatus.message = "Receiving live options flow data";
+      }
       
     } catch (error) {
-      // console.error('❌ Options flow scan failed:', error);
+      this.integrationStatus.liveData = false;
+      this.integrationStatus.lastError =
+        error instanceof Error ? error.message : String(error);
+      this.integrationStatus.message = "Live fetch failed";
     }
   }
 
   private async fetchOptionsFlow(): Promise<OptionsFlowData[]> {
-    // Placeholder - integrate with Market Chameleon, Unusual Whales, etc.
-    return [];
+    const enabled = process.env.ENABLE_OPTIONS_SCANNER_LIVE === "true";
+    const apiKey = process.env.UNUSUAL_WHALES_API_KEY || "";
+    const url =
+      process.env.UNUSUAL_WHALES_OPTIONS_URL ||
+      "https://api.unusualwhales.com/api/options/flow/recent";
+
+    this.integrationStatus.enabled = enabled;
+
+    if (!enabled) {
+      this.integrationStatus.message = "Enable with ENABLE_OPTIONS_SCANNER_LIVE=true";
+      return [];
+    }
+    if (!apiKey) {
+      this.integrationStatus.liveData = false;
+      this.integrationStatus.message = "UNUSUAL_WHALES_API_KEY missing";
+      return [];
+    }
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Unusual Whales API error: ${response.status} ${response.statusText}`
+      );
+    }
+
+    const payload = await response.json();
+    const rows: any[] = Array.isArray(payload) ? payload : payload?.data || [];
+
+    return rows
+      .map((row) => this.toFlow(row))
+      .filter((entry): entry is OptionsFlowData => entry !== null);
+  }
+
+  private toFlow(row: any): OptionsFlowData | null {
+    const symbol = String(row?.symbol || row?.ticker || "").toUpperCase();
+    if (!symbol) return null;
+
+    const strike = Number(row?.strike || row?.strike_price || 0);
+    const volume = Number(row?.volume || row?.total_volume || 0);
+    const openInterest = Number(row?.open_interest || row?.openInterest || 0);
+    const premium = Number(row?.premium || row?.notional || row?.premium_total || 0);
+    const spotPrice = Number(row?.spot_price || row?.underlying_price || row?.price || 0);
+
+    const typeRaw = String(row?.option_type || row?.type || "call").toUpperCase();
+    const optionType: "CALL" | "PUT" = typeRaw.includes("P") ? "PUT" : "CALL";
+
+    const sentimentRaw = String(row?.sentiment || row?.side || "neutral").toUpperCase();
+    const sentiment: "BULLISH" | "BEARISH" | "NEUTRAL" =
+      sentimentRaw.includes("BULL")
+        ? "BULLISH"
+        : sentimentRaw.includes("BEAR")
+        ? "BEARISH"
+        : "NEUTRAL";
+
+    const expiration = new Date(
+      row?.expiration || row?.expiry || row?.expiration_date || Date.now()
+    );
+    const timestamp = new Date(row?.timestamp || row?.created_at || Date.now());
+
+    return {
+      symbol,
+      optionType,
+      strike: Number.isFinite(strike) ? strike : 0,
+      expiration: Number.isNaN(expiration.getTime()) ? new Date() : expiration,
+      volume: Number.isFinite(volume) ? volume : 0,
+      openInterest: Number.isFinite(openInterest) ? openInterest : 0,
+      premium: Number.isFinite(premium) ? premium : 0,
+      spotPrice: Number.isFinite(spotPrice) ? spotPrice : 0,
+      isUnusual: false,
+      sentiment,
+      timestamp: Number.isNaN(timestamp.getTime()) ? new Date() : timestamp,
+      source: "unusual_whales",
+    };
   }
 
   private isUnusual(flow: OptionsFlowData): boolean {
@@ -183,6 +283,10 @@ export class OptionsFlowScanner {
       totalFlow: Array.from(this.recentFlow.values()).reduce((sum, flow) => sum + flow.length, 0),
       isRunning: this.scanInterval !== null
     };
+  }
+
+  getIntegrationStatus(): OptionsIntegrationStatus {
+    return this.integrationStatus;
   }
 }
 

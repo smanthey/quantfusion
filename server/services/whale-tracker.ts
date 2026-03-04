@@ -40,9 +40,24 @@ export interface WhaleSignal {
   netFlowDirection: 'TO_EXCHANGE' | 'FROM_EXCHANGE' | 'WALLET_TO_WALLET';
 }
 
+export interface WhaleIntegrationStatus {
+  provider: string;
+  liveData: boolean;
+  enabled: boolean;
+  message: string;
+  lastError?: string;
+  lastSuccessAt?: Date;
+}
+
 export class WhaleTracker {
   private scanInterval: NodeJS.Timeout | null = null;
   private recentTransactions: Map<string, WhaleTransaction[]> = new Map();
+  private integrationStatus: WhaleIntegrationStatus = {
+    provider: "whale_alert",
+    liveData: false,
+    enabled: false,
+    message: "Live provider disabled",
+  };
   
   // Configuration
   private readonly SCAN_INTERVAL_MS = 60000; // 1 minute
@@ -77,7 +92,7 @@ export class WhaleTracker {
     try {
       // console.log('🔍 Scanning for whale transactions...');
       
-      // TODO: Integrate with Whale Alert API, Etherscan, etc.
+      // Pull live whale transfers from configured provider when enabled.
       const transactions = await this.fetchWhaleTransactions();
       
       // Filter by minimum size
@@ -104,15 +119,100 @@ export class WhaleTracker {
       for (const signal of signals.filter(s => s.confidence >= 0.6)) {
         // console.log(`🎯 WHALE SIGNAL: ${signal.direction} ${signal.symbol} (${(signal.confidence*100).toFixed(0)}% confidence, $${(signal.totalValueUSD/1000000).toFixed(1)}M moved)`);
       }
+      if (this.integrationStatus.enabled && transactions.length > 0) {
+        this.integrationStatus.liveData = true;
+        this.integrationStatus.lastSuccessAt = new Date();
+        this.integrationStatus.lastError = undefined;
+        this.integrationStatus.message = "Receiving live whale transfer data";
+      }
       
     } catch (error) {
-      // console.error('❌ Whale tracking scan failed:', error);
+      this.integrationStatus.liveData = false;
+      this.integrationStatus.lastError =
+        error instanceof Error ? error.message : String(error);
+      this.integrationStatus.message = "Live fetch failed";
     }
   }
 
   private async fetchWhaleTransactions(): Promise<WhaleTransaction[]> {
-    // Placeholder - integrate with Whale Alert, blockchain explorers
-    return [];
+    const enabled = process.env.ENABLE_WHALE_SCANNER_LIVE === "true";
+    const apiKey = process.env.WHALE_ALERT_API_KEY || "";
+    const url =
+      process.env.WHALE_ALERT_URL ||
+      `https://api.whale-alert.io/v1/transactions?api_key=${encodeURIComponent(
+        apiKey
+      )}&min_value=1000000&limit=100`;
+
+    this.integrationStatus.enabled = enabled;
+
+    if (!enabled) {
+      this.integrationStatus.message = "Enable with ENABLE_WHALE_SCANNER_LIVE=true";
+      return [];
+    }
+    if (!apiKey) {
+      this.integrationStatus.liveData = false;
+      this.integrationStatus.message = "WHALE_ALERT_API_KEY missing";
+      return [];
+    }
+
+    const response = await fetch(url, {
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Whale Alert API error: ${response.status} ${response.statusText}`);
+    }
+
+    const payload = await response.json();
+    const rows: any[] = Array.isArray(payload) ? payload : payload?.transactions || [];
+
+    return rows
+      .map((row) => this.toWhaleTransaction(row))
+      .filter((entry): entry is WhaleTransaction => entry !== null);
+  }
+
+  private toWhaleTransaction(row: any): WhaleTransaction | null {
+    const symbol = String(
+      row?.symbol || row?.token_symbol || row?.currency || row?.blockchain || ""
+    ).toUpperCase();
+    if (!symbol) return null;
+
+    const valueUSD = Number(row?.amount_usd || row?.value || row?.value_usd || 0);
+    const amount = Number(row?.amount || row?.quantity || 0);
+    const blockNumber = Number(row?.block_id || row?.block_number || 0);
+    const timestamp = new Date(
+      row?.timestamp
+        ? Number.isFinite(Number(row.timestamp))
+          ? Number(row.timestamp) * 1000
+          : row.timestamp
+        : Date.now()
+    );
+
+    const fromAddress = String(
+      row?.from?.address || row?.from_address || row?.from || "unknown"
+    );
+    const toAddress = String(row?.to?.address || row?.to_address || row?.to || "unknown");
+    const fromOwnerType = String(row?.from?.owner_type || row?.from_owner_type || "");
+    const toOwnerType = String(row?.to?.owner_type || row?.to_owner_type || "");
+    const isExchange =
+      fromOwnerType.toLowerCase().includes("exchange") ||
+      toOwnerType.toLowerCase().includes("exchange");
+
+    return {
+      symbol,
+      blockchain: String(row?.blockchain || row?.network || "unknown"),
+      fromAddress,
+      toAddress,
+      amount: Number.isFinite(amount) ? amount : 0,
+      valueUSD: Number.isFinite(valueUSD) ? valueUSD : 0,
+      txHash: String(row?.transaction_id || row?.hash || row?.tx_hash || "unknown"),
+      blockNumber: Number.isFinite(blockNumber) ? blockNumber : 0,
+      timestamp: Number.isNaN(timestamp.getTime()) ? new Date() : timestamp,
+      isExchange,
+      source: "whale_alert",
+    };
   }
 
   private cleanOldTransactions(): void {
@@ -214,6 +314,10 @@ export class WhaleTracker {
       totalTransactions: Array.from(this.recentTransactions.values()).reduce((sum, txs) => sum + txs.length, 0),
       isRunning: this.scanInterval !== null
     };
+  }
+
+  getIntegrationStatus(): WhaleIntegrationStatus {
+    return this.integrationStatus;
   }
 }
 

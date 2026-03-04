@@ -44,10 +44,25 @@ export interface PoliticianTradeSignal {
   isCommitteeMember: boolean; // Higher weight if on relevant committee
 }
 
+export interface ScannerIntegrationStatus {
+  provider: string;
+  liveData: boolean;
+  enabled: boolean;
+  message: string;
+  lastError?: string;
+  lastSuccessAt?: Date;
+}
+
 export class PoliticianTradesScanner {
   private recentTrades: Map<string, PoliticianTrade[]> = new Map();
   private scanInterval: NodeJS.Timeout | null = null;
   private lastScanTime: Date | null = null;
+  private integrationStatus: ScannerIntegrationStatus = {
+    provider: "quiver",
+    liveData: false,
+    enabled: false,
+    message: "Live provider disabled",
+  };
   
   // Configuration
   private readonly SCAN_INTERVAL_MS = 3600000; // Scan every hour
@@ -93,8 +108,7 @@ export class PoliticianTradesScanner {
     try {
       // console.log('🔍 Scanning for new politician trades...');
       
-      // TODO: Integrate with actual API (Capitol Trades, Quiver Quantitative)
-      // For now, use mock data to demonstrate the system
+      // Pull congress trade data from configured provider when enabled.
       const trades = await this.fetchRecentTrades();
       
       // Store trades
@@ -120,21 +134,113 @@ export class PoliticianTradesScanner {
       }
       
       this.lastScanTime = new Date();
+      if (this.integrationStatus.enabled && trades.length > 0) {
+        this.integrationStatus.liveData = true;
+        this.integrationStatus.lastSuccessAt = new Date();
+        this.integrationStatus.lastError = undefined;
+        this.integrationStatus.message = "Receiving live congress trade data";
+      }
       
     } catch (error) {
-      // console.error('❌ Politicians trade scan failed:', error);
+      this.integrationStatus.liveData = false;
+      this.integrationStatus.lastError =
+        error instanceof Error ? error.message : String(error);
+      this.integrationStatus.message = "Live fetch failed";
     }
   }
 
   /**
-   * Fetch recent politician trades
-   * TODO: Replace with real API integration
+   * Fetch recent politician trades from configured provider.
    */
   private async fetchRecentTrades(): Promise<PoliticianTrade[]> {
-    // Placeholder - in production, call Capitol Trades or Quiver Quantitative API
-    // Example: await fetch('https://api.quiverquant.com/v1/congress/trades', { headers: { Authorization: `Bearer ${API_KEY}` }})
-    
-    return []; // Mock empty for now
+    const enabled = process.env.ENABLE_POLITICIAN_SCANNER_LIVE === "true";
+    const apiKey = process.env.QUIVER_API_KEY || "";
+    const url =
+      process.env.QUIVER_CONGRESS_TRADES_URL ||
+      "https://api.quiverquant.com/beta/live/congresstrading";
+
+    this.integrationStatus.enabled = enabled;
+
+    if (!enabled) {
+      this.integrationStatus.message = "Enable with ENABLE_POLITICIAN_SCANNER_LIVE=true";
+      return [];
+    }
+
+    if (!apiKey) {
+      this.integrationStatus.liveData = false;
+      this.integrationStatus.message = "QUIVER_API_KEY missing";
+      return [];
+    }
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Quiver API error: ${response.status} ${response.statusText}`);
+    }
+
+    const payload = await response.json();
+    const rows: any[] = Array.isArray(payload) ? payload : payload?.data || [];
+
+    return rows
+      .map((row) => this.toTrade(row))
+      .filter((trade): trade is PoliticianTrade => trade !== null);
+  }
+
+  private toTrade(row: any): PoliticianTrade | null {
+    const symbol = String(row?.Ticker || row?.ticker || row?.symbol || "").toUpperCase();
+    if (!symbol) return null;
+
+    const txTypeRaw = String(
+      row?.Transaction || row?.transaction || row?.transaction_type || ""
+    ).toLowerCase();
+    const transactionType: "purchase" | "sale" =
+      txTypeRaw.includes("sale") || txTypeRaw.includes("sell") ? "sale" : "purchase";
+
+    const amountText = String(
+      row?.Range || row?.amount || row?.Amount || row?.amount_range || "$1 - $1"
+    );
+    const [amountMin, amountMax] = this.parseAmountRange(amountText);
+
+    const transactionDate = new Date(
+      row?.TransactionDate || row?.transaction_date || row?.txDate || Date.now()
+    );
+    const disclosureDate = new Date(
+      row?.Date || row?.disclosure_date || row?.disclosedAt || Date.now()
+    );
+
+    return {
+      politician: String(row?.Representative || row?.politician || row?.name || "Unknown"),
+      position: String(row?.Chamber || row?.position || "Unknown"),
+      party: String(row?.Party || row?.party || "Unknown"),
+      symbol,
+      transactionType,
+      amount: amountText,
+      amountMin,
+      amountMax,
+      transactionDate: Number.isNaN(transactionDate.getTime()) ? new Date() : transactionDate,
+      disclosureDate: Number.isNaN(disclosureDate.getTime()) ? new Date() : disclosureDate,
+      assetType: String(row?.AssetType || row?.assetType || "Stock"),
+      committee: row?.committee ? String(row.committee) : undefined,
+    };
+  }
+
+  private parseAmountRange(raw: string): [number, number] {
+    const values = (raw.match(/\d[\d,]*/g) || [])
+      .map((part) => Number(part.replace(/,/g, "")))
+      .filter((value) => Number.isFinite(value));
+
+    if (values.length >= 2) {
+      return [values[0], values[1]];
+    }
+    if (values.length === 1) {
+      return [values[0], values[0]];
+    }
+    return [0, 0];
   }
 
   /**
@@ -270,6 +376,10 @@ export class PoliticianTradesScanner {
       lastScan: this.lastScanTime,
       isRunning: this.scanInterval !== null
     };
+  }
+
+  getIntegrationStatus(): ScannerIntegrationStatus {
+    return this.integrationStatus;
   }
 }
 
