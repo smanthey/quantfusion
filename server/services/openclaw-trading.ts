@@ -56,8 +56,11 @@ interface PendingLiveOrder {
 
 export class OpenClawTradingService {
   private pendingLiveOrders = new Map<string, PendingLiveOrder>();
-  private readonly defaultMode: OrderMode =
-    process.env.OPENCLAW_TRADING_MODE === "live" ? "live" : "paper";
+  private readonly strictRealMoneyMode =
+    process.env.STRICT_REAL_MONEY_MODE === "true" || process.env.OPENCLAW_REQUIRE_LIVE_TRADING === "true";
+  private readonly defaultMode: OrderMode = this.strictRealMoneyMode
+    ? "live"
+    : (process.env.OPENCLAW_TRADING_MODE === "live" ? "live" : "paper");
   private readonly defaultRiskPercent = Number(process.env.OPENCLAW_DEFAULT_RISK_PCT || "1");
   private readonly defaultMaxNotionalPct = Number(process.env.OPENCLAW_MAX_NOTIONAL_PCT || "5");
   private readonly liveConfirmTtlMs = Number(process.env.OPENCLAW_LIVE_CONFIRM_TTL_MS || `${10 * 60 * 1000}`);
@@ -74,7 +77,25 @@ export class OpenClawTradingService {
     return this.defaultMode;
   }
 
+  isStrictRealMoneyMode(): boolean {
+    return this.strictRealMoneyMode;
+  }
+
+  getLiveReadiness() {
+    const missing: string[] = [];
+    if (!this.openAlgoApiUrl) missing.push("OPENALGO_API_URL");
+    if (!this.openAlgoApiKey) missing.push("OPENALGO_API_KEY");
+    if (this.strictRealMoneyMode && !this.tradingViewSecret) missing.push("TRADINGVIEW_WEBHOOK_SECRET");
+    return {
+      strictRealMoneyMode: this.strictRealMoneyMode,
+      mode: this.defaultMode,
+      ready: missing.length === 0,
+      missing,
+    };
+  }
+
   verifyTradingViewSecret(candidate: string): boolean {
+    if (this.strictRealMoneyMode && !this.tradingViewSecret) return false;
     if (!this.tradingViewSecret) return true;
     return candidate === this.tradingViewSecret;
   }
@@ -130,7 +151,13 @@ export class OpenClawTradingService {
   }
 
   async submitTrade(req: TradeRequest): Promise<any> {
-    const mode: OrderMode = req.mode === "live" ? "live" : this.defaultMode;
+    if (this.strictRealMoneyMode && req.mode === "paper") {
+      return { ok: false, error: "paper_mode_disabled_in_strict_real_money_mode" };
+    }
+
+    const mode: OrderMode = this.strictRealMoneyMode
+      ? "live"
+      : (req.mode === "live" ? "live" : this.defaultMode);
     const normalized: TradeRequest = {
       ...req,
       mode,
@@ -275,6 +302,10 @@ export class OpenClawTradingService {
   }
 
   private async executePaperTrade(req: TradeRequest) {
+    if (this.strictRealMoneyMode) {
+      throw new Error("paper_mode_disabled_in_strict_real_money_mode");
+    }
+
     const strategyId = await this.ensureOpenClawStrategy();
     const sizing = this.calculatePositionSize({
       accountBalance: Number(req.accountBalance || 10000),

@@ -40,6 +40,9 @@ export class MarketDataService {
   private subscribers: Set<(data: MarketData) => void> = new Set();
   private binanceSubscriptions: Map<string, () => void> = new Map();
   private useLiveData = true;
+  private dataFeedError: string | null = null;
+  private readonly strictLiveDataMode =
+    process.env.STRICT_REAL_MONEY_MODE === 'true' || process.env.QUANT_REQUIRE_LIVE_DATA === 'true';
   private simulationInterval?: NodeJS.Timeout;
   private unsubscribeFunctions: (() => void)[] = [];
   private pollIntervals?: Map<string, NodeJS.Timeout>;
@@ -109,9 +112,13 @@ export class MarketDataService {
         // console.log('✅ Using multi-API aggregated real-time data');
         this.useLiveData = true;
       } catch (apiError) {
+        this.useLiveData = false;
+        this.dataFeedError = apiError instanceof Error ? apiError.message : String(apiError);
+        if (this.strictLiveDataMode) {
+          return;
+        }
         // console.warn('⚠️ Multi-API failed, using simulation as last resort', apiError);
         this.startRealisticMarketSimulation();
-        this.useLiveData = false;
       }
     }
     
@@ -434,7 +441,7 @@ export class MarketDataService {
 
   private startRealisticMarketSimulation() {
     // Simulate realistic market movements using web-researched volatility
-    setInterval(() => {
+    this.simulationInterval = setInterval(() => {
       const btcData = this.data.get('BTCUSDT');
       const ethData = this.data.get('ETHUSDT');
       
@@ -576,6 +583,24 @@ export class MarketDataService {
 
   getCurrentPriceSync(symbol: string): number {
     return this.data.get(symbol)?.price ?? 0;
+  }
+
+  isUsingLiveData(): boolean {
+    return this.useLiveData;
+  }
+
+  getDataFeedHealth() {
+    const cryptoTimestamps = ['BTCUSDT', 'ETHUSDT']
+      .map((symbol) => this.data.get(symbol)?.timestamp || 0)
+      .filter((ts) => ts > 0);
+    const lastCryptoUpdate = cryptoTimestamps.length ? Math.max(...cryptoTimestamps) : 0;
+    return {
+      strictLiveDataMode: this.strictLiveDataMode,
+      useLiveData: this.useLiveData,
+      dataFeedError: this.dataFeedError,
+      lastCryptoUpdate,
+      staleSeconds: lastCryptoUpdate ? Math.round((Date.now() - lastCryptoUpdate) / 1000) : null,
+    };
   }
 
   getMarketData(symbol: string): MarketData | undefined {

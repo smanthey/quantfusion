@@ -52,7 +52,8 @@ const indicatorEngine = new CustomIndicatorEngine();
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
-  const mockLabEnabled = process.env.ENABLE_OPENCLAW_MOCK_LAB === "true";
+  const strictRealMoneyMode = process.env.STRICT_REAL_MONEY_MODE === "true";
+  const mockLabEnabled = !strictRealMoneyMode && process.env.ENABLE_OPENCLAW_MOCK_LAB === "true";
   let scannerInitPromise: Promise<void> | null = null;
 
   const ensureScannersStarted = async () => {
@@ -83,6 +84,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       message: "Enable with ENABLE_OPENCLAW_MOCK_LAB=true",
     });
     return false;
+  };
+
+  const rejectSimulationInStrictMode = (res: any, path: string): boolean => {
+    if (!strictRealMoneyMode) return false;
+    res.status(403).json({
+      ok: false,
+      error: "simulation_path_blocked_in_strict_real_money_mode",
+      path,
+      message: "Disable STRICT_REAL_MONEY_MODE to use simulation endpoints.",
+    });
+    return true;
   };
 
   // WebSocket server for real-time updates
@@ -542,7 +554,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }],
         totalValue: currentBalance || startingCapital,
         tradingEnabled: (currentBalance || startingCapital) > 100,
-        accountType: 'testnet',
+        accountType: strictRealMoneyMode ? 'live' : 'testnet',
         feeDiscountRate: 0.1,
         totalPnL: totalPnL || 0, // Net P&L from profit/loss fields
         totalWins: totalProfits || 0, // Total profits
@@ -562,7 +574,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         balances: [{ asset: 'USDT', free: '10000.00', locked: '0.00' }],
         totalValue: 10000,
         tradingEnabled: true,
-        accountType: 'testnet',
+        accountType: strictRealMoneyMode ? 'live' : 'testnet',
         feeDiscountRate: 0.1,
         totalPnL: 0,
         totalFees: 0,
@@ -729,10 +741,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // OpenClaw Trading Automation (paper-first with live confirmation gate)
   app.get('/api/openclaw/trading/config', async (_req, res) => {
+    const readiness = openClawTradingService.getLiveReadiness();
     res.json({
       mode: openClawTradingService.getMode(),
       paperDefault: openClawTradingService.getMode() !== 'live',
       liveRequiresConfirmation: true,
+      strictRealMoneyMode: openClawTradingService.isStrictRealMoneyMode(),
+      readiness,
+    });
+  });
+
+  app.get('/api/openclaw/trading/live-readiness', async (_req, res) => {
+    const tradeReadiness = openClawTradingService.getLiveReadiness();
+    const feedHealth = marketData.getDataFeedHealth();
+    const ready = tradeReadiness.ready && feedHealth.useLiveData;
+    res.status(ready ? 200 : 503).json({
+      ok: ready,
+      strictRealMoneyMode: openClawTradingService.isStrictRealMoneyMode(),
+      trading: tradeReadiness,
+      marketData: feedHealth,
     });
   });
 
@@ -808,7 +835,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         takeProfit: Number(body.takeProfit),
         riskPercent: body.riskPercent ? Number(body.riskPercent) : undefined,
         accountBalance: body.accountBalance ? Number(body.accountBalance) : undefined,
-        mode: body.mode === 'live' ? 'live' : 'paper',
+        mode: openClawTradingService.isStrictRealMoneyMode()
+          ? 'live'
+          : (body.mode === 'live' ? 'live' : 'paper'),
         notes: body.notes ? String(body.notes) : undefined,
       });
 
@@ -1939,6 +1968,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Custom Technical Indicators endpoints
   app.get('/api/indicators/adaptive-rsi/:symbol', async (req, res) => {
     try {
+      if (rejectSimulationInStrictMode(res, '/api/indicators/adaptive-rsi/:symbol')) return;
       const { symbol } = req.params;
       const { period = '14' } = req.query;
 
@@ -1959,6 +1989,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/indicators/sentiment-oscillator/:symbol', async (req, res) => {
     try {
+      if (rejectSimulationInStrictMode(res, '/api/indicators/sentiment-oscillator/:symbol')) return;
       const { symbol } = req.params;
       const { period = '20' } = req.query;
 
@@ -1979,6 +2010,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/indicators/market-regime/:symbol', async (req, res) => {
     try {
+      if (rejectSimulationInStrictMode(res, '/api/indicators/market-regime/:symbol')) return;
       const { symbol } = req.params;
       const { period = '20' } = req.query;
 
@@ -1999,6 +2031,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/indicators/volume-profile/:symbol', async (req, res) => {
     try {
+      if (rejectSimulationInStrictMode(res, '/api/indicators/volume-profile/:symbol')) return;
       const { symbol } = req.params;
       const { period = '50' } = req.query;
 
@@ -2022,6 +2055,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/indicators/volatility-bands/:symbol', async (req, res) => {
     try {
+      if (rejectSimulationInStrictMode(res, '/api/indicators/volatility-bands/:symbol')) return;
       const { symbol } = req.params;
       const { period = '20', multiplier = '2' } = req.query;
 
@@ -2046,6 +2080,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Strategy Performance Analysis
   app.get('/api/analytics/strategy-performance', async (req, res) => {
     try {
+      if (rejectSimulationInStrictMode(res, '/api/analytics/strategy-performance')) return;
       const { period = '7d' } = req.query;
       const strategies = await storage.getActiveStrategies();
       const performance = [];
@@ -2076,6 +2111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Advanced Analytics endpoints
   app.get('/api/analytics/market-microstructure', async (req, res) => {
     try {
+      if (rejectSimulationInStrictMode(res, '/api/analytics/market-microstructure')) return;
       const { symbol = 'BTCUSDT' } = req.query;
       // Simulate microstructure analysis
       const analysis = {
@@ -2094,6 +2130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/analytics/regime-detection', async (req, res) => {
     try {
+      if (rejectSimulationInStrictMode(res, '/api/analytics/regime-detection')) return;
       // Simulate regime detection
       const regimes = {
         current_regime: ['bull', 'bear', 'sideways'][Math.floor(Math.random() * 3)],
@@ -2111,6 +2148,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // PROFITABLE TRADES ENDPOINT - Execute research-based profitable trades
   app.post('/api/profitable-trades/execute', async (req, res) => {
     try {
+      if (rejectSimulationInStrictMode(res, '/api/profitable-trades/execute')) return;
       log.info('💰 EXECUTING PROFITABLE RESEARCH-BASED TRADE');
       
       // Generate profitable signal based on research (85% win rate)
@@ -2176,8 +2214,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allTrades = await storage.getAllTrades();
       const openTrades = allTrades.filter((t: Trade) => t.status === 'open');
       
+      const tradeReadiness = openClawTradingService.getLiveReadiness();
+      const marketDataHealth = marketData.getDataFeedHealth();
+      const strictReady = !strictRealMoneyMode || (tradeReadiness.ready && marketDataHealth.useLiveData);
+
       const healthStatus = {
-        status: 'healthy',
+        status: strictReady ? 'healthy' : 'degraded',
         timestamp: new Date().toISOString(),
         uptime: Math.round(process.uptime()),
         memory: {
@@ -2190,12 +2232,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           openTrades: openTrades.length
         },
         services: {
-          marketData: 'running',
+          marketData: marketDataHealth.useLiveData ? 'running' : 'degraded',
           workingTrader: 'initialized'
-        }
+        },
+        strictRealMoneyMode,
+        liveReadiness: {
+          ready: strictReady,
+          trading: tradeReadiness,
+          marketData: marketDataHealth,
+        },
       };
 
-      res.status(200).json(healthStatus);
+      res.status(strictReady ? 200 : 503).json(healthStatus);
     } catch (error) {
       res.status(503).json({
         status: 'unhealthy',
