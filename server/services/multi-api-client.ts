@@ -73,12 +73,6 @@ export class MultiApiClient {
     const prices: number[] = [];
     const sources: string[] = [];
 
-    // Use cached/fallback prices for common symbols
-    const fallbackPrices = {
-      'BTCUSDT': 116450.00,
-      'ETHUSDT': 3975.00
-    };
-
     // Try CoinLore first (most reliable free API)
     try {
       await this.canMakeRequest('CoinLore', 1000); // CoinLore rate limit
@@ -112,14 +106,6 @@ export class MultiApiClient {
     // CoinGecko and CoinCap are hitting rate limits
 
     if (prices.length === 0) {
-      // Use fallback price if available
-      const fallbackPrice = fallbackPrices[symbol as keyof typeof fallbackPrices];
-      if (fallbackPrice) {
-        // console.log(`⚠️ Using fallback price for ${symbol}: $${fallbackPrice}`);
-        this.setCachedData(cacheKey, fallbackPrice);
-        return fallbackPrice;
-      }
-      // If no fallback, throw error
       throw new Error(`No valid price data available for ${symbol} from any source`);
     }
 

@@ -31,6 +31,8 @@ export class ForexDataService {
   private cache: Map<string, ForexRateData> = new Map();
   private lastUpdate: number = 0;
   private readonly UPDATE_INTERVAL = 60000; // 1 minute
+  private usingRealData = false;
+  private readonly allowSyntheticFallback = process.env.QUANT_ALLOW_SYNTHETIC_DATA === 'true';
   
   // Free API endpoints (no registration required)
   private readonly EXCHANGE_RATES_API = 'https://api.exchangerate-api.com/v4/latest/USD';
@@ -44,10 +46,11 @@ export class ForexDataService {
 
   constructor() {
     this.initializeForexData();
-    
+    void this.updateForexRates();
+
     // Start real-time updates every minute
     setInterval(() => {
-      this.updateForexRates();
+      void this.updateForexRates();
     }, this.UPDATE_INTERVAL);
   }
 
@@ -119,62 +122,110 @@ export class ForexDataService {
     return Array.from(this.cache.values());
   }
 
+  isUsingRealData(): boolean {
+    return this.usingRealData;
+  }
+
   /**
    * Update forex rates with realistic market movement
    */
   private async updateForexRates() {
     try {
       const now = Date.now();
-      
+      const response = await fetch(this.EXCHANGE_RATES_API);
+      if (!response.ok) {
+        throw new Error(`exchange_rate_api_http_${response.status}`);
+      }
+
+      const payload = await response.json() as { rates?: Record<string, number> };
+      const rates = payload?.rates || {};
+
+      const usdPer = {
+        EUR: rates.EUR ? 1 / rates.EUR : undefined,
+        GBP: rates.GBP ? 1 / rates.GBP : undefined,
+        AUD: rates.AUD ? 1 / rates.AUD : undefined,
+        NZD: rates.NZD ? 1 / rates.NZD : undefined,
+        CAD: rates.CAD,
+        CHF: rates.CHF,
+        JPY: rates.JPY,
+      };
+
+      const realPrices: Record<string, number | undefined> = {
+        EURUSD: usdPer.EUR,
+        GBPUSD: usdPer.GBP,
+        AUDUSD: usdPer.AUD,
+        NZDUSD: usdPer.NZD,
+        USDCAD: usdPer.CAD,
+        USDCHF: usdPer.CHF,
+        USDJPY: usdPer.JPY,
+        EURGBP: usdPer.EUR && usdPer.GBP ? usdPer.EUR / usdPer.GBP : undefined,
+      };
+
       for (const symbol of Array.from(this.cache.keys())) {
         const currentData = this.cache.get(symbol)!;
-        // Simulate realistic forex price movement
-        const volatility = currentData.volatility || 0.0012;
-        const randomMove = (Math.random() - 0.5) * 2; // -1 to 1
-        const priceChange = randomMove * volatility * currentData.price;
-        
-        // Apply market hours influence (higher volatility during London/NY overlap)
-        const hour = new Date().getUTCHours();
-        const isHighVolatilityHour = (hour >= 12 && hour <= 16); // London-NY overlap
-        const volatilityMultiplier = isHighVolatilityHour ? 1.5 : 1.0;
-        
-        const newPrice = currentData.price + (priceChange * volatilityMultiplier);
-        
-        // Ensure price stays within reasonable bounds (±5% daily move max)
-        const maxDailyMove = currentData.price * 0.05;
-        const clampedPrice = Math.max(
-          currentData.price - maxDailyMove,
-          Math.min(currentData.price + maxDailyMove, newPrice)
-        );
-        
-        // Update spread based on volatility (higher volatility = wider spreads)
+        const nextPrice = realPrices[symbol];
+        if (!nextPrice || !Number.isFinite(nextPrice) || nextPrice <= 0) {
+          continue;
+        }
+
+        const movePct = Math.abs(nextPrice - currentData.price) / currentData.price;
         const baseSpread = this.getBaseSpread(symbol);
-        const dynamicSpread = baseSpread * (1 + volatility * 100);
-        
-        const newBid = clampedPrice - dynamicSpread / 2;
-        const newAsk = clampedPrice + dynamicSpread / 2;
-        
-        // Update cache
+        const dynamicSpread = baseSpread * (1 + movePct * 100);
+        const bid = nextPrice - dynamicSpread / 2;
+        const ask = nextPrice + dynamicSpread / 2;
+
         this.cache.set(symbol, {
           ...currentData,
-          bid: Number(newBid.toFixed(this.getPrecision(symbol))),
-          ask: Number(newAsk.toFixed(this.getPrecision(symbol))),
+          bid: Number(bid.toFixed(this.getPrecision(symbol))),
+          ask: Number(ask.toFixed(this.getPrecision(symbol))),
           spread: dynamicSpread,
-          price: Number(clampedPrice.toFixed(this.getPrecision(symbol))),
+          price: Number(nextPrice.toFixed(this.getPrecision(symbol))),
           timestamp: now,
-          volatility: this.updateVolatility(currentData.volatility || 0.0012, Math.abs(priceChange / currentData.price))
+          volatility: this.updateVolatility(currentData.volatility || 0.0012, movePct),
         });
       }
-      
+
+      this.usingRealData = true;
       this.lastUpdate = now;
-      
-      // Log every 5 minutes
-      if (now % 300000 < this.UPDATE_INTERVAL) {
-        // console.log(`💱 Updated ${this.cache.size} forex rates - Market ${this.getMarketSession()}`);
-      }
     } catch (error) {
-      // console.error('Error updating forex rates:', error);
+      this.usingRealData = false;
+      if (this.allowSyntheticFallback) {
+        this.simulateForexRates();
+      }
     }
+  }
+
+  private simulateForexRates() {
+    const now = Date.now();
+    for (const symbol of Array.from(this.cache.keys())) {
+      const currentData = this.cache.get(symbol)!;
+      const volatility = currentData.volatility || 0.0012;
+      const randomMove = (Math.random() - 0.5) * 2;
+      const priceChange = randomMove * volatility * currentData.price;
+      const hour = new Date().getUTCHours();
+      const volatilityMultiplier = hour >= 12 && hour <= 16 ? 1.5 : 1.0;
+      const newPrice = currentData.price + (priceChange * volatilityMultiplier);
+      const maxDailyMove = currentData.price * 0.05;
+      const clampedPrice = Math.max(
+        currentData.price - maxDailyMove,
+        Math.min(currentData.price + maxDailyMove, newPrice)
+      );
+      const baseSpread = this.getBaseSpread(symbol);
+      const dynamicSpread = baseSpread * (1 + volatility * 100);
+      const newBid = clampedPrice - dynamicSpread / 2;
+      const newAsk = clampedPrice + dynamicSpread / 2;
+
+      this.cache.set(symbol, {
+        ...currentData,
+        bid: Number(newBid.toFixed(this.getPrecision(symbol))),
+        ask: Number(newAsk.toFixed(this.getPrecision(symbol))),
+        spread: dynamicSpread,
+        price: Number(clampedPrice.toFixed(this.getPrecision(symbol))),
+        timestamp: now,
+        volatility: this.updateVolatility(currentData.volatility || 0.0012, Math.abs(priceChange / currentData.price))
+      });
+    }
+    this.lastUpdate = now;
   }
 
   /**

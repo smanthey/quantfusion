@@ -55,6 +55,7 @@ const indicatorEngine = new CustomIndicatorEngine();
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   const strictRealMoneyMode = process.env.STRICT_REAL_MONEY_MODE === "true";
+  const requireLiveDataForPaper = process.env.QUANT_REQUIRE_LIVE_DATA !== "false";
   const mockLabEnabled = !strictRealMoneyMode && process.env.ENABLE_OPENCLAW_MOCK_LAB === "true";
   let scannerInitPromise: Promise<void> | null = null;
 
@@ -879,6 +880,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/trading/start', async (req, res) => {
     try {
       log.info('💡 Starting WorkingTrader (EMA+RSI strategy)...');
+      const feedHealth = marketData.getDataFeedHealth();
+      if (requireLiveDataForPaper && !feedHealth.useLiveData) {
+        return res.status(503).json({
+          error: 'live_market_data_required',
+          details: feedHealth,
+        });
+      }
       
       // DISABLED: Old complex research engine (conflicts with WorkingTrader)
       // await tradingEngine.start();
@@ -897,6 +905,157 @@ export async function registerRoutes(app: Express): Promise<Server> {
       log.error('❌ Failed to start trading:', error);
       res.status(500).json({ error: 'Failed to start trading' });
     }
+  });
+
+  app.get('/api/trading/status', async (_req, res) => {
+    try {
+      const feedHealth = marketData.getDataFeedHealth();
+      const allTrades = await storage.getAllTrades();
+      const openTrades = allTrades.filter((t: any) => t.status === 'open').length;
+      const closedTrades = allTrades.filter((t: any) => t.status === 'closed').length;
+      const totalPnL = allTrades.reduce((sum: number, trade: any) => {
+        const pnl = parseFloat(trade.pnl || '0');
+        return Number.isFinite(pnl) ? sum + pnl : sum;
+      }, 0);
+
+      res.json({
+        running: workingTrader.isActive(),
+        paperMode: true,
+        strictRealMoneyMode,
+        requireLiveDataForPaper,
+        paperExecution: workingTrader.getPaperExecutionConfig(),
+        marketData: feedHealth,
+        trades: {
+          total: allTrades.length,
+          open: openTrades,
+          closed: closedTrades,
+        },
+        pnl: {
+          total: Number(totalPnL.toFixed(2)),
+          accountBalance: Number((10000 + totalPnL).toFixed(2)),
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch trading status' });
+    }
+  });
+
+  app.get('/api/trading/startup-checklist', async (_req, res) => {
+    const minCandlesRequired = 50;
+    const maxFeedStaleSeconds = 120;
+    const symbols = workingTrader.getSymbols();
+    const missingPrereqs: Array<{ code: string; message: string; details?: any }> = [];
+
+    let databaseOk = false;
+    let databaseError: string | null = null;
+    let tradesCount = 0;
+    try {
+      const trades = await storage.getAllTrades();
+      tradesCount = trades.length;
+      databaseOk = true;
+    } catch (error) {
+      databaseError = error instanceof Error ? error.message : String(error);
+      missingPrereqs.push({
+        code: 'DB_UNAVAILABLE',
+        message: 'Database connectivity check failed',
+        details: { error: databaseError },
+      });
+    }
+
+    const feedHealth = marketData.getDataFeedHealth();
+    const feedStale = typeof feedHealth.staleSeconds === 'number' && feedHealth.staleSeconds > maxFeedStaleSeconds;
+    const feedOk = !!feedHealth.useLiveData && !feedStale;
+    if (!feedOk) {
+      missingPrereqs.push({
+        code: 'LIVE_FEED_NOT_READY',
+        message: 'Live market feed is not ready',
+        details: {
+          useLiveData: feedHealth.useLiveData,
+          staleSeconds: feedHealth.staleSeconds,
+          maxAllowedStaleSeconds: maxFeedStaleSeconds,
+          dataFeedError: feedHealth.dataFeedError,
+        },
+      });
+    }
+
+    const symbolChecks = symbols.map((symbol) => {
+      const data = marketData.getMarketData(symbol);
+      const hasPrice = !!data && Number.isFinite(data.price) && data.price > 0;
+      const hasTimestamp = !!data && Number.isFinite(data.timestamp) && data.timestamp > 0;
+      const staleSeconds = hasTimestamp ? Math.round((Date.now() - (data?.timestamp || 0)) / 1000) : null;
+      const stale = typeof staleSeconds === 'number' && staleSeconds > maxFeedStaleSeconds;
+      return {
+        symbol,
+        ok: hasPrice && hasTimestamp && !stale,
+        hasPrice,
+        hasTimestamp,
+        staleSeconds,
+      };
+    });
+    const missingSymbols = symbolChecks.filter((s) => !s.ok);
+    if (missingSymbols.length > 0) {
+      missingPrereqs.push({
+        code: 'SYMBOLS_NOT_READY',
+        message: 'One or more required symbols are missing/stale',
+        details: {
+          required: symbols,
+          failing: missingSymbols,
+        },
+      });
+    }
+
+    const candleChecks = symbols.map((symbol) => {
+      const count = marketData.getCandles(symbol, minCandlesRequired).length;
+      return {
+        symbol,
+        count,
+        minRequired: minCandlesRequired,
+        ok: count >= minCandlesRequired,
+      };
+    });
+    const missingCandles = candleChecks.filter((c) => !c.ok);
+    if (missingCandles.length > 0) {
+      missingPrereqs.push({
+        code: 'CANDLES_INSUFFICIENT',
+        message: 'Insufficient candles for strategy warm-up',
+        details: {
+          minRequired: minCandlesRequired,
+          failing: missingCandles,
+        },
+      });
+    }
+
+    const readyToPaperTrade = missingPrereqs.length === 0;
+    const statusCode = readyToPaperTrade ? 200 : 503;
+    return res.status(statusCode).json({
+      readyToPaperTrade,
+      status: readyToPaperTrade ? 'ready_to_paper_trade' : 'not_ready',
+      checkedAt: new Date().toISOString(),
+      prerequisites: {
+        database: {
+          ok: databaseOk,
+          tradesCount,
+          error: databaseError,
+        },
+        feed: {
+          ok: feedOk,
+          ...feedHealth,
+          maxAllowedStaleSeconds: maxFeedStaleSeconds,
+        },
+        symbols: {
+          ok: missingSymbols.length === 0,
+          required: symbols,
+          checks: symbolChecks,
+        },
+        candles: {
+          ok: missingCandles.length === 0,
+          minRequired: minCandlesRequired,
+          checks: candleChecks,
+        },
+      },
+      missingPrereqs,
+    });
   });
 
   app.post('/api/trading/stop', async (req, res) => {
@@ -1729,35 +1888,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Real-time data updates (simulate for demo) - simplified to avoid API errors
-  setInterval(async () => {
+  // Real-time market updates from the live-backed MarketDataService.
+  marketData.subscribe((update) => {
     try {
-      // Just broadcast simulated market updates without backend API calls
       broadcast({
         type: 'market_update',
         data: {
           marketData: {
-            BTCUSDT: {
-              price: 43000 + (Math.random() - 0.5) * 1000,
-              change: Math.random() * 0.1 - 0.05,
-              volume: 1234567,
-              volatility: 0.035
-            },
-            ETHUSDT: {
-              price: 2500 + (Math.random() - 0.5) * 100,
-              change: Math.random() * 0.1 - 0.05,
-              volume: 876543,
-              volatility: 0.042
-            }
+            [update.symbol]: update,
           },
           timestamp: new Date().toISOString()
         }
       });
-
     } catch (error) {
       log.error('Real-time update error:', error);
     }
-  }, 5000); // Update every 5 seconds
+  });
+
+  setInterval(() => {
+    try {
+      broadcast({
+        type: 'market_snapshot',
+        data: {
+          marketData: marketData.getAllMarketData(),
+          timestamp: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      log.error('Market snapshot broadcast error:', error);
+    }
+  }, 15000);
 
   // Get historical candles for backtesting and analysis
   app.get('/api/market/:symbol/candles', async (req, res) => {
@@ -2447,6 +2607,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ✅ AUTO-START Working Trader (wait 3 seconds for initialization)
   setTimeout(async () => {
     try {
+      const feedHealth = marketData.getDataFeedHealth();
+      if (requireLiveDataForPaper && !feedHealth.useLiveData) {
+        log.warn('⏸️ Skipping auto-start: live market data not ready', feedHealth);
+        return;
+      }
       log.info('🚀 AUTO-STARTING Working Trader (new strict strategy)...');
       await workingTrader.start();
       log.info('✅ Working Trader auto-started successfully');

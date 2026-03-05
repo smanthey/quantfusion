@@ -23,6 +23,8 @@ export class HistoricalDataService {
   private historicalData: Map<string, HistoricalDataPoint[]> = new Map();
   private patterns: MarketPattern[] = [];
   private usingRealData = false;
+  private readonly strictLiveDataMode =
+    process.env.STRICT_REAL_MONEY_MODE === 'true' || process.env.QUANT_REQUIRE_LIVE_DATA === 'true';
 
   constructor() {
     this.initializeHistoricalData();
@@ -51,6 +53,10 @@ export class HistoricalDataService {
         this.usingRealData = this.historicalData.size > 0;
       }
     } catch (error) {
+      if (this.strictLiveDataMode) {
+        this.usingRealData = false;
+        return;
+      }
       // console.warn('⚠️ Failed to load historical data, using synthetic data:', error);
       this.generateHistoricalData();
       this.usingRealData = false;

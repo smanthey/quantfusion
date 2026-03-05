@@ -19,6 +19,19 @@ export class WorkingTrader {
   private interval?: NodeJS.Timeout;
   private accountBalance = 10000;
   private inCycle = false; // Reentrancy guard
+  private readonly symbols = ['BTCUSDT', 'ETHUSDT', 'EURUSD', 'GBPUSD', 'AUDUSD'];
+  private readonly executionConfig = {
+    baseSlippageBps: Number(process.env.QUANT_PAPER_BASE_SLIPPAGE_BPS || 6),
+    volatilityMultiplier: Number(process.env.QUANT_PAPER_VOLATILITY_SLIPPAGE_MULT || 1.5),
+    maxSlippageBps: Number(process.env.QUANT_PAPER_MAX_SLIPPAGE_BPS || 35),
+  };
+  private readonly partialConfig = {
+    tp1R: Number(process.env.QUANT_PARTIAL_TP1_R || 1.0),
+    tp1ClosePct: Number(process.env.QUANT_PARTIAL_TP1_CLOSE_PCT || 35),
+    tp2R: Number(process.env.QUANT_PARTIAL_TP2_R || 2.0),
+    tp2ClosePct: Number(process.env.QUANT_PARTIAL_TP2_CLOSE_PCT || 35),
+    minRemainingSize: Number(process.env.QUANT_PARTIAL_MIN_REMAINING_SIZE || 0.000001),
+  };
 
   constructor(marketDataService: MarketDataService) {
     this.marketData = marketDataService;
@@ -92,21 +105,8 @@ export class WorkingTrader {
       // Monitor existing positions FIRST
       await this.monitorOpenPositions();
 
-      // HEDGE FUND DIVERSIFIED PORTFOLIO - 15 uncorrelated assets
-      // More pairs = more opportunities + better risk-adjusted returns
-      const symbols = [
-        // Major Forex (7 pairs - global currency exposure)
-        'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCHF', 'NZDUSD', 'USDCAD',
-        
-        // Major Crypto (6 pairs - digital asset exposure)
-        'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'SOLUSDT', 'ADAUSDT',
-        
-        // Commodities (2 pairs - inflation hedge)
-        'XAUUSD', 'XAGUSD'  // Gold, Silver
-      ];
-      
-      log.info(`🔍 [Working Trader] Evaluating ${symbols.length} pairs (hedge fund portfolio)`);
-      for (const symbol of symbols) {
+      log.info(`🔍 [Working Trader] Evaluating ${this.symbols.length} pairs (hedge fund portfolio)`);
+      for (const symbol of this.symbols) {
         await this.evaluateSymbol(symbol);
       }
       log.info('✅ [Working Trader] Evaluation cycle complete');
@@ -199,19 +199,25 @@ export class WorkingTrader {
     });
 
     try {
+      const requestedEntryPrice = Number(signal.indicators.price);
+      const entryFill = this.applyEntryFillPrice(symbol, requestedEntryPrice, side);
+      const slippageBps = this.estimateSlippageBps(symbol, requestedEntryPrice);
       const trade = {
         strategyId: 'research_master',
         symbol,
         side,
-        size: (positionSize / signal.indicators.price).toString(),
-        entryPrice: signal.indicators.price.toString(),
+        size: (positionSize / entryFill).toString(),
+        entryPrice: entryFill.toString(),
         stopLoss: signal.stopLoss.toString(),
         takeProfit: signal.takeProfit.toString(),
         status: 'open' as const,
+        strategy: `research_master_paper_fill_${slippageBps.toFixed(2)}bps`,
       };
 
       await storage.createTrade(trade);
-      log.info(`✅ Trade executed: ${symbol} ${side} @ ${signal.indicators.price.toFixed(5)}`, {
+      log.info(`✅ Trade executed: ${symbol} ${side} @ ${entryFill.toFixed(5)}`, {
+        requestedPrice: requestedEntryPrice.toFixed(5),
+        modeledSlippageBps: slippageBps.toFixed(2),
         stopLoss: signal.stopLoss.toFixed(5),
         takeProfit: signal.takeProfit.toFixed(5)
       });
@@ -226,7 +232,7 @@ export class WorkingTrader {
       const allTrades = await storage.getAllTrades();
       const openTrades = allTrades.filter((t: any) => t.status === 'open');
 
-      for (const trade of openTrades) {
+      for (let trade of openTrades) {
         const currentPrice = this.marketData.getCurrentPriceSync(trade.symbol);
         if (!currentPrice || currentPrice === 0) continue;
 
@@ -240,15 +246,27 @@ export class WorkingTrader {
 
         // Calculate risk (distance from entry to stop)
         const initialRisk = stopLoss ? Math.abs(entryPrice - stopLoss) : 0;
+        const roundTripCostPerUnit = entryPrice * this.getRoundTripCostPercent(trade.symbol, entryPrice);
 
         if (trade.side === 'BUY' || trade.side === 'buy') {
           const profit = currentPrice - entryPrice;
+          const rMultiple = initialRisk > 0 ? profit / initialRisk : 0;
           
-          // BREAKEVEN: Move stop to entry once up +1R (1× initial risk)
-          if (stopLoss && profit >= initialRisk && stopLoss < entryPrice) {
-            stopLoss = entryPrice;
+          if (!this.hasStrategyFlag(trade.strategy, 'partial_tp1') && rMultiple >= this.partialConfig.tp1R) {
+            trade = await this.executePartialClose(trade, currentPrice, this.partialConfig.tp1ClosePct, 'partial_tp1');
+          }
+
+          if (!this.hasStrategyFlag(trade.strategy, 'partial_tp2') && rMultiple >= this.partialConfig.tp2R) {
+            trade = await this.executePartialClose(trade, currentPrice, this.partialConfig.tp2ClosePct, 'partial_tp2');
+          }
+
+          // COST-AWARE BREAKEVEN: move stop beyond entry only after fees+slippage are covered.
+          const breakevenTrigger = initialRisk + roundTripCostPerUnit;
+          const costAwareBreakeven = entryPrice + roundTripCostPerUnit;
+          if (stopLoss && profit >= breakevenTrigger && stopLoss < costAwareBreakeven) {
+            stopLoss = costAwareBreakeven;
             needsUpdate = true;
-            log.info(`🔒 BREAKEVEN: ${trade.symbol} - moved SL to entry ${entryPrice.toFixed(5)}`);
+            log.info(`🔒 BREAKEVEN: ${trade.symbol} - moved SL to cost-aware level ${stopLoss.toFixed(5)}`);
           }
           
           // TRAILING STOP: Trail stop as price rises (1.5×ATR below current price)
@@ -270,12 +288,23 @@ export class WorkingTrader {
           }
         } else {
           const profit = entryPrice - currentPrice;
+          const rMultiple = initialRisk > 0 ? profit / initialRisk : 0;
           
-          // BREAKEVEN: Move stop to entry once up +1R
-          if (stopLoss && profit >= initialRisk && stopLoss > entryPrice) {
-            stopLoss = entryPrice;
+          if (!this.hasStrategyFlag(trade.strategy, 'partial_tp1') && rMultiple >= this.partialConfig.tp1R) {
+            trade = await this.executePartialClose(trade, currentPrice, this.partialConfig.tp1ClosePct, 'partial_tp1');
+          }
+
+          if (!this.hasStrategyFlag(trade.strategy, 'partial_tp2') && rMultiple >= this.partialConfig.tp2R) {
+            trade = await this.executePartialClose(trade, currentPrice, this.partialConfig.tp2ClosePct, 'partial_tp2');
+          }
+
+          // COST-AWARE BREAKEVEN: short needs stop below entry by round-trip cost.
+          const breakevenTrigger = initialRisk + roundTripCostPerUnit;
+          const costAwareBreakeven = entryPrice - roundTripCostPerUnit;
+          if (stopLoss && profit >= breakevenTrigger && stopLoss > costAwareBreakeven) {
+            stopLoss = costAwareBreakeven;
             needsUpdate = true;
-            // console.log(`🔒 BREAKEVEN: ${trade.symbol} - moved SL to entry ${entryPrice.toFixed(5)}`);
+            log.info(`🔒 BREAKEVEN: ${trade.symbol} - moved SL to cost-aware level ${stopLoss.toFixed(5)}`);
           }
           
           // TRAILING STOP: Trail stop as price falls
@@ -306,11 +335,13 @@ export class WorkingTrader {
 
         if (shouldClose) {
           const size = parseFloat(trade.size);
-          const grossPnl = (currentPrice - entryPrice) * size * (trade.side === 'BUY' || trade.side === 'buy' ? 1 : -1);
+          const closeSide = trade.side === 'BUY' || trade.side === 'buy' ? 'SELL' : 'BUY';
+          const exitFillPrice = this.applyExitFillPrice(trade.symbol, currentPrice, closeSide);
+          const grossPnl = (exitFillPrice - entryPrice) * size * (trade.side === 'BUY' || trade.side === 'buy' ? 1 : -1);
           
           // Calculate fees (0.1% of entry value + 0.1% of exit value = 0.2% total)
           const entryValue = entryPrice * size;
-          const exitValue = currentPrice * size;
+          const exitValue = exitFillPrice * size;
           const totalFees = (entryValue + exitValue) * 0.001; // 0.1% each side
           
           // Net P&L after fees
@@ -320,7 +351,7 @@ export class WorkingTrader {
           const executedTime = trade.executedAt ? new Date(trade.executedAt).getTime() : Date.now();
           
           await storage.updateTrade(trade.id, {
-            exitPrice: currentPrice.toString(),
+            exitPrice: exitFillPrice.toString(),
             pnl: netPnl.toString(), // Store NET P&L (after fees)
             profit: grossPnl > 0 ? grossPnl.toString() : '0',
             loss: grossPnl < 0 ? Math.abs(grossPnl).toString() : '0',
@@ -332,6 +363,7 @@ export class WorkingTrader {
 
           log.info(`🔴 CLOSED: ${trade.symbol} ${trade.side} @ ${currentPrice.toFixed(5)}`, {
             entry: entryPrice.toFixed(5),
+            exitFill: exitFillPrice.toFixed(5),
             grossPnL: `$${grossPnl.toFixed(2)}`,
             fees: `$${totalFees.toFixed(2)}`,
             net: `$${netPnl.toFixed(2)} (${pnlPercent.toFixed(2)}%)`,
@@ -350,6 +382,133 @@ export class WorkingTrader {
     }
     this.isRunning = false;
     log.info('🛑 Working Trader stopped');
+  }
+
+  isActive(): boolean {
+    return this.isRunning;
+  }
+
+  getSymbols(): string[] {
+    return [...this.symbols];
+  }
+
+  getPaperExecutionConfig() {
+    return {
+      ...this.executionConfig,
+      partialExits: { ...this.partialConfig },
+    };
+  }
+
+  private getRoundTripCostPercent(symbol: string, referencePrice: number): number {
+    const feePercent = 0.002; // 0.1% entry + 0.1% exit
+    const slippagePercent = (this.estimateSlippageBps(symbol, referencePrice) * 2) / 10_000;
+    return feePercent + slippagePercent;
+  }
+
+  private hasStrategyFlag(strategy: string | null | undefined, flag: string): boolean {
+    if (!strategy) return false;
+    return strategy.split('|').includes(flag);
+  }
+
+  private appendStrategyFlag(strategy: string | null | undefined, flag: string): string {
+    const base = strategy || 'research_master';
+    if (this.hasStrategyFlag(base, flag)) return base;
+    return `${base}|${flag}`;
+  }
+
+  private async executePartialClose(trade: any, currentPrice: number, closePct: number, flag: string): Promise<any> {
+    const currentSize = parseFloat(trade.size || '0');
+    if (!Number.isFinite(currentSize) || currentSize <= 0) return trade;
+
+    const pct = Math.max(0, Math.min(100, closePct));
+    if (pct <= 0) return trade;
+
+    const closeSize = currentSize * (pct / 100);
+    const remainingSize = currentSize - closeSize;
+    if (closeSize <= 0 || remainingSize < 0) return trade;
+
+    const entryPrice = parseFloat(trade.entryPrice);
+    const closeSide = trade.side === 'BUY' || trade.side === 'buy' ? 'SELL' : 'BUY';
+    const exitFillPrice = this.applyExitFillPrice(trade.symbol, currentPrice, closeSide);
+    const direction = trade.side === 'BUY' || trade.side === 'buy' ? 1 : -1;
+    const grossPnl = (exitFillPrice - entryPrice) * closeSize * direction;
+    const entryValue = entryPrice * closeSize;
+    const exitValue = exitFillPrice * closeSize;
+    const fees = (entryValue + exitValue) * 0.001;
+    const netPnl = grossPnl - fees;
+    const executedTime = trade.executedAt ? new Date(trade.executedAt).getTime() : Date.now();
+
+    await storage.createTrade({
+      strategyId: trade.strategyId,
+      symbol: trade.symbol,
+      side: closeSide,
+      size: closeSize.toString(),
+      entryPrice: entryPrice.toString(),
+      exitPrice: exitFillPrice.toString(),
+      pnl: netPnl.toString(),
+      profit: grossPnl > 0 ? grossPnl.toString() : '0',
+      loss: grossPnl < 0 ? Math.abs(grossPnl).toString() : '0',
+      fees: fees.toString(),
+      duration: Math.floor((Date.now() - executedTime) / 1000),
+      status: 'closed',
+      strategy: this.appendStrategyFlag(trade.strategy, `${flag}_commit`),
+    });
+
+    const updatedStrategy = this.appendStrategyFlag(trade.strategy, flag);
+    if (remainingSize <= this.partialConfig.minRemainingSize) {
+      const closed = await storage.updateTrade(trade.id, {
+        size: '0',
+        status: 'closed',
+        closedAt: new Date(),
+        strategy: updatedStrategy,
+      });
+      log.info(`🧩 PARTIAL(${flag}) fully closed remainder: ${trade.symbol}`, {
+        closedSize: closeSize.toFixed(8),
+        exitFill: exitFillPrice.toFixed(5),
+        netPnl: netPnl.toFixed(2),
+      });
+      return closed;
+    }
+
+    const updated = await storage.updateTrade(trade.id, {
+      size: remainingSize.toString(),
+      strategy: updatedStrategy,
+    });
+
+    log.info(`🧩 PARTIAL(${flag}) executed: ${trade.symbol}`, {
+      closedSize: closeSize.toFixed(8),
+      remainingSize: remainingSize.toFixed(8),
+      exitFill: exitFillPrice.toFixed(5),
+      netPnl: netPnl.toFixed(2),
+    });
+
+    return updated;
+  }
+
+  private estimateSlippageBps(symbol: string, referencePrice: number): number {
+    const spread = Math.max(0, this.marketData.getSpread(symbol));
+    const volatility = Math.max(0, this.marketData.getVolatility(symbol));
+    const spreadBps = referencePrice > 0 ? (spread / referencePrice) * 10_000 : 0;
+    const volatilityBps = Math.min(
+      20,
+      volatility * 100 * this.executionConfig.volatilityMultiplier
+    );
+    const total = this.executionConfig.baseSlippageBps + (spreadBps * 0.5) + volatilityBps;
+    return Math.min(this.executionConfig.maxSlippageBps, Math.max(0.5, total));
+  }
+
+  private applyEntryFillPrice(symbol: string, requestedPrice: number, side: 'BUY' | 'SELL'): number {
+    const slippageFactor = this.estimateSlippageBps(symbol, requestedPrice) / 10_000;
+    return side === 'BUY'
+      ? requestedPrice * (1 + slippageFactor)
+      : requestedPrice * (1 - slippageFactor);
+  }
+
+  private applyExitFillPrice(symbol: string, markPrice: number, closeSide: 'BUY' | 'SELL'): number {
+    const slippageFactor = this.estimateSlippageBps(symbol, markPrice) / 10_000;
+    return closeSide === 'BUY'
+      ? markPrice * (1 + slippageFactor)
+      : markPrice * (1 - slippageFactor);
   }
 }
 

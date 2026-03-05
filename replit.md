@@ -116,8 +116,6 @@ Based on research of proven solutions from OpenAlgo, Jesse, NautilusTrader, Quan
    - **Net P&L Display** - UI shows net P&L (after fees), not gross
 
 All improvements follow proven patterns from production trading systems and institutional hedge funds.
-<<<<<<< HEAD
-
 ## Production Readiness Improvements (October 23, 2025)
 
 Systematic implementation of 19 critical fixes for production deployment:

@@ -43,6 +43,7 @@ export class MarketDataService {
   private dataFeedError: string | null = null;
   private readonly strictLiveDataMode =
     process.env.STRICT_REAL_MONEY_MODE === 'true' || process.env.QUANT_REQUIRE_LIVE_DATA === 'true';
+  private readonly allowSyntheticData = process.env.QUANT_ALLOW_SYNTHETIC_DATA === 'true';
   private simulationInterval?: NodeJS.Timeout;
   private unsubscribeFunctions: (() => void)[] = [];
   private pollIntervals?: Map<string, NodeJS.Timeout>;
@@ -122,7 +123,7 @@ export class MarketDataService {
       } catch (apiError) {
         this.useLiveData = false;
         this.dataFeedError = apiError instanceof Error ? apiError.message : String(apiError);
-        if (this.strictLiveDataMode) {
+        if (this.strictLiveDataMode || !this.allowSyntheticData) {
           return;
         }
         // console.warn('⚠️ Multi-API failed, using simulation as last resort', apiError);
@@ -155,6 +156,7 @@ export class MarketDataService {
           };
 
           this.data.set(symbol, marketData);
+          this.updateCandles(symbol, marketData.price, marketData.volume);
           this.notifySubscribers(marketData);
           
           // 💾 Store to database for permanent history
@@ -209,6 +211,7 @@ export class MarketDataService {
               volatility: Math.abs(parseFloat(tickerData.P)) / 100
             };
             this.data.set(symbol, marketData);
+            this.updateCandles(symbol, marketData.price, marketData.volume);
             this.notifySubscribers(marketData);
             
             // 💾 Store to database for permanent history
@@ -253,6 +256,7 @@ export class MarketDataService {
       };
       
       this.data.set(symbol, marketData);
+      this.updateCandles(symbol, marketData.price, marketData.volume);
       this.notifySubscribers(marketData);
       // console.log(`🎯 ${symbol}: $${data.price.toFixed(2)} (${Math.round(data.confidence * 100)}% confidence from ${data.sources.join(', ')})`);
       
@@ -283,6 +287,7 @@ export class MarketDataService {
           };
           
           this.data.set(symbol, marketData);
+          this.updateCandles(symbol, marketData.price, marketData.volume);
           this.notifySubscribers(marketData);
         });
       } catch (error) {
@@ -317,7 +322,11 @@ export class MarketDataService {
               volatility: forexRate.volatility ?? 0.001
             };
             this.data.set(pair, marketData);
+            this.updateCandles(pair, marketData.price, marketData.volume);
             this.notifySubscribers(marketData);
+            if (this.forexData.isUsingRealData()) {
+              this.useLiveData = true;
+            }
             // console.log(`💱 ${pair}: $${forexRate.price.toFixed(5)} (spread: ${forexRate.spread.toFixed(5)}, vol: ${((forexRate.volatility ?? 0.001) * 100).toFixed(2)}%)`);
             
             // 💾 Store to database for permanent history
@@ -432,6 +441,7 @@ export class MarketDataService {
           };
 
           this.data.set(symbol, marketData);
+          this.updateCandles(symbol, marketData.price, marketData.volume);
           this.notifySubscribers(marketData);
         }
       } catch (error) {
@@ -459,6 +469,7 @@ export class MarketDataService {
         btcData.price = Math.max(btcData.price * (1 + btcChange), 110000); // Floor at $110k
         btcData.price = Math.min(btcData.price, 125000); // Cap at $125k
         btcData.timestamp = Date.now();
+        this.updateCandles('BTCUSDT', btcData.price, btcData.volume);
         this.notifySubscribers(btcData);
       }
       
@@ -468,6 +479,7 @@ export class MarketDataService {
         ethData.price = Math.max(ethData.price * (1 + ethChange), 3700); // Floor at $3700
         ethData.price = Math.min(ethData.price, 4200); // Cap at $4200
         ethData.timestamp = Date.now();
+        this.updateCandles('ETHUSDT', ethData.price, ethData.volume);
         this.notifySubscribers(ethData);
       }
     }, 8000); // Update every 8 seconds
@@ -610,7 +622,9 @@ export class MarketDataService {
     const lastCryptoUpdate = cryptoTimestamps.length ? Math.max(...cryptoTimestamps) : 0;
     return {
       strictLiveDataMode: this.strictLiveDataMode,
+      allowSyntheticData: this.allowSyntheticData,
       useLiveData: this.useLiveData,
+      forexUsingRealData: this.forexData.isUsingRealData(),
       dataFeedError: this.dataFeedError,
       lastCryptoUpdate,
       staleSeconds: lastCryptoUpdate ? Math.round((Date.now() - lastCryptoUpdate) / 1000) : null,
@@ -619,6 +633,18 @@ export class MarketDataService {
 
   getMarketData(symbol: string): MarketData | undefined {
     return this.data.get(symbol);
+  }
+
+  getAllMarketData(): Record<string, MarketData> {
+    const snapshot: Record<string, MarketData> = {};
+    for (const [symbol, data] of Array.from(this.data.entries())) {
+      snapshot[symbol] = { ...data };
+    }
+    return snapshot;
+  }
+
+  getTradableSymbols(): string[] {
+    return Array.from(this.data.keys());
   }
 
   getCandles(symbol: string, limit = 100): Candle[] {
