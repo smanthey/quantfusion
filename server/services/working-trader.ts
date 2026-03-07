@@ -12,6 +12,11 @@ import { improvedStrategy } from './improved-strategy';
 import { circuitBreakerManager } from './circuit-breaker';
 import { log } from '../utils/logger';
 import { tradeValidator } from '../utils/trade-validation';
+import { ContinuousLearner } from './continuous-learner';
+import { appendTradeSnapshot } from './trade-journal';
+import { loadLearningState, saveLearningState } from './learning-state';
+import { riskManager } from './risk-manager';
+import { rejectionTracker } from './rejection-tracker';
 
 export class WorkingTrader {
   private marketData: MarketDataService;
@@ -20,6 +25,7 @@ export class WorkingTrader {
   private accountBalance = 10000;
   private inCycle = false; // Reentrancy guard
   private readonly symbols = ['BTCUSDT', 'ETHUSDT', 'EURUSD', 'GBPUSD', 'AUDUSD'];
+  private readonly learner = new ContinuousLearner();
   private readonly executionConfig = {
     baseSlippageBps: Number(process.env.QUANT_PAPER_BASE_SLIPPAGE_BPS || 6),
     volatilityMultiplier: Number(process.env.QUANT_PAPER_VOLATILITY_SLIPPAGE_MULT || 1.5),
@@ -47,6 +53,11 @@ export class WorkingTrader {
 
     // Load existing open positions
     await this.loadOpenPositions();
+    const learningState = await loadLearningState();
+    if (learningState) {
+      this.learner.importLearningState(learningState);
+      log.info('🧠 Loaded learning state');
+    }
 
     // Trade every 30 seconds (aggressive)
     this.interval = setInterval(async () => {
@@ -102,8 +113,33 @@ export class WorkingTrader {
 
       log.info(`💰 [Working Trader] Account: $${this.accountBalance.toFixed(2)}`);
 
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const dailyPnL = closedTrades
+        .filter((t: any) => t.executedAt && new Date(t.executedAt) >= today)
+        .reduce((sum: number, t: any) => {
+          const profit = parseFloat(t.profit || '0');
+          const loss = parseFloat(t.loss || '0');
+          const fees = parseFloat(t.fees || '0');
+          return sum + (profit - loss - fees);
+        }, 0);
+      const openTrades = trades.filter((t: any) => t.status === 'open');
+      const totalPositionSize = openTrades.reduce((sum: number, t: any) => {
+        const size = parseFloat(t.size || '0');
+        const price = parseFloat(t.entryPrice || '0');
+        return sum + (size * price);
+      }, 0);
+      riskManager.updateMetrics(totalPnL, dailyPnL, totalPositionSize);
+
       // Monitor existing positions FIRST
       await this.monitorOpenPositions();
+
+      if (riskManager.shouldHaltTrading()) {
+        log.warn('🛑 [Working Trader] Risk halt active - skipping new entries', {
+          circuitBreakers: riskManager.getCurrentMetrics().circuitBreakers,
+        });
+        return;
+      }
 
       log.info(`🔍 [Working Trader] Evaluating ${this.symbols.length} pairs (hedge fund portfolio)`);
       for (const symbol of this.symbols) {
@@ -155,7 +191,7 @@ export class WorkingTrader {
   }
 
   private async executeTrade(symbol: string, signal: any) {
-    const requestedSize = signal.positionSize || (this.accountBalance * 0.05);
+    const requestedSize = signal.positionSize || riskManager.calculateDynamicPositionSize(symbol, this.accountBalance);
     const side = signal.action === 'buy' ? 'BUY' : 'SELL';
 
     // Apply circuit breaker position size adjustment
@@ -163,6 +199,12 @@ export class WorkingTrader {
     
     if (sizeAdjustment.multiplier === 0) {
       log.warn(`🔴 TRADE BLOCKED: ${sizeAdjustment.reason}`, { symbol, side });
+      rejectionTracker.record({
+        symbol,
+        side,
+        reason: sizeAdjustment.reason || 'circuit_breaker_block',
+        stage: 'circuit_breaker',
+      });
       return;
     }
     
@@ -190,6 +232,26 @@ export class WorkingTrader {
 
     if (!validation.allowed) {
       log.warn(`⏭️  TRADE SKIPPED: ${validation.reason}`, { symbol, side });
+      rejectionTracker.record({
+        symbol,
+        side,
+        reason: validation.reason || 'validation_block',
+        stage: 'validation',
+      });
+      return;
+    }
+
+    const estimatedEntry = Number(signal.indicators.price);
+    const qty = estimatedEntry > 0 ? positionSize / estimatedEntry : 0;
+    const riskCheck = riskManager.validateTradeSize(symbol, qty, estimatedEntry);
+    if (!riskCheck.allowed) {
+      log.warn(`⛔ RISK BLOCK: ${riskCheck.reason}`, { symbol, side });
+      rejectionTracker.record({
+        symbol,
+        side,
+        reason: riskCheck.reason || 'risk_manager_block',
+        stage: 'risk_manager',
+      });
       return;
     }
 
@@ -202,6 +264,9 @@ export class WorkingTrader {
       const requestedEntryPrice = Number(signal.indicators.price);
       const entryFill = this.applyEntryFillPrice(symbol, requestedEntryPrice, side);
       const slippageBps = this.estimateSlippageBps(symbol, requestedEntryPrice);
+      const spread = Math.max(0, this.marketData.getSpread(symbol));
+      const spreadBps = requestedEntryPrice > 0 ? (spread / requestedEntryPrice) * 10_000 : 0;
+      const volatility = this.marketData.getMarketData(symbol)?.volatility ?? 0;
       const trade = {
         strategyId: 'research_master',
         symbol,
@@ -214,7 +279,17 @@ export class WorkingTrader {
         strategy: `research_master_paper_fill_${slippageBps.toFixed(2)}bps`,
       };
 
-      await storage.createTrade(trade);
+      const created = await storage.createTrade(trade);
+      await appendTradeSnapshot("open", {
+        ...created,
+        execution: {
+          entryRequested: requestedEntryPrice,
+          entryFill,
+          entrySlippageBps: slippageBps,
+          spreadBps,
+          volatility,
+        },
+      });
       log.info(`✅ Trade executed: ${symbol} ${side} @ ${entryFill.toFixed(5)}`, {
         requestedPrice: requestedEntryPrice.toFixed(5),
         modeledSlippageBps: slippageBps.toFixed(2),
@@ -328,15 +403,20 @@ export class WorkingTrader {
         
         // Update stop-loss if it moved (breakeven or trailing)
         if (needsUpdate && !shouldClose) {
-          await storage.updateTrade(trade.id, {
+          const updated = await storage.updateTrade(trade.id, {
             stopLoss: stopLoss!.toString()
           });
+          await appendTradeSnapshot("update", updated);
         }
 
         if (shouldClose) {
           const size = parseFloat(trade.size);
           const closeSide = trade.side === 'BUY' || trade.side === 'buy' ? 'SELL' : 'BUY';
           const exitFillPrice = this.applyExitFillPrice(trade.symbol, currentPrice, closeSide);
+          const exitSlippageBps = this.estimateSlippageBps(trade.symbol, currentPrice);
+          const spread = Math.max(0, this.marketData.getSpread(trade.symbol));
+          const spreadBps = currentPrice > 0 ? (spread / currentPrice) * 10_000 : 0;
+          const volatility = this.marketData.getMarketData(trade.symbol)?.volatility ?? 0;
           const grossPnl = (exitFillPrice - entryPrice) * size * (trade.side === 'BUY' || trade.side === 'buy' ? 1 : -1);
           
           // Calculate fees (0.1% of entry value + 0.1% of exit value = 0.2% total)
@@ -350,7 +430,7 @@ export class WorkingTrader {
           
           const executedTime = trade.executedAt ? new Date(trade.executedAt).getTime() : Date.now();
           
-          await storage.updateTrade(trade.id, {
+          const updatedClosed = await storage.updateTrade(trade.id, {
             exitPrice: exitFillPrice.toString(),
             pnl: netPnl.toString(), // Store NET P&L (after fees)
             profit: grossPnl > 0 ? grossPnl.toString() : '0',
@@ -359,6 +439,17 @@ export class WorkingTrader {
             status: 'closed',
             closedAt: new Date(),
             duration: Math.floor((Date.now() - executedTime) / 1000),
+          });
+          await appendTradeSnapshot("close", {
+            ...updatedClosed,
+            execution: {
+              entryFill: entryPrice,
+              exitMark: currentPrice,
+              exitFill: exitFillPrice,
+              exitSlippageBps,
+              spreadBps,
+              volatility,
+            },
           });
 
           log.info(`🔴 CLOSED: ${trade.symbol} ${trade.side} @ ${currentPrice.toFixed(5)}`, {
@@ -369,6 +460,8 @@ export class WorkingTrader {
             net: `$${netPnl.toFixed(2)} (${pnlPercent.toFixed(2)}%)`,
             reason: exitReason
           });
+
+          await this.recordLearning(trade, entryPrice, exitFillPrice, netPnl);
         }
       }
     } catch (error) {
@@ -430,6 +523,10 @@ export class WorkingTrader {
     const entryPrice = parseFloat(trade.entryPrice);
     const closeSide = trade.side === 'BUY' || trade.side === 'buy' ? 'SELL' : 'BUY';
     const exitFillPrice = this.applyExitFillPrice(trade.symbol, currentPrice, closeSide);
+    const exitSlippageBps = this.estimateSlippageBps(trade.symbol, currentPrice);
+    const spread = Math.max(0, this.marketData.getSpread(trade.symbol));
+    const spreadBps = currentPrice > 0 ? (spread / currentPrice) * 10_000 : 0;
+    const volatility = this.marketData.getMarketData(trade.symbol)?.volatility ?? 0;
     const direction = trade.side === 'BUY' || trade.side === 'buy' ? 1 : -1;
     const grossPnl = (exitFillPrice - entryPrice) * closeSize * direction;
     const entryValue = entryPrice * closeSize;
@@ -438,7 +535,7 @@ export class WorkingTrader {
     const netPnl = grossPnl - fees;
     const executedTime = trade.executedAt ? new Date(trade.executedAt).getTime() : Date.now();
 
-    await storage.createTrade({
+    const partialTrade = await storage.createTrade({
       strategyId: trade.strategyId,
       symbol: trade.symbol,
       side: closeSide,
@@ -453,6 +550,19 @@ export class WorkingTrader {
       status: 'closed',
       strategy: this.appendStrategyFlag(trade.strategy, `${flag}_commit`),
     });
+    await appendTradeSnapshot("partial", {
+      ...partialTrade,
+      execution: {
+        entryFill: entryPrice,
+        exitMark: currentPrice,
+        exitFill: exitFillPrice,
+        exitSlippageBps,
+        spreadBps,
+        volatility,
+      },
+    });
+
+    await this.recordLearning(trade, entryPrice, exitFillPrice, netPnl);
 
     const updatedStrategy = this.appendStrategyFlag(trade.strategy, flag);
     if (remainingSize <= this.partialConfig.minRemainingSize) {
@@ -462,6 +572,7 @@ export class WorkingTrader {
         closedAt: new Date(),
         strategy: updatedStrategy,
       });
+      await appendTradeSnapshot("close", closed);
       log.info(`🧩 PARTIAL(${flag}) fully closed remainder: ${trade.symbol}`, {
         closedSize: closeSize.toFixed(8),
         exitFill: exitFillPrice.toFixed(5),
@@ -474,6 +585,7 @@ export class WorkingTrader {
       size: remainingSize.toString(),
       strategy: updatedStrategy,
     });
+    await appendTradeSnapshot("update", updated);
 
     log.info(`🧩 PARTIAL(${flag}) executed: ${trade.symbol}`, {
       closedSize: closeSize.toFixed(8),
@@ -483,6 +595,28 @@ export class WorkingTrader {
     });
 
     return updated;
+  }
+
+  private async recordLearning(trade: any, entryPrice: number, exitPrice: number, netPnl: number): Promise<void> {
+    try {
+      const priceChange = entryPrice > 0 ? (exitPrice - entryPrice) / entryPrice : 0;
+      const pnlPercent = entryPrice > 0 ? netPnl / (entryPrice * Math.max(1e-8, Number(trade.size || 1))) : 0;
+      const slippageBps = this.estimateSlippageBps(trade.symbol, entryPrice);
+      const volatility = this.marketData.getMarketData(trade.symbol)?.volatility ?? 0;
+
+      const predictionDirection = trade.side === 'BUY' || trade.side === 'buy' ? 'up' : 'down';
+      const actualDirection = priceChange > 0 ? 'up' : priceChange < 0 ? 'down' : 'neutral';
+
+      await this.learner.learnFromTrade(
+        [priceChange, pnlPercent, slippageBps / 100, volatility],
+        { direction: predictionDirection, confidence: Number(trade.confidence || 0.55) },
+        { direction: actualDirection, priceChange },
+        netPnl
+      );
+      await saveLearningState(this.learner.exportLearningState());
+    } catch (error) {
+      log.warn('⚠️ Learning update failed', { error });
+    }
   }
 
   private estimateSlippageBps(symbol: string, referencePrice: number): number {

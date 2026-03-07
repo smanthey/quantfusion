@@ -1,4 +1,5 @@
 import express, { type Express } from "express";
+import { promises as fs } from "fs";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import crypto from "crypto";
@@ -19,7 +20,7 @@ import {
 import { TradingEngine } from "./services/trading-engine";
 import { RegimeDetector } from "./services/regime-detector";
 import { MetaAllocator } from "./services/meta-allocator";
-import { RiskManager } from "./services/risk-manager";
+import { riskManager } from "./services/risk-manager";
 import { BacktestEngine } from "./services/backtest-engine";
 import { MarketDataService } from "./services/market-data";
 import { binanceTradingService } from "./services/binance-trading";
@@ -37,16 +38,24 @@ import { WorkingTrader } from './services/working-trader';
 import { openClawTradingService } from './services/openclaw-trading';
 import { openClawMockLabService } from './services/openclaw-mock-lab';
 import { predictionMarketQuoteService } from './services/prediction-market-quote-service';
+import { StrategyLab } from './services/strategy-lab';
+import { appendTradeSnapshot, getTradeJournalPath, readLatestTradesFromJournal } from './services/trade-journal';
+import { computeExecutionMetrics } from './services/execution-metrics';
+import { startupChecklistMonitor } from './services/startup-checklist-monitor';
+import { rejectionTracker } from './services/rejection-tracker';
+import { buildStrategyInsights } from './services/strategy-insights';
+import { learningAnalyticsEngine } from './services/learning-analytics';
+import { loadLearningState, getLearningStatePath } from './services/learning-state';
 
 // Initialize trading services - SIMPLE SYSTEM ONLY (proven Freqtrade patterns)
 const marketData = new MarketDataService();
 const workingTrader = new WorkingTrader(marketData); // ✅ ONLY TRADER: Simple EMA+RSI (65-75% win rate)
+const strategyLab = new StrategyLab(marketData);
 
 // DISABLED: Complex systems that were causing conflicts
 // const tradingEngine = new ResearchTradingMaster();
 const regimeDetector = new RegimeDetector(marketData);
 const metaAllocator = new MetaAllocator();
-const riskManager = new RiskManager();
 const backtestEngine = new BacktestEngine();
 const orderManager = new AdvancedOrderManager();
 const portfolioOptimizer = new PortfolioOptimizer();
@@ -98,6 +107,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       message: "Disable STRICT_REAL_MONEY_MODE to use simulation endpoints.",
     });
     return true;
+  };
+
+  const calculatePnlRollups = (trades: any[]) => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const hourAgo = now.getTime() - 60 * 60 * 1000;
+    const weekAgo = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+    const monthAgo = now.getTime() - 30 * 24 * 60 * 60 * 1000;
+
+    const netPnl = (trade: any) => {
+      const profit = parseFloat(trade.profit || '0');
+      const loss = parseFloat(trade.loss || '0');
+      const fees = parseFloat(trade.fees || '0');
+      if (profit === 0 && loss === 0 && trade.pnl) {
+        const pnl = parseFloat(trade.pnl || '0');
+        return Number.isFinite(pnl) ? pnl : 0;
+      }
+      const pnl = profit - loss - fees;
+      return Number.isFinite(pnl) ? pnl : 0;
+    };
+
+    const summarizeSince = (sinceMs: number) => {
+      const windowTrades = trades.filter((t) => {
+        if (t.status !== 'closed') return false;
+        const ts = t.executedAt ? new Date(t.executedAt).getTime() : 0;
+        return ts >= sinceMs;
+      });
+      const total = windowTrades.reduce((sum, t) => sum + netPnl(t), 0);
+      const wins = windowTrades.filter((t) => netPnl(t) > 0).length;
+      const count = windowTrades.length;
+      return {
+        pnl: Number(total.toFixed(2)),
+        trades: count,
+        winRate: count > 0 ? Number((wins / count).toFixed(4)) : 0,
+      };
+    };
+
+    return {
+      lastHour: summarizeSince(hourAgo),
+      today: summarizeSince(startOfToday),
+      lastWeek: summarizeSince(weekAgo),
+      lastMonth: summarizeSince(monthAgo),
+      allTime: summarizeSince(0),
+      updatedAt: now.toISOString(),
+    };
+  };
+
+  const loadTradesForReporting = async (): Promise<any[]> => {
+    try {
+      return await storage.getAllTrades();
+    } catch (error) {
+      log.warn('⚠️ DB unavailable for reporting, falling back to trade journal', { error });
+      return await readLatestTradesFromJournal();
+    }
   };
 
   const stripeSecretKey = String(process.env.STRIPE_SECRET_KEY || "").trim();
@@ -910,9 +973,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/trading/status', async (_req, res) => {
     try {
       const feedHealth = marketData.getDataFeedHealth();
-      const allTrades = await storage.getAllTrades();
+      const allTrades = await loadTradesForReporting();
       const openTrades = allTrades.filter((t: any) => t.status === 'open').length;
       const closedTrades = allTrades.filter((t: any) => t.status === 'closed').length;
+      const rollups = calculatePnlRollups(allTrades);
+      const execution = await computeExecutionMetrics();
       const totalPnL = allTrades.reduce((sum: number, trade: any) => {
         const pnl = parseFloat(trade.pnl || '0');
         return Number.isFinite(pnl) ? sum + pnl : sum;
@@ -924,6 +989,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         strictRealMoneyMode,
         requireLiveDataForPaper,
         paperExecution: workingTrader.getPaperExecutionConfig(),
+        risk: riskManager.getCurrentMetrics(),
         marketData: feedHealth,
         trades: {
           total: allTrades.length,
@@ -933,11 +999,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
         pnl: {
           total: Number(totalPnL.toFixed(2)),
           accountBalance: Number((10000 + totalPnL).toFixed(2)),
+          rollups,
         },
+        execution,
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
       res.status(500).json({ error: 'Failed to fetch trading status' });
+    }
+  });
+
+  app.get('/api/trading/pnl/rollups', async (_req, res) => {
+    try {
+      const trades = await loadTradesForReporting();
+      const rollups = calculatePnlRollups(trades);
+      res.json({ ok: true, rollups, updatedAt: new Date().toISOString() });
+    } catch (error) {
+      log.error('pnl rollups error', { error });
+      res.status(500).json({ ok: false, error: 'pnl_rollups_failed' });
+    }
+  });
+
+  app.get('/api/trading/execution-quality', async (_req, res) => {
+    try {
+      const execution = await computeExecutionMetrics();
+      res.json({ ok: true, execution });
+    } catch (error) {
+      log.error('execution quality error', { error });
+      res.status(500).json({ ok: false, error: 'execution_quality_failed' });
+    }
+  });
+
+  app.get('/api/trading/rejections', (_req, res) => {
+    res.json({ ok: true, rejections: rejectionTracker.getSummary() });
+  });
+
+  app.get('/api/trading/learning/analysis', async (_req, res) => {
+    try {
+      const trades = await loadTradesForReporting();
+      const analysis = await learningAnalyticsEngine.performComprehensiveAnalysis(trades);
+      const learningState = await loadLearningState();
+      res.json({
+        ok: true,
+        analysis,
+        learningStateLoaded: Boolean(learningState),
+        learningStatePath: getLearningStatePath(),
+      });
+    } catch (error) {
+      log.error('learning analysis error', { error });
+      res.status(500).json({ ok: false, error: 'learning_analysis_failed' });
+    }
+  });
+
+  app.get('/api/trading/strategy-insights', async (_req, res) => {
+    try {
+      const trades = await loadTradesForReporting();
+      const lab = strategyLab.getLabResult();
+      const insights = buildStrategyInsights(trades, lab);
+      res.json({ ok: true, insights });
+    } catch (error) {
+      log.error('strategy insights error', { error });
+      res.status(500).json({ ok: false, error: 'strategy_insights_failed' });
+    }
+  });
+
+  app.post('/api/trading/journal/backfill', async (req, res) => {
+    try {
+      const reset = String(req.query.reset || '').toLowerCase() === 'true';
+      if (reset) {
+        try {
+          await fs.unlink(getTradeJournalPath());
+        } catch {
+          // ignore
+        }
+      }
+      const trades = await storage.getAllTrades();
+      for (const trade of trades) {
+        const event = trade.status === 'closed' ? 'close' : 'open';
+        await appendTradeSnapshot(event, trade);
+      }
+      res.json({ ok: true, appended: trades.length, reset });
+    } catch (error) {
+      log.error('journal backfill error', { error });
+      res.status(500).json({ ok: false, error: 'journal_backfill_failed' });
+    }
+  });
+
+  app.get('/api/trading/strategy-lab', async (_req, res) => {
+    try {
+      const result = strategyLab.getLabResult();
+      res.json({ ok: true, result });
+    } catch (error) {
+      log.error('strategy lab error', { error });
+      res.status(500).json({ ok: false, error: 'strategy_lab_failed' });
     }
   });
 
@@ -1028,6 +1182,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const readyToPaperTrade = missingPrereqs.length === 0;
     const statusCode = readyToPaperTrade ? 200 : 503;
+    startupChecklistMonitor.record({
+      ready: readyToPaperTrade,
+      missingCodes: missingPrereqs.map((p) => p.code),
+      feedStaleSeconds: feedHealth.staleSeconds ?? null,
+    });
     return res.status(statusCode).json({
       readyToPaperTrade,
       status: readyToPaperTrade ? 'ready_to_paper_trade' : 'not_ready',
@@ -1055,6 +1214,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       },
       missingPrereqs,
+    });
+  });
+
+  app.get('/api/trading/startup-checklist/history', (_req, res) => {
+    res.json({
+      ok: true,
+      summary: startupChecklistMonitor.getSummary(),
+      history: startupChecklistMonitor.getHistory(),
     });
   });
 
